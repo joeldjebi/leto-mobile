@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'realtime.dart';
+
 /// URL de l'API. Surchargeable : flutter run --dart-define=API_URL=http://192.168.1.10:3000
 /// Par défaut : 10.0.2.2 sur émulateur Android (= localhost du Mac), localhost sinon.
 final String apiUrl = const String.fromEnvironment('API_URL').isNotEmpty
@@ -37,6 +39,7 @@ class Api {
   String? _token;
   Map<String, dynamic>? user;
 
+  String? get token => _token;
   bool get isLoggedIn => _token != null && user != null;
   String get role => user?['role'] ?? '';
 
@@ -59,6 +62,7 @@ class Api {
       _request('POST', '/auth/register', {'name': name, 'phone': phone, 'password': password}));
 
   Future<void> logout() async {
+    Realtime.instance.disconnect();
     _token = null;
     user = null;
     final prefs = await SharedPreferences.getInstance();

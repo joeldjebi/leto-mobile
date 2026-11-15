@@ -36,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: letaOrange,
+      backgroundColor: letoOrange,
       body: SafeArea(
         bottom: false,
         child: Column(children: [
@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.delivery_dining, size: 80, color: Colors.white),
-                Text('LETA',
+                Text('LETO',
                     style: TextStyle(fontSize: 44, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 2)),
                 Text('Livraison rapide à Abidjan', style: TextStyle(color: Colors.white, fontSize: 16)),
               ]),

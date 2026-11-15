@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../api.dart';
 import '../geo.dart';
 import '../main.dart';
+import '../realtime.dart';
 import 'widgets.dart';
 
 /// Accueil livreur : carte avec les courses disponibles + panneau glissant
@@ -20,6 +23,9 @@ class _DriverHomeState extends State<DriverHome> {
   final _map = MapController();
   final _scaffold = GlobalKey<ScaffoldState>();
   Timer? _timer;
+  Timer? _heartbeat;
+  StreamSubscription<Position>? _gps;
+  LatLng? _me; // ma position
 
   List<Map<String, dynamic>> _available = [];
   List<Map<String, dynamic>> _active = [];
@@ -29,16 +35,43 @@ class _DriverHomeState extends State<DriverHome> {
   void initState() {
     super.initState();
     _load();
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _load());
-    myPosition().then((p) {
-      if (p != null && mounted) _map.move(p, 13);
-    });
+    // Les nouvelles courses arrivent en temps réel ; le rafraîchissement périodique est un filet de sécurité
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _load());
+    Realtime.instance.socket.on('deliveries:changed', _onDeliveriesChanged);
+    _startGps();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _heartbeat?.cancel();
+    _gps?.cancel();
+    Realtime.instance.socket.off('deliveries:changed', _onDeliveriesChanged);
     super.dispose();
+  }
+
+  void _onDeliveriesChanged(dynamic _) => _load();
+
+  /// Envoie la position GPS du livreur au serveur (à chaque déplacement de 10 m,
+  /// et toutes les 20 s même à l'arrêt pour rester « en ligne »)
+  Future<void> _startGps() async {
+    final first = await myPosition(); // demande aussi la permission
+    if (!mounted) return;
+    if (first != null) {
+      _map.move(first, 13);
+      _sendPosition(first);
+    }
+    _gps = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
+    ).listen((p) => _sendPosition(LatLng(p.latitude, p.longitude)), onError: (_) {});
+    _heartbeat = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (_me != null) _sendPosition(_me!);
+    });
+  }
+
+  void _sendPosition(LatLng p) {
+    if (mounted) setState(() => _me = p);
+    Realtime.instance.socket.emit('driver:location', {'lat': p.latitude, 'lng': p.longitude});
   }
 
   Future<void> _load() async {
@@ -126,7 +159,7 @@ class _DriverHomeState extends State<DriverHome> {
 
     return Scaffold(
       key: _scaffold,
-      drawer: LetaDrawer(items: [
+      drawer: LetoDrawer(items: [
         ListTile(
           leading: const Icon(Icons.history),
           title: const Text('Historique'),
@@ -137,11 +170,11 @@ class _DriverHomeState extends State<DriverHome> {
         ),
       ]),
       body: Stack(children: [
-        LetaMap(
+        LetoMap(
           controller: _map,
           layers: [
             if (a != null && b != null) routeLine(a, b),
-            MarkerLayer(markers: markers),
+            MarkerLayer(markers: [...markers, if (_me != null) myMarker(_me!)]),
           ],
         ),
         SafeArea(
@@ -154,7 +187,7 @@ class _DriverHomeState extends State<DriverHome> {
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(color: letaGreen, borderRadius: BorderRadius.circular(24)),
+                decoration: BoxDecoration(color: letoGreen, borderRadius: BorderRadius.circular(24)),
                 child: const Text('● En ligne', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ]),
@@ -189,7 +222,7 @@ class _DriverHomeState extends State<DriverHome> {
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
-                  const Text('Actualisé automatiquement', style: TextStyle(color: Colors.grey)),
+                  const Text('Nouvelles courses en temps réel', style: TextStyle(color: Colors.grey)),
                   const SizedBox(height: 12),
                   for (final d in _available)
                     DeliveryCard(
@@ -232,7 +265,7 @@ class _DriverHomeState extends State<DriverHome> {
         FilledButton(
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(46),
-            backgroundColor: accepted ? letaDark : letaGreen,
+            backgroundColor: accepted ? letoDark : letoGreen,
           ),
           onPressed: accepted
               ? () => _run(() => api.pickup(d['id']), 'Colis récupéré')
@@ -253,7 +286,7 @@ class _PriceTag extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: letaDark,
+          color: letoDark,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: Colors.white, width: 2),
           boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],

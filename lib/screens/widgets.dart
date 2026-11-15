@@ -9,7 +9,7 @@ import '../main.dart';
 // ======================= Carte =======================
 
 /// Carte OpenStreetMap (gratuite, sans clé API)
-class LetaMap extends StatelessWidget {
+class LetoMap extends StatelessWidget {
   final MapController? controller;
   final LatLng center;
   final double zoom;
@@ -17,7 +17,7 @@ class LetaMap extends StatelessWidget {
   final void Function(MapCamera camera, bool hasGesture)? onMove;
   final VoidCallback? onReady;
 
-  const LetaMap({
+  const LetoMap({
     super.key,
     this.controller,
     this.center = abidjan,
@@ -41,7 +41,7 @@ class LetaMap extends StatelessWidget {
       children: [
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'ci.leta.leta',
+          userAgentPackageName: 'ci.leto.leto',
         ),
         ...layers,
       ],
@@ -55,12 +55,43 @@ Marker pin(LatLng p, {bool dropoff = false}) => Marker(
       width: 44,
       height: 44,
       alignment: Alignment.topCenter,
-      child: Icon(Icons.location_on, size: 44, color: dropoff ? letaOrange : letaGreen),
+      child: Icon(Icons.location_on, size: 44, color: dropoff ? letoOrange : letoGreen),
+    );
+
+/// Marqueur du livreur (moto)
+Marker driverMarker(LatLng p) => Marker(
+      point: p,
+      width: 46,
+      height: 46,
+      child: Container(
+        decoration: BoxDecoration(
+          color: letoDark,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8)],
+        ),
+        child: const Icon(Icons.two_wheeler, color: Colors.white, size: 24),
+      ),
+    );
+
+/// Ma position (point bleu)
+Marker myMarker(LatLng p) => Marker(
+      point: p,
+      width: 24,
+      height: 24,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.blue,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
+        ),
+      ),
     );
 
 /// Trait entre départ et arrivée (ligne droite)
 Widget routeLine(LatLng a, LatLng b) => PolylineLayer(polylines: [
-      Polyline(points: [a, b], color: letaDark.withValues(alpha: 0.7), strokeWidth: 4),
+      Polyline(points: [a, b], color: letoDark.withValues(alpha: 0.7), strokeWidth: 4),
     ]);
 
 /// Ajuste la carte pour voir les deux points
@@ -81,7 +112,7 @@ class CenterPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = dropoff ? letaOrange : letaGreen;
+    final color = dropoff ? letoOrange : letoGreen;
     return IgnorePointer(
       child: Center(
         child: Transform.translate(
@@ -89,10 +120,10 @@ class CenterPin extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: letaDark, borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: letoDark, borderRadius: BorderRadius.circular(20)),
               child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
             ),
-            Container(width: 4, height: 18, color: letaDark),
+            Container(width: 4, height: 18, color: letoDark),
             Container(
               width: 16,
               height: 16,
@@ -165,7 +196,7 @@ class RoundButton extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: Padding(padding: const EdgeInsets.all(12), child: Icon(icon, color: letaDark)),
+        child: Padding(padding: const EdgeInsets.all(12), child: Icon(icon, color: letoDark)),
       ),
     );
   }
@@ -196,7 +227,7 @@ class AddressTile extends StatelessWidget {
               width: 12,
               height: 12,
               decoration: BoxDecoration(
-                color: dropoff ? letaOrange : letaGreen,
+                color: dropoff ? letoOrange : letoGreen,
                 shape: dropoff ? BoxShape.rectangle : BoxShape.circle,
               ),
             ),
@@ -262,13 +293,13 @@ class StatusSteps extends StatelessWidget {
               height: 5,
               margin: const EdgeInsets.symmetric(horizontal: 2),
               decoration: BoxDecoration(
-                color: done ? letaGreen : Colors.black12,
+                color: done ? letoGreen : Colors.black12,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
             const SizedBox(height: 6),
             Text(_labels[i],
-                style: TextStyle(fontSize: 11, color: done ? letaDark : Colors.grey, fontWeight: FontWeight.w600)),
+                style: TextStyle(fontSize: 11, color: done ? letoDark : Colors.grey, fontWeight: FontWeight.w600)),
           ]),
         );
       }),
@@ -288,11 +319,11 @@ class DeliveryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      color: selected ? letaOrange.withValues(alpha: 0.08) : const Color(0xFFF7F7F8),
+      color: selected ? letoOrange.withValues(alpha: 0.08) : const Color(0xFFF7F7F8),
       margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: selected ? letaOrange : Colors.transparent),
+        side: BorderSide(color: selected ? letoOrange : Colors.transparent),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -321,7 +352,7 @@ class DeliveryCard extends StatelessWidget {
           width: 10,
           height: 10,
           decoration: BoxDecoration(
-            color: dropoff ? letaOrange : letaGreen,
+            color: dropoff ? letoOrange : letoGreen,
             shape: dropoff ? BoxShape.rectangle : BoxShape.circle,
           ),
         ),
@@ -340,9 +371,9 @@ class DeliveryCard extends StatelessWidget {
 }
 
 /// Menu latéral commun (client et livreur)
-class LetaDrawer extends StatelessWidget {
+class LetoDrawer extends StatelessWidget {
   final List<Widget> items;
-  const LetaDrawer({super.key, required this.items});
+  const LetoDrawer({super.key, required this.items});
 
   @override
   Widget build(BuildContext context) {
@@ -355,7 +386,7 @@ class LetaDrawer extends StatelessWidget {
             child: Row(children: [
               CircleAvatar(
                 radius: 26,
-                backgroundColor: letaOrange,
+                backgroundColor: letoOrange,
                 child: Text((user['name'] ?? '?').toString().substring(0, 1).toUpperCase(),
                     style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
               ),

@@ -2,13 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../api.dart';
 import '../geo.dart';
 import '../main.dart';
+import '../realtime.dart';
 import 'widgets.dart';
 
-/// Suivi d'une livraison côté client (rafraîchi toutes les 5 secondes)
+/// Suivi d'une livraison côté client, en temps réel (Socket.IO).
+/// Un rafraîchissement REST toutes les 20 s sert de filet de sécurité.
 class TrackingScreen extends StatefulWidget {
   final String id;
   const TrackingScreen(this.id, {super.key});
@@ -22,6 +25,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
   Map<String, dynamic>? _d;
   Timer? _timer;
   bool _mapReady = false;
+  LatLng? _driverPos; // position en direct du livreur
+  bool _driverFitted = false;
+  void Function()? _unsubscribe;
 
   bool get _finished => ['DELIVERED', 'CANCELLED'].contains(_d?['status']);
 
@@ -29,15 +35,42 @@ class _TrackingScreenState extends State<TrackingScreen> {
   void initState() {
     super.initState();
     _load();
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 20), (_) {
       if (!_finished) _load();
     });
+    final rt = Realtime.instance;
+    rt.socket.on('driver:location', _onDriverLocation);
+    rt.socket.on('delivery:updated', _onDeliveryUpdated);
+    _unsubscribe = rt.onConnected(() => rt.socket.emit('delivery:watch', widget.id));
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    final s = Realtime.instance.socket;
+    s.off('driver:location', _onDriverLocation);
+    s.off('delivery:updated', _onDeliveryUpdated);
+    s.emit('delivery:unwatch', widget.id);
+    _unsubscribe?.call();
     super.dispose();
+  }
+
+  void _onDriverLocation(dynamic e) {
+    if (!mounted || e is! Map || e['deliveryId'] != widget.id) return;
+    setState(() => _driverPos = LatLng((e['lat'] as num).toDouble(), (e['lng'] as num).toDouble()));
+    _fitDriver();
+  }
+
+  void _onDeliveryUpdated(dynamic e) {
+    if (e is Map && e['id'] == widget.id) _load();
+  }
+
+  /// Au premier point GPS du livreur, cadre la carte sur le livreur et sa prochaine étape
+  void _fitDriver() {
+    if (_driverFitted || !_mapReady || _d == null || _driverPos == null) return;
+    final target = _d!['status'] == 'PICKED_UP' ? pointOf(_d!, 'dropoff') : pointOf(_d!, 'pickup');
+    fitRoute(_map, _driverPos, target);
+    _driverFitted = true;
   }
 
   Future<void> _load() async {
@@ -45,12 +78,22 @@ class _TrackingScreenState extends State<TrackingScreen> {
       final d = await api.getDelivery(widget.id);
       final first = _d == null;
       if (!mounted) return;
-      setState(() => _d = d);
+      setState(() {
+        _d = d;
+        // Dernière position connue du livreur, en attendant le direct
+        final driver = d['driver'];
+        if (_driverPos == null && driver != null && driver['lastLat'] != null && _active(d)) {
+          _driverPos = LatLng((driver['lastLat'] as num).toDouble(), (driver['lastLng'] as num).toDouble());
+        }
+      });
       if (first) _fit();
+      _fitDriver();
     } catch (e) {
       if (mounted) showError(context, e);
     }
   }
+
+  bool _active(Map d) => ['ACCEPTED', 'PICKED_UP'].contains(d['status']);
 
   void _fit() {
     if (_mapReady && _d != null) fitRoute(_map, pointOf(_d!, 'pickup'), pointOf(_d!, 'dropoff'));
@@ -86,7 +129,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
       body: Column(children: [
         Expanded(
           child: Stack(children: [
-            LetaMap(
+            LetoMap(
               controller: _map,
               center: a ?? abidjan,
               onReady: () {
@@ -95,7 +138,11 @@ class _TrackingScreenState extends State<TrackingScreen> {
               },
               layers: [
                 if (a != null && b != null) routeLine(a, b),
-                MarkerLayer(markers: [if (a != null) pin(a), if (b != null) pin(b, dropoff: true)]),
+                MarkerLayer(markers: [
+                  if (a != null) pin(a),
+                  if (b != null) pin(b, dropoff: true),
+                  if (_driverPos != null && d != null && _active(d)) driverMarker(_driverPos!),
+                ]),
               ],
             ),
             SafeArea(
@@ -115,7 +162,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     final status = d['status'] as String;
     final title = switch (status) {
       'PENDING' => 'Recherche d’un livreur…',
-      'ACCEPTED' => 'Le livreur va récupérer le colis',
+      'ACCEPTED' => 'Le livreur arrive au point de départ',
       'PICKED_UP' => 'Votre colis est en route',
       'DELIVERED' => 'Colis livré ✅',
       _ => 'Livraison annulée',
@@ -132,6 +179,14 @@ class _TrackingScreenState extends State<TrackingScreen> {
       if (status != 'CANCELLED') StatusSteps(status),
       const SizedBox(height: 14),
       if (d['driver'] != null) _driver(d),
+      if (_active(d) && _driverPos != null) ...[
+        const SizedBox(height: 8),
+        const Row(children: [
+          Icon(Icons.circle, size: 10, color: letoGreen),
+          SizedBox(width: 6),
+          Text('Position du livreur en direct', style: TextStyle(color: Colors.grey, fontSize: 13)),
+        ]),
+      ],
       if (!_finished) ...[
         const SizedBox(height: 12),
         _code(d['confirmationCode']),
@@ -161,7 +216,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
       child: Row(children: [
         CircleAvatar(
           radius: 24,
-          backgroundColor: letaOrange,
+          backgroundColor: letoOrange,
           child: Text(driver['name'].toString().substring(0, 1).toUpperCase(),
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
         ),
@@ -173,7 +228,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
           ]),
         ),
         Row(children: [
-          const Icon(Icons.phone, size: 18, color: letaGreen),
+          const Icon(Icons.phone, size: 18, color: letoGreen),
           const SizedBox(width: 4),
           SelectableText(driver['phone'], style: const TextStyle(fontWeight: FontWeight.w600)),
         ]),
@@ -184,7 +239,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
   Widget _code(String code) => Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: letaOrange.withValues(alpha: 0.1),
+          color: letoOrange.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(children: [

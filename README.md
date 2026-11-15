@@ -1,4 +1,4 @@
-# LETA — Application mobile (Flutter)
+# LETO — Application mobile (Flutter)
 
 Une seule app pour deux profils :
 
@@ -6,6 +6,15 @@ Une seule app pour deux profils :
 - **Livreur** : carte des courses disponibles avec leur prix, acceptation, « colis récupéré », puis validation par le code du destinataire.
 
 Carte : OpenStreetMap via `flutter_map` (sans clé API).
+
+## Temps réel (Socket.IO)
+
+- Le livreur envoie sa position GPS (à chaque déplacement de 10 m, et toutes les 20 s à l'arrêt).
+- Le client voit la moto du livreur bouger sur l'écran de suivi, et les changements de statut arrivent instantanément.
+- Les livreurs reçoivent les nouvelles courses sans rafraîchir.
+- Code : `lib/realtime.dart`. Un rafraîchissement REST périodique reste actif en filet de sécurité.
+
+Notifications push (Firebase) : prévues pour une prochaine étape.
 
 ## Démarrer
 

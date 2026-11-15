@@ -81,7 +81,7 @@ class _OrderScreenState extends State<OrderScreen> {
       initialValue: value,
       isExpanded: true,
       decoration: InputDecoration(
-        prefixIcon: Icon(dropoff ? Icons.square : Icons.circle, size: 14, color: dropoff ? letaOrange : letaGreen),
+        prefixIcon: Icon(dropoff ? Icons.square : Icons.circle, size: 14, color: dropoff ? letoOrange : letoGreen),
       ),
       items: communeCenters.keys.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
       onChanged: (v) {
@@ -139,11 +139,11 @@ class _OrderScreenState extends State<OrderScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            border: Border.all(color: letaOrange, width: 2),
+            border: Border.all(color: letoOrange, width: 2),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(children: [
-            const Icon(Icons.two_wheeler, size: 36, color: letaOrange),
+            const Icon(Icons.two_wheeler, size: 36, color: letoOrange),
             const SizedBox(width: 12),
             const Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

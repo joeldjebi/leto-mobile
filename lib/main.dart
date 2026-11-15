@@ -16,31 +16,31 @@ void main() async {
       await Api.instance.login(devPhone, const String.fromEnvironment('DEV_PASSWORD'));
     } catch (_) {}
   }
-  runApp(const LetaApp());
+  runApp(const LetoApp());
 }
 
-const letaOrange = Color(0xFFF77F00);
-const letaGreen = Color(0xFF009E60);
-const letaDark = Color(0xFF1D2330);
+const letoOrange = Color(0xFFF77F00);
+const letoGreen = Color(0xFF009E60);
+const letoDark = Color(0xFF1D2330);
 
-class LetaApp extends StatelessWidget {
-  const LetaApp({super.key});
+class LetoApp extends StatelessWidget {
+  const LetoApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
     return MaterialApp(
-      title: 'LETA',
+      title: 'LETO',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: letaOrange, primary: letaOrange),
+        colorScheme: ColorScheme.fromSeed(seedColor: letoOrange, primary: letoOrange),
         scaffoldBackgroundColor: Colors.white,
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
-          foregroundColor: letaDark,
+          foregroundColor: letoDark,
           elevation: 0,
-          titleTextStyle: TextStyle(color: letaDark, fontSize: 20, fontWeight: FontWeight.bold),
+          titleTextStyle: TextStyle(color: letoDark, fontSize: 20, fontWeight: FontWeight.bold),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(

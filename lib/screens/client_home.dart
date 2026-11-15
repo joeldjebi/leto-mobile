@@ -84,7 +84,7 @@ class _ClientHomeState extends State<ClientHome> {
     final isPickup = _step == _Step.pickup;
     return Scaffold(
       key: _scaffold,
-      drawer: LetaDrawer(items: [
+      drawer: LetoDrawer(items: [
         ListTile(
           leading: const Icon(Icons.receipt_long),
           title: const Text('Mes livraisons'),
@@ -106,7 +106,7 @@ class _ClientHomeState extends State<ClientHome> {
       body: Column(children: [
         Expanded(
           child: Stack(children: [
-            LetaMap(
+            LetoMap(
               controller: _map,
               layers: [if (!isPickup && _pickup != null) MarkerLayer(markers: [pin(_pickup!)])],
               onMove: (camera, gesture) => setState(() {
@@ -174,7 +174,7 @@ class _ActiveBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: letaDark,
+      color: letoDark,
       borderRadius: BorderRadius.circular(16),
       elevation: 4,
       child: InkWell(
