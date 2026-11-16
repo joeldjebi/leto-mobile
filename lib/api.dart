@@ -33,6 +33,16 @@ class ApiException implements Exception {
 }
 
 /// Lieu (recherche ou point sur la carte)
+/// Lien de suivi public d'une course (à partager au client ou aux destinataires)
+String? trackingUrl(Map d) {
+  final token = d['trackingToken'];
+  if (token == null) return null;
+  final base = apiUrl == prodApiUrl
+      ? 'https://leto.performx.online'
+      : apiUrl.replaceFirst(':3000', ':5173');
+  return '$base/#/suivi/$token';
+}
+
 /// Fond de carte choisi par le SA (OpenStreetMap, Carto, MapTiler, Mapbox, Google)
 class MapStyle {
   final String provider;
@@ -224,8 +234,10 @@ class Api {
   /// Devis : ordre optimisé (`order`), itinéraire et prix de chaque offre
   Future<Map<String, dynamic>> quote(
     LatLng pickup,
-    List<({LatLng point, bool cod})> stops,
-  ) async => await _request('POST', '/pricing/quote', {
+    List<({LatLng point, bool cod})> stops, {
+    String? companyId,
+  }) async => await _request('POST', '/pricing/quote', {
+    'companyId': ?companyId,
     'pickupLat': pickup.latitude,
     'pickupLng': pickup.longitude,
     'stops': [
@@ -282,6 +294,14 @@ class Api {
       _request('POST', '/deliveries', body);
   Future<dynamic> cancel(String id) =>
       _request('POST', '/deliveries/$id/cancel');
+
+  /// Entreprises de livraison (choix du client) : livreurs en ligne, réussite, prix indicatifs
+  Future<List<dynamic>> companiesDirectory() async =>
+      await _request('GET', '/companies/directory');
+
+  /// Course adressée à une entreprise sans réponse : l'ouvrir à toutes
+  Future<dynamic> openToAll(String id) =>
+      _request('POST', '/deliveries/$id/open-to-all');
 
   /// Frais éventuels si la course est annulée maintenant
   Future<dynamic> cancelPreview(String id) =>
@@ -356,6 +376,13 @@ class Api {
     'proofUrl': ?proofUrl,
     'note': ?note,
   });
+
+  /// Refuser une course affectée par l'entreprise
+  Future<dynamic> declineAssignment(String id, {String? reason}) => _request(
+    'POST',
+    '/deliveries/$id/decline-assignment',
+    {'reason': ?reason},
+  );
 
   /// Colis non livrés rapportés à l'expéditeur (code de retour)
   Future<dynamic> confirmReturn(String id, String code) =>

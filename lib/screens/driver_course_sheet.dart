@@ -101,6 +101,35 @@ class _CourseSheetState extends State<_CourseSheet> {
     }
   }
 
+  /// Course affectée par mon entreprise (prix fixé par elle, refus possible avec un motif)
+  bool get _assigned =>
+      widget.d['assignedDriverId'] != null &&
+      widget.d['assignedDriverId'] == Api.instance.user?['id'];
+
+  Future<void> _decline() async {
+    final reason = await prompt(
+      context,
+      'Refuser la course',
+      message:
+          'Votre entreprise est prévenue et pourra l’affecter à un autre livreur.',
+      placeholder: 'Motif (ex. : panne, trop loin)',
+      ok: 'Refuser',
+    );
+    if (reason == null) return;
+    setState(() => _busy = true);
+    try {
+      await Api.instance.declineAssignment(
+        widget.d['id'],
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (mounted) Navigator.pop(context, 'declined');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _propose(int price) async {
     setState(() => _busy = true);
     try {
@@ -302,6 +331,14 @@ class _CourseSheetState extends State<_CourseSheet> {
                   ),
                 ],
                 const SizedBox(height: 18),
+                if (_assigned) ...[
+                  const Pill(
+                    'Affectée par votre entreprise',
+                    color: accent,
+                    icon: CupertinoIcons.building_2_fill,
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 FilledButton(
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(54),
@@ -309,46 +346,58 @@ class _CourseSheetState extends State<_CourseSheet> {
                   onPressed: _busy ? null : _accept,
                   child: Text('Accepter pour ${fcfa(d['price'])}'),
                 ),
-                const SizedBox(height: 16),
-                if (widget.myOffer != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Pill(
-                      'Votre proposition : ${fcfa(widget.myOffer!['price'])} · en attente du client',
-                      color: accentDeep,
-                      icon: CupertinoIcons.hourglass,
+                if (_assigned) ...[
+                  const SizedBox(height: 10),
+                  CupertinoButton(
+                    onPressed: _busy ? null : _decline,
+                    child: Text(
+                      'Refuser',
+                      style: TextStyles.body.copyWith(color: p.red),
                     ),
                   ),
-                Text(
-                  'Proposez votre prix',
-                  textAlign: TextAlign.center,
-                  style: TextStyles.subheadline.copyWith(
-                    color: p.secondaryLabel,
+                ],
+                const SizedBox(height: 16),
+                if (!_assigned) ...[
+                  if (widget.myOffer != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Pill(
+                        'Votre proposition : ${fcfa(widget.myOffer!['price'])} · en attente du client',
+                        color: accentDeep,
+                        icon: CupertinoIcons.hourglass,
+                      ),
+                    ),
+                  Text(
+                    'Proposez votre prix',
+                    textAlign: TextAlign.center,
+                    style: TextStyles.subheadline.copyWith(
+                      color: p.secondaryLabel,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    for (final f in [1.1, 1.2]) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      for (final f in [1.1, 1.2]) ...[
+                        Expanded(
+                          child: _PriceChip(
+                            key: ValueKey('propose-$f'),
+                            label: fcfa(_round50(d['price'] * f)),
+                            onTap: _busy
+                                ? null
+                                : () => _propose(_round50(d['price'] * f)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       Expanded(
                         child: _PriceChip(
-                          key: ValueKey('propose-$f'),
-                          label: fcfa(_round50(d['price'] * f)),
-                          onTap: _busy
-                              ? null
-                              : () => _propose(_round50(d['price'] * f)),
+                          icon: CupertinoIcons.pencil,
+                          onTap: _busy ? null : _customPrice,
                         ),
                       ),
-                      const SizedBox(width: 8),
                     ],
-                    Expanded(
-                      child: _PriceChip(
-                        icon: CupertinoIcons.pencil,
-                        onTap: _busy ? null : _customPrice,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 CupertinoButton(
                   onPressed: () => Navigator.pop(context),

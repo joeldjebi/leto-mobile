@@ -21,6 +21,7 @@ String shareMessage(Map<String, dynamic> d, Map<String, dynamic> stop) {
     if (cod > 0) 'Montant à payer à la livraison : ${fcfa(cod)} (espèces)',
     '',
     'Adresse : ${stop['address']}',
+    if (trackingUrl(d) != null) 'Suivre la livraison : ${trackingUrl(d)}',
   ].join('\n');
 }
 

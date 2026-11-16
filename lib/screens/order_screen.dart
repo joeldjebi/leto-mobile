@@ -8,6 +8,7 @@ import '../api.dart';
 import '../labels.dart';
 import '../main.dart';
 import '../models.dart';
+import 'company_picker.dart';
 import 'map_picker.dart';
 import 'place_search.dart';
 import 'widgets.dart';
@@ -22,7 +23,11 @@ class OrderScreen extends StatefulWidget {
   final String vehicle;
   final ValueChanged<Place>? onPickupChanged;
   final ValueChanged<String>? onVehicleChanged;
+
+  /// Entreprise choisie (sa grille, ses livreurs) ; null = toutes
+  final ChosenCompany? company;
   const OrderScreen({
+    this.company,
     super.key,
     required this.pickup,
     required this.stops,
@@ -99,7 +104,7 @@ class _OrderScreenState extends State<OrderScreen> {
     try {
       final q = await api.quote(_pickup.point, [
         for (final s in _stops) (point: s.place.point, cod: false),
-      ]);
+      ], companyId: widget.company?.id);
       if (!mounted) return;
       final order = (q['order'] as List).cast<int>();
       final reordered = [for (final i in order) _stops[i]];
@@ -244,6 +249,7 @@ class _OrderScreenState extends State<OrderScreen> {
       final d = await api.createDelivery({
         'vehicleType': _vehicle,
         'speed': _speed,
+        'companyId': ?widget.company?.id,
         'pickupLat': _pickup.point.latitude,
         'pickupLng': _pickup.point.longitude,
         'pickupAddress': _pickup.label,
@@ -384,7 +390,11 @@ class _OrderScreenState extends State<OrderScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: Text(
-            '${km(_quote['distanceKm'])} · ~${_quote['durationMin']} min${n > 1 ? ' · ordre de passage optimisé' : ''}',
+            [
+              '${km(_quote['distanceKm'])} · ~${_quote['durationMin']} min',
+              if (n > 1) 'ordre de passage optimisé',
+              'livré par ${widget.company?.name ?? 'toutes les entreprises'}',
+            ].join(' · '),
             style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
           ),
         ),

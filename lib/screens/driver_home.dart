@@ -110,6 +110,7 @@ class _DriverHomeState extends State<DriverHome> {
     s.on('stop:cancel-refused', _onCancelRefused);
     s.on('delivery:cancelled', _onDeliveryCancelled);
     s.on('remittance:updated', _onRemittance);
+    s.on('delivery:assigned', _onAssigned);
     SharedPreferences.getInstance().then((p) {
       if (p.getBool('driver_online') == true) _goOnline();
     });
@@ -129,6 +130,7 @@ class _DriverHomeState extends State<DriverHome> {
     s.off('stop:cancel-refused', _onCancelRefused);
     s.off('delivery:cancelled', _onDeliveryCancelled);
     s.off('remittance:updated', _onRemittance);
+    s.off('delivery:assigned', _onAssigned);
     super.dispose();
   }
 
@@ -192,6 +194,17 @@ class _DriverHomeState extends State<DriverHome> {
             : 'Course annulée par l’expéditeur',
       );
     }
+  }
+
+  /// Mon entreprise m'affecte une course : elle s'affiche en tête des courses
+  Future<void> _onAssigned(dynamic e) async {
+    await _load();
+    if (!mounted || e is! Map) return;
+    hapticSuccess();
+    _setTab(0);
+    final d = _available.where((x) => x['id'] == e['deliveryId']).firstOrNull;
+    showInfo(context, 'Votre entreprise vous affecte une course');
+    if (d != null) _openCourse(d);
   }
 
   void _onRemittance(dynamic e) {
@@ -1478,6 +1491,15 @@ class _OrderCard extends StatelessWidget {
                 if (cod > 0) CodBadge(cod),
               ],
             ),
+            if (d['assignedDriverId'] != null &&
+                d['assignedDriverId'] == Api.instance.user?['id']) ...[
+              const SizedBox(height: 10),
+              const Pill(
+                'Affectée par votre entreprise',
+                color: accent,
+                icon: CupertinoIcons.building_2_fill,
+              ),
+            ],
             if (myOffer != null) ...[
               const SizedBox(height: 10),
               Pill(

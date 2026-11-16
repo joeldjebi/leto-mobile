@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../api.dart';
 import '../geo.dart';
@@ -410,10 +411,17 @@ class _TrackingScreenState extends State<TrackingScreen> {
                             s['position'] + 1,
                             status: s['status'],
                           ),
-                        if (_driverPos != null && d != null && _active(d))
-                          driverMarker(_driverPos!),
                       ],
                     ),
+                    // Livreur en temps réel : glisse en douceur d'une position à la suivante
+                    if (_driverPos != null && d != null && _active(d))
+                      TweenAnimationBuilder<LatLng>(
+                        tween: _LatLngTween(end: _driverPos),
+                        duration: const Duration(milliseconds: 1200),
+                        curve: Curves.easeInOut,
+                        builder: (_, pos, _) =>
+                            MarkerLayer(markers: [driverMarker(pos)]),
+                      ),
                   ],
                 ),
                 SafeArea(
@@ -503,6 +511,69 @@ class _TrackingScreenState extends State<TrackingScreen> {
       ],
       if (status != 'CANCELLED') StatusSteps(status),
       const SizedBox(height: 14),
+      if (status == 'PENDING' &&
+          d['targetCompanyId'] != null &&
+          d['source'] == 'CLIENT') ...[
+        Builder(
+          builder: (_) {
+            final waited = DateTime.now()
+                .difference(DateTime.parse(d['createdAt']))
+                .inMinutes;
+            return waited >= 5
+                ? _notice(
+                    p,
+                    icon: CupertinoIcons.clock_fill,
+                    color: p.yellow,
+                    title: 'Pas encore de réponse de l’entreprise choisie',
+                    text:
+                        'Ouvrir la course à tous les livreurs disponibles (même prix) ?',
+                    onTap: _openToAll,
+                  )
+                : _notice(
+                    p,
+                    icon: CupertinoIcons.building_2_fill,
+                    color: accent,
+                    title: 'Envoyée à votre entreprise de livraison',
+                    text:
+                        'Seuls ses livreurs la voient. Sans réponse dans 5 min, vous pourrez l’ouvrir à tous.',
+                  );
+          },
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (trackingUrl(d) != null && !_finished) ...[
+        Builder(
+          builder: (ctx) => Pressable(
+            onTap: () => _shareTracking(ctx, d),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: ShapeDecoration(
+                color: p.accentSoft,
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(CupertinoIcons.link, color: accent, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Partager le suivi en direct',
+                      style: TextStyles.subheadline.copyWith(
+                        color: accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Icon(CupertinoIcons.share, color: accent, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
       // Colis non livrés rapportés par le livreur : code de retour
       if (d['returnRequired'] == true && d['returnedAt'] == null) ...[
         _notice(
@@ -691,6 +762,56 @@ class _TrackingScreenState extends State<TrackingScreen> {
     ),
   );
 
+  /// Délai d'arrivée estimé du livreur (départ, puis prochain arrêt) : 20 km/h en ville
+  int? _etaMin(Map<String, dynamic> d) {
+    if (_driverPos == null || !_active(d)) return null;
+    final LatLng? target;
+    if (d['status'] == 'ACCEPTED') {
+      target = pointOf(d, 'pickup');
+    } else {
+      final next = _stops.where((s) => s['status'] == 'PENDING').firstOrNull;
+      target = next == null
+          ? null
+          : LatLng(
+              (next['lat'] as num).toDouble(),
+              (next['lng'] as num).toDouble(),
+            );
+    }
+    if (target == null) return null;
+    return (distanceKm(_driverPos!, target) * 1.35 / 20 * 60).ceil().clamp(
+      1,
+      999,
+    );
+  }
+
+  /// Partager le lien de suivi (client, destinataires…)
+  Future<void> _shareTracking(BuildContext ctx, Map<String, dynamic> d) async {
+    final url = trackingUrl(d);
+    if (url == null) return;
+    final box = ctx.findRenderObject() as RenderBox?;
+    await SharePlus.instance.share(
+      ShareParams(
+        text: 'Suivez ma livraison LETO en direct : $url',
+        sharePositionOrigin: box == null
+            ? null
+            : box.localToGlobal(Offset.zero) & box.size,
+      ),
+    );
+  }
+
+  /// Course adressée à une entreprise restée sans réponse : l'ouvrir à toutes
+  Future<void> _openToAll() async {
+    try {
+      await api.openToAll(widget.id);
+      hapticSuccess();
+      if (mounted)
+        showInfo(context, 'Course ouverte à tous les livreurs disponibles');
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
   Widget _driverCard(Map<String, dynamic> d, Palette p) {
     final driver = d['driver'];
     return Container(
@@ -715,8 +836,13 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 ),
                 Text(
                   [
+                    if (_etaMin(d) != null)
+                      d['status'] == 'ACCEPTED'
+                          ? 'au départ dans ~${_etaMin(d)} min'
+                          : 'chez le destinataire dans ~${_etaMin(d)} min',
                     d['company']?['name'] ?? '',
-                    if (_active(d) && _driverPos != null) 'position en direct',
+                    if (_active(d) && _driverPos != null && _etaMin(d) == null)
+                      'position en direct',
                   ].where((x) => x.isNotEmpty).join(' · '),
                   style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
                 ),
@@ -1048,6 +1174,20 @@ class _OfferTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Interpolation entre deux positions (animation du livreur)
+class _LatLngTween extends Tween<LatLng> {
+  _LatLngTween({super.end});
+
+  @override
+  LatLng lerp(double t) {
+    final a = begin ?? end!, b = end!;
+    return LatLng(
+      a.latitude + (b.latitude - a.latitude) * t,
+      a.longitude + (b.longitude - a.longitude) * t,
     );
   }
 }

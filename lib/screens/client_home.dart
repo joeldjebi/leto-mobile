@@ -10,6 +10,7 @@ import '../labels.dart';
 import '../main.dart';
 import '../models.dart';
 import 'address_book_screen.dart';
+import 'company_picker.dart';
 import 'order_screen.dart';
 import 'place_search.dart';
 import 'share_codes.dart';
@@ -46,12 +47,18 @@ class _ClientHomeState extends State<ClientHome> {
   bool _quoting = false;
   String _vehicle = 'MOTO';
 
+  /// Entreprise choisie (null = toutes) — l'entreprise favorite est présélectionnée
+  ChosenCompany? _company;
+
   Map<String, dynamic>? _active;
 
   @override
   void initState() {
     super.initState();
     _loadActive();
+    loadFavoriteCompany().then(
+      (c) => mounted ? setState(() => _company = c) : null,
+    );
     _lookupCenter();
     _locateMe();
   }
@@ -181,7 +188,7 @@ class _ClientHomeState extends State<ClientHome> {
     try {
       final q = await api.quote(_pickup!.point, [
         for (final s in _stops) (point: s.place.point, cod: false),
-      ]);
+      ], companyId: _company?.id);
       if (!mounted) return;
       final order = (q['order'] as List).cast<int>();
       final reordered = [for (final i in order) _stops[i]];
@@ -239,6 +246,7 @@ class _ClientHomeState extends State<ClientHome> {
           stops: _stops,
           quote: _quote!,
           vehicle: _vehicle,
+          company: _company,
           onPickupChanged: (pl) => _pickup = pl,
           onVehicleChanged: (v) => _vehicle = v,
         ),
@@ -743,6 +751,67 @@ class _ClientHomeState extends State<ClientHome> {
     ),
   );
 
+  /// Qui livre : toutes les entreprises ou celle choisie (annuaire, grille tarifaire)
+  Widget _companyChip(Palette p) => Pressable(
+    onTap: () async {
+      final res = await pickCompany(context, _company);
+      if (res == null || !mounted) return;
+      setState(() => _company = res.$2);
+      _refreshQuote();
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: ShapeDecoration(
+        color: p.fill,
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _company == null
+                ? CupertinoIcons.bolt_fill
+                : CupertinoIcons.building_2_fill,
+            size: 18,
+            color: accent,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Livré par ',
+                    style: TextStyles.subheadline.copyWith(
+                      color: p.secondaryLabel,
+                    ),
+                  ),
+                  TextSpan(
+                    text: _company?.name ?? 'toutes les entreprises',
+                    style: TextStyles.subheadline.copyWith(
+                      color: p.label,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            'Changer',
+            style: TextStyles.subheadline.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
   Widget _divider(Palette p) => Padding(
     padding: const EdgeInsets.only(left: 64),
     child: Divider(height: 1, thickness: 1, color: p.separator),
@@ -817,7 +886,9 @@ class _ClientHomeState extends State<ClientHome> {
         onTap: _openStopsSheet,
         trailing: _stopsPill(p),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: 6),
+      _companyChip(p),
+      const SizedBox(height: 10),
       SizedBox(
         height: 134,
         child: AnimatedSwitcher(
