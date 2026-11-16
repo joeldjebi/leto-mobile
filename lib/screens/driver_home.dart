@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api.dart';
 import '../geo.dart';
@@ -822,6 +823,7 @@ class _DriverHomeState extends State<DriverHome> {
               leading: _dot('A', p.green),
               title: '${d['pickupAddress']} (${d['pickupCommune']})',
               subtitle: d['pickupDetails'],
+              trailing: _navButton(pointOf(d, 'pickup'), p),
             ),
             GroupRow(
               leading: Avatar(sender, radius: 15),
@@ -884,6 +886,7 @@ class _DriverHomeState extends State<DriverHome> {
             GroupRow(
               leading: _dot('A', p.green),
               title: '${d['pickupAddress']} (${d['pickupCommune']})',
+              trailing: _navButton(pointOf(d, 'pickup'), p),
             ),
             GroupRow(
               leading: Avatar(sender, radius: 15),
@@ -942,6 +945,7 @@ class _DriverHomeState extends State<DriverHome> {
               leading: _dot('${next['position'] + 1}', accent),
               title: '${next['address']} (${next['commune']})',
               subtitle: next['details'],
+              trailing: _navButton(_pt(next), p),
             ),
             GroupRow(
               leading: Avatar(next['recipientName'] ?? '', radius: 15),
@@ -1056,6 +1060,52 @@ class _DriverHomeState extends State<DriverHome> {
     child: Text(
       label,
       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+    ),
+  );
+
+  /// Ouvre la navigation Google Maps (application si installée, sinon navigateur) vers ce point
+  Future<void> _openMaps(LatLng? to) async {
+    if (to == null) return;
+    hapticTap();
+    final url = Uri.https('www.google.com', '/maps/dir/', {
+      'api': '1',
+      'destination': '${to.latitude},${to.longitude}',
+      'travelmode': 'driving',
+      'dir_action': 'navigate',
+    });
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication) &&
+        mounted) {
+      showError(context, 'Impossible d’ouvrir Google Maps');
+    }
+  }
+
+  /// Bouton « Itinéraire » (Google Maps) à côté d'une adresse
+  Widget _navButton(LatLng? to, Palette p) => Pressable(
+    onTap: () => _openMaps(to),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: ShapeDecoration(
+        color: p.accentSoft,
+        shape: const StadiumBorder(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            CupertinoIcons.location_north_fill,
+            size: 15,
+            color: accent,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            'Itinéraire',
+            style: TextStyles.subheadline.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 
