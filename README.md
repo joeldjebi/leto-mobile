@@ -3,9 +3,11 @@
 Une seule app pour deux profils :
 
 - **Client** (inspiré de Yango) :
-  - accueil : carte, épingle avec « Prise en charge ~X min », recherche de l'adresse de livraison, carrousel d'offres (Moto, Voiture, Cargo) et mode de paiement ;
+  - accueil : carte, épingle avec « Prise en charge ~X min », recherche de l'adresse de livraison, carrousel d'offres (Moto, Voiture, Cargo), paiement en espèces ;
   - commande : délai (Express, Standard, Dans 2 h), paiement à la livraison, précisions, photos, expéditeur et destinataire, commentaire au coursier.
-- **Livreur** (inspiré d'inDrive) : interrupteur En ligne / Hors ligne, liste des courses (distance, prix, badges Wave et montant à encaisser), fiche avec les itinéraires moi → A et A → B, puis les onglets En cours et Performance.
+  - suivi : propositions de prix des livreurs (accepter ou refuser, avec compte à rebours), puis la moto en direct.
+- **Livreur** (esprit Yango) : carte plein écran, interrupteur En ligne / Hors ligne, panneau avec les onglets Courses, En cours et Gains. La fiche d'une course montre les itinéraires moi → A et A → B, avec « Accepter pour X F » ou **« Proposez votre prix »** (+10 %, +20 % ou montant libre).
+- Paiement de la course : **espèces uniquement**.
 
 Carte : OpenStreetMap via `flutter_map` (sans clé API).
 

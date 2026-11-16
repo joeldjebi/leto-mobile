@@ -9,14 +9,15 @@ import '../main.dart';
 import 'widgets.dart';
 
 /// Fiche d'une course disponible (style inDrive) : carte avec trajets
-/// moi → A (bleu) et A → B (vert), détails, bouton « Accepter pour X F ».
-/// Renvoie true si la course a été acceptée.
-Future<bool?> showCourseSheet(
+/// moi → A (bleu) et A → B (vert), détails, « Accepter pour X F » ou « Proposez votre prix ».
+/// Renvoie 'accepted', 'offered' (proposition envoyée) ou null.
+Future<String?> showCourseSheet(
   BuildContext context,
   Map<String, dynamic> d,
-  LatLng? me,
-) {
-  return showModalBottomSheet<bool>(
+  LatLng? me, {
+  Map<String, dynamic>? myOffer,
+}) {
+  return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -24,14 +25,15 @@ Future<bool?> showCourseSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => _CourseSheet(d, me),
+    builder: (_) => _CourseSheet(d, me, myOffer),
   );
 }
 
 class _CourseSheet extends StatefulWidget {
   final Map<String, dynamic> d;
   final LatLng? me;
-  const _CourseSheet(this.d, this.me);
+  final Map<String, dynamic>? myOffer;
+  const _CourseSheet(this.d, this.me, this.myOffer);
 
   @override
   State<_CourseSheet> createState() => _CourseSheetState();
@@ -42,6 +44,57 @@ class _CourseSheetState extends State<_CourseSheet> {
   RouteInfo? _toPickup; // moi → A
   RouteInfo? _trip; // A → B
   bool _accepting = false;
+  bool _proposing = false;
+
+  /// Prix arrondi aux 50 F supérieurs
+  int _round50(num v) => ((v / 50).ceil() * 50).toInt();
+
+  Future<void> _propose(int price) async {
+    setState(() => _proposing = true);
+    try {
+      await Api.instance.proposePrice(widget.d['id'], price);
+      if (mounted) Navigator.pop(context, 'offered');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _proposing = false);
+    }
+  }
+
+  Future<void> _customPrice() async {
+    final base = widget.d['price'] as int;
+    final ctrl = TextEditingController(text: '${_round50(base * 1.3)}');
+    final price = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Votre prix'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          decoration: InputDecoration(
+            suffixText: 'F',
+            helperText: 'Entre ${fcfa(base + 50)} et ${fcfa(base * 2)}',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(110, 44)),
+            onPressed: () =>
+                Navigator.pop(ctx, int.tryParse(ctrl.text.replaceAll(' ', ''))),
+            child: const Text('Proposer'),
+          ),
+        ],
+      ),
+    );
+    if (price != null) await _propose(price);
+  }
+
   bool _ready = false;
 
   LatLng? get _a => pointOf(widget.d, 'pickup');
@@ -85,11 +138,11 @@ class _CourseSheetState extends State<_CourseSheet> {
     setState(() => _accepting = true);
     try {
       await Api.instance.accept(widget.d['id']);
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) Navigator.pop(context, 'accepted');
     } catch (e) {
       if (!mounted) return;
       showError(context, e);
-      Navigator.pop(context, false);
+      Navigator.pop(context);
     }
   }
 
@@ -113,7 +166,7 @@ class _CourseSheetState extends State<_CourseSheet> {
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             child: SizedBox(
-              height: 300,
+              height: 230,
               child: Stack(
                 children: [
                   LetoMap(
@@ -257,7 +310,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                       fg: letoDark,
                       icon: vehicleIcons[d['vehicleType']],
                     ),
-                    PaymentBadge(d['paymentMethod']),
+                    const CashPill(),
                     if (cod > 0) CodBadge(cod),
                   ],
                 ),
@@ -305,13 +358,60 @@ class _CourseSheetState extends State<_CourseSheet> {
                     style: const TextStyle(fontSize: 18),
                   ),
                 ),
+                const SizedBox(height: 16),
+                // ----- Proposez votre prix -----
+                if (widget.myOffer != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: letoOrange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      'Votre proposition : ${fcfa(widget.myOffer!['price'])} · en attente du client',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF9A4A00),
+                      ),
+                    ),
+                  ),
+                const Text(
+                  'Proposez votre prix',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.black54, fontSize: 15),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (final f in [1.1, 1.2]) ...[
+                      Expanded(
+                        child: _PriceChip(
+                          key: ValueKey('propose-$f'),
+                          label: fcfa(_round50(d['price'] * f)),
+                          onTap: _proposing
+                              ? null
+                              : () => _propose(_round50(d['price'] * f)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: _PriceChip(
+                        icon: Icons.edit_outlined,
+                        onTap: _proposing ? null : _customPrice,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 10),
                 FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFFF1F1EF),
                     foregroundColor: letoDark,
                   ),
-                  onPressed: () => Navigator.pop(context, false),
+                  onPressed: () => Navigator.pop(context),
                   child: const Text('Fermer'),
                 ),
               ],
@@ -321,4 +421,36 @@ class _CourseSheetState extends State<_CourseSheet> {
       ),
     );
   }
+}
+
+/// Bouton de prix proposé (+10 %, +20 %, personnalisé)
+class _PriceChip extends StatelessWidget {
+  final String? label;
+  final IconData? icon;
+  final VoidCallback? onTap;
+  const _PriceChip({super.key, this.label, this.icon, this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: const Color(0xFFF1F1EF),
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: SizedBox(
+        height: 60,
+        child: Center(
+          child: icon != null
+              ? Icon(icon, color: letoDark)
+              : Text(
+                  label!,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+        ),
+      ),
+    ),
+  );
 }

@@ -14,14 +14,12 @@ class OrderScreen extends StatefulWidget {
   final Place dropoff;
   final Map<String, dynamic> quote;
   final String vehicle;
-  final String payment;
   const OrderScreen({
     super.key,
     required this.pickup,
     required this.dropoff,
     required this.quote,
     required this.vehicle,
-    required this.payment,
   });
 
   @override
@@ -33,7 +31,6 @@ class _OrderScreenState extends State<OrderScreen> {
   final _form = GlobalKey<FormState>();
 
   String _speed = 'STANDARD';
-  late String _payment = widget.payment;
   bool _cod = false;
   bool _sending = false;
   String? _pickupPhoto;
@@ -68,7 +65,6 @@ class _OrderScreenState extends State<OrderScreen> {
         {
           'vehicleType': widget.vehicle,
           'speed': _speed,
-          'paymentMethod': _payment,
           'pickupLat': widget.pickup.point.latitude,
           'pickupLng': widget.pickup.point.longitude,
           'pickupAddress': widget.pickup.label,
@@ -251,31 +247,21 @@ class _OrderScreenState extends State<OrderScreen> {
                 ),
               ],
             ),
-            // ----- Paiement de la course -----
-            _Section(
-              title: 'Paiement de la course',
+            // ----- Paiement -----
+            const _Section(
               children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                Row(
                   children: [
-                    for (final e in paymentLabels.entries)
-                      ChoiceChip(
-                        avatar: Icon(paymentIcons[e.key], size: 18),
-                        label: Text(e.value),
-                        selected: _payment == e.key,
-                        onSelected: (_) => setState(() => _payment = e.key),
+                    Icon(Icons.payments_outlined, color: letoGreen),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Paiement de la course en espèces, au livreur',
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
+                    ),
                   ],
                 ),
-                if (_payment != 'CASH')
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Vous payez le livreur directement par Mobile Money.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
               ],
             ),
           ],

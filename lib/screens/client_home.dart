@@ -37,7 +37,6 @@ class _ClientHomeState extends State<ClientHome> {
   Place? _dropoff;
   Map<String, dynamic>? _quote;
   String _vehicle = 'MOTO';
-  String _payment = 'CASH';
 
   Map<String, dynamic>? _active; // livraison en cours
 
@@ -190,7 +189,6 @@ class _ClientHomeState extends State<ClientHome> {
           dropoff: _dropoff!,
           quote: _quote!,
           vehicle: _vehicle,
-          payment: _payment,
         ),
       ),
     );
@@ -214,38 +212,6 @@ class _ClientHomeState extends State<ClientHome> {
         setState(() => _active = active.isEmpty ? null : active.first);
       }
     } catch (_) {}
-  }
-
-  Future<void> _choosePayment() async {
-    final m = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Paiement de la course',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            for (final e in paymentLabels.entries)
-              ListTile(
-                leading: Icon(paymentIcons[e.key]),
-                title: Text(e.value),
-                subtitle: e.key == 'CASH'
-                    ? null
-                    : const Text('Paiement direct au livreur'),
-                trailing: _payment == e.key
-                    ? const Icon(Icons.check_circle, color: letoOrange)
-                    : null,
-                onTap: () => Navigator.pop(ctx, e.key),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (m != null) setState(() => _payment = m);
   }
 
   // ---------- UI ----------
@@ -478,26 +444,20 @@ class _ClientHomeState extends State<ClientHome> {
       const SizedBox(height: 12),
       Row(
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: _choosePayment,
-            child: Container(
-              height: 54,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Icon(paymentIcons[_payment], color: letoGreen),
-                  const SizedBox(width: 6),
-                  Text(
-                    paymentLabels[_payment]!,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+          // Paiement en espèces uniquement
+          Container(
+            height: 54,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.payments_outlined, color: letoGreen),
+                SizedBox(width: 6),
+                Text('Espèces', style: TextStyle(fontWeight: FontWeight.w600)),
+              ],
             ),
           ),
           const SizedBox(width: 10),

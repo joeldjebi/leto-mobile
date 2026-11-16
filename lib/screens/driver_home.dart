@@ -14,8 +14,8 @@ import '../realtime.dart';
 import 'driver_course_sheet.dart';
 import 'widgets.dart';
 
-/// Accueil livreur (style inDrive) : En ligne / Hors ligne, liste des courses,
-/// course en cours, performance.
+/// Accueil livreur (esprit Yango) : carte plein écran + panneau glissant
+/// avec trois onglets : Courses, En cours, Gains.
 class DriverHome extends StatefulWidget {
   const DriverHome({super.key});
   @override
@@ -25,8 +25,18 @@ class DriverHome extends StatefulWidget {
 class _DriverHomeState extends State<DriverHome> {
   final api = Api.instance;
   final _scaffold = GlobalKey<ScaffoldState>();
+  final _map = MapController();
+  final _sheet = DraggableScrollableController();
 
-  int _tab = 0;
+  int _tab = 0; // 0 Courses · 1 En cours · 2 Gains
+  ScrollController? _sheetScroll;
+
+  /// Change d'onglet et remonte en haut du panneau
+  void _setTab(int i) {
+    setState(() => _tab = i);
+    if (_sheetScroll?.hasClients == true) _sheetScroll!.jumpTo(0);
+  }
+
   bool _online = false;
   LatLng? _me;
   Timer? _timer;
@@ -36,6 +46,11 @@ class _DriverHomeState extends State<DriverHome> {
 
   List<Map<String, dynamic>> _available = [];
   List<Map<String, dynamic>> _mine = [];
+  Map<String, Map<String, dynamic>> _myOffers =
+      {}; // deliveryId → ma proposition
+
+  RouteInfo? _activeRoute;
+  String? _activeRouteKey;
 
   List<Map<String, dynamic>> get _active => _mine
       .where((d) => ['ACCEPTED', 'PICKED_UP'].contains(d['status']))
@@ -50,7 +65,10 @@ class _DriverHomeState extends State<DriverHome> {
       const Duration(seconds: 15),
       (_) => mounted ? setState(() {}) : null,
     );
-    Realtime.instance.socket.on('deliveries:changed', _onDeliveriesChanged);
+    final s = Realtime.instance.socket;
+    s.on('deliveries:changed', _onDeliveriesChanged);
+    s.on('offer:accepted', _onOfferAccepted);
+    s.on('offer:rejected', _onOfferRejected);
     SharedPreferences.getInstance().then((p) {
       if (p.getBool('driver_online') == true) _goOnline();
     });
@@ -61,24 +79,52 @@ class _DriverHomeState extends State<DriverHome> {
     _timer?.cancel();
     _clock?.cancel();
     _stopGps();
-    Realtime.instance.socket.off('deliveries:changed', _onDeliveriesChanged);
+    final s = Realtime.instance.socket;
+    s.off('deliveries:changed', _onDeliveriesChanged);
+    s.off('offer:accepted', _onOfferAccepted);
+    s.off('offer:rejected', _onOfferRejected);
     super.dispose();
   }
 
   void _onDeliveriesChanged(dynamic _) => _load();
 
+  Future<void> _onOfferAccepted(dynamic _) async {
+    await _load();
+    if (!mounted) return;
+    _setTab(1);
+    showInfo(
+      context,
+      'Le client a accepté votre prix — direction le point de départ',
+    );
+  }
+
+  void _onOfferRejected(dynamic _) {
+    _load();
+    if (mounted) {
+      showInfo(context, 'Le client n’a pas retenu votre proposition');
+    }
+  }
+
   Future<void> _load() async {
     try {
-      final r = await Future.wait([api.available(), api.driverDeliveries()]);
+      final r = await Future.wait([
+        api.available(),
+        api.driverDeliveries(),
+        api.myOffers(),
+      ]);
       if (!mounted) return;
       setState(() {
         _available = r[0].cast<Map<String, dynamic>>();
         _mine = r[1].cast<Map<String, dynamic>>();
-        // Les plus proches d'abord
+        _myOffers = {
+          for (final o in r[2].cast<Map<String, dynamic>>())
+            o['deliveryId'] as String: o,
+        };
         if (_me != null) {
           _available.sort((a, b) => _distanceTo(a).compareTo(_distanceTo(b)));
         }
       });
+      _refreshActiveRoute();
     } catch (e) {
       if (mounted) showError(context, e);
     }
@@ -87,6 +133,34 @@ class _DriverHomeState extends State<DriverHome> {
   double _distanceTo(Map d) {
     final p = pointOf(d, 'pickup');
     return (_me == null || p == null) ? double.infinity : distanceKm(_me!, p);
+  }
+
+  /// Itinéraire vers la prochaine étape de la course en cours (dessiné sur la carte)
+  Future<void> _refreshActiveRoute() async {
+    if (_active.isEmpty) {
+      if (_activeRoute != null) setState(() => _activeRoute = null);
+      _activeRouteKey = null;
+      return;
+    }
+    final d = _active.first;
+    final to = pointOf(d, d['status'] == 'ACCEPTED' ? 'pickup' : 'dropoff');
+    final from = _me ?? pointOf(d, 'pickup');
+    if (from == null || to == null) return;
+    final key = '${d['id']}-${d['status']}';
+    if (key == _activeRouteKey) return;
+    _activeRouteKey = key;
+    try {
+      final r = await api.route(from, to);
+      if (!mounted) return;
+      setState(() => _activeRoute = r);
+      _fitMap([from, to, ...r.points]);
+    } catch (_) {}
+  }
+
+  /// Cadre la carte au-dessus du panneau
+  void _fitMap(List<LatLng?> pts) {
+    final h = MediaQuery.of(context).size.height;
+    fitPoints(_map, pts, padding: EdgeInsets.fromLTRB(50, 110, 50, h * 0.5));
   }
 
   // ---------- En ligne / Hors ligne ----------
@@ -101,6 +175,7 @@ class _DriverHomeState extends State<DriverHome> {
     setState(() => _online = true);
     (await SharedPreferences.getInstance()).setBool('driver_online', true);
     _sendPosition(first);
+    _map.move(first, 14);
     if (devPosition == null) {
       _gps =
           Geolocator.getPositionStream(
@@ -151,11 +226,22 @@ class _DriverHomeState extends State<DriverHome> {
   // ---------- Actions ----------
 
   Future<void> _openCourse(Map<String, dynamic> d) async {
-    final accepted = await showCourseSheet(context, d, _me);
+    final result = await showCourseSheet(
+      context,
+      d,
+      _me,
+      myOffer: _myOffers[d['id']],
+    );
     await _load();
-    if (accepted == true && mounted) {
-      setState(() => _tab = 1);
+    if (!mounted) return;
+    if (result == 'accepted') {
+      _setTab(1);
       showInfo(context, 'Course acceptée — direction le point de départ');
+    } else if (result == 'offered') {
+      showInfo(
+        context,
+        'Proposition envoyée — en attente de la réponse du client',
+      );
     }
   }
 
@@ -222,7 +308,10 @@ class _DriverHomeState extends State<DriverHome> {
       ),
     );
     if (code != null && code.isNotEmpty) {
-      await _run(() => api.deliver(d['id'], code), 'Livraison terminée 🎉');
+      await _run(
+        () => api.deliver(d['id'], code),
+        'Livraison terminée, bravo !',
+      );
     }
   }
 
@@ -230,9 +319,16 @@ class _DriverHomeState extends State<DriverHome> {
 
   @override
   Widget build(BuildContext context) {
+    final active = _active.isEmpty ? null : _active.first;
+    final target = active == null
+        ? null
+        : pointOf(
+            active,
+            active['status'] == 'ACCEPTED' ? 'pickup' : 'dropoff',
+          );
+
     return Scaffold(
       key: _scaffold,
-      backgroundColor: Colors.white,
       drawer: LetoDrawer(
         items: [
           ListTile(
@@ -250,133 +346,298 @@ class _DriverHomeState extends State<DriverHome> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      body: Stack(
+        children: [
+          // ----- Carte -----
+          LetoMap(
+            controller: _map,
+            layers: [
+              if (_activeRoute != null)
+                routeLayer(
+                  _activeRoute!.points,
+                  color: active?['status'] == 'ACCEPTED'
+                      ? const Color(0xFF3D5AFE)
+                      : const Color(0xFF2E7D32),
+                ),
+              MarkerLayer(
+                markers: [
+                  // Courses disponibles : étiquettes de prix au point de départ
+                  if (active == null && _online)
+                    for (final d in _available)
+                      if (pointOf(d, 'pickup') != null)
+                        Marker(
+                          point: pointOf(d, 'pickup')!,
+                          width: 96,
+                          height: 38,
+                          child: GestureDetector(
+                            onTap: () => _openCourse(d),
+                            child: _PriceTag(d['price']),
+                          ),
+                        ),
+                  if (target != null)
+                    pointMarker(
+                      target,
+                      dropoff: active!['status'] != 'ACCEPTED',
+                    ),
+                  if (_me != null) myMarker(_me!),
+                ],
+              ),
+            ],
+          ),
+          // ----- Barre du haut -----
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
                   RoundButton(
                     Icons.menu,
                     onTap: () => _scaffold.currentState!.openDrawer(),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _OnlineSwitch(
-                      online: _online,
-                      onTap: _online ? _goOffline : _goOnline,
-                    ),
+                  const Spacer(),
+                  _StatusPill(
+                    online: _online,
+                    onChanged: (v) => v ? _goOnline() : _goOffline(),
                   ),
-                  const SizedBox(width: 12),
-                  RoundButton(Icons.refresh, onTap: _load),
+                  const Spacer(),
+                  RoundButton(
+                    Icons.near_me_outlined,
+                    onTap: () =>
+                        _me != null ? _map.move(_me!, 15) : _goOnline(),
+                  ),
                 ],
               ),
             ),
-            Expanded(
-              child: IndexedStack(
-                index: _tab,
-                children: [_ordersTab(), _activeTab(), _performanceTab()],
-              ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        backgroundColor: Colors.white,
-        destinations: [
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: _online && _available.isNotEmpty,
-              label: Text('${_available.length}'),
-              child: const Icon(Icons.list_alt),
-            ),
-            label: 'Courses',
           ),
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: _active.isNotEmpty,
-              label: Text('${_active.length}'),
-              child: const Icon(Icons.bolt),
-            ),
-            label: 'En cours',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.grid_view),
-            label: 'Performance',
+          // ----- Panneau -----
+          DraggableScrollableSheet(
+            controller: _sheet,
+            initialChildSize: 0.5,
+            minChildSize: 0.18,
+            maxChildSize: 0.92,
+            snap: true,
+            snapSizes: const [0.5],
+            builder: (context, scroll) {
+              _sheetScroll = scroll;
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 18)],
+                ),
+                child: RefreshIndicator(
+                  onRefresh: _load,
+                  child: CustomScrollView(
+                    controller: scroll,
+                    slivers: [
+                      // Poignée + onglets toujours visibles en haut du panneau
+                      SliverPersistentHeader(
+                        pinned: true,
+                        delegate: _SheetHeader(
+                          _Tabs(
+                            index: _tab,
+                            labels: [
+                              'Courses${_online && _available.isNotEmpty ? ' · ${_available.length}' : ''}',
+                              'En cours${_active.isNotEmpty ? ' · ${_active.length}' : ''}',
+                              'Gains',
+                            ],
+                            onChanged: _setTab,
+                          ),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate(switch (_tab) {
+                            0 => _ordersTab(),
+                            1 => _activeTab(),
+                            _ => _gainsTab(),
+                          }),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  // ----- Onglet 1 : commandes de course -----
-  Widget _ordersTab() {
+  // ----- Onglet Courses -----
+  List<Widget> _ordersTab() {
     if (!_online) {
-      return _Empty(
-        icon: Icons.power_settings_new,
-        title: 'Vous êtes hors ligne',
-        text: 'Passez en ligne pour recevoir les courses autour de vous.',
-        action: FilledButton(
-          onPressed: _goOnline,
-          child: const Text('Passer en ligne'),
+      return [
+        const _Title('VOUS ÊTES HORS LIGNE'),
+        const SizedBox(height: 6),
+        const Text(
+          'Passez en ligne pour recevoir les courses autour de vous.',
+          style: TextStyle(color: Colors.black54, fontSize: 15),
         ),
-      );
+        const SizedBox(height: 18),
+        FilledButton.icon(
+          onPressed: _goOnline,
+          icon: const Icon(Icons.power_settings_new),
+          label: const Text('Passer en ligne'),
+        ),
+      ];
     }
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: _available.isEmpty
-          ? ListView(
-              children: const [
-                _Empty(
-                  icon: Icons.inbox_outlined,
-                  title: 'Aucune course pour le moment',
-                  text: 'Les nouvelles courses apparaissent ici en temps réel.',
-                ),
-              ],
-            )
-          : ListView.separated(
-              itemCount: _available.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) => _OrderTile(
-                d: _available[i],
-                distance: _me == null ? null : _distanceTo(_available[i]),
-                onTap: () => _openCourse(_available[i]),
-              ),
-            ),
-    );
+    return [
+      const _Title('COURSES DISPONIBLES'),
+      const SizedBox(height: 4),
+      Text(
+        _available.isEmpty
+            ? 'Aucune course pour le moment. Elles apparaissent ici en temps réel.'
+            : 'En temps réel · les plus proches d’abord',
+        style: const TextStyle(color: Colors.black54),
+      ),
+      const SizedBox(height: 14),
+      for (final d in _available)
+        _OrderCard(
+          d: d,
+          distance: _me == null ? null : _distanceTo(d),
+          myOffer: _myOffers[d['id']],
+          onTap: () => _openCourse(d),
+        ),
+    ];
   }
 
-  // ----- Onglet 2 : course en cours -----
-  Widget _activeTab() {
+  // ----- Onglet En cours -----
+  List<Widget> _activeTab() {
     if (_active.isEmpty) {
-      return _Empty(
-        icon: Icons.bolt,
-        title: 'Aucune course en cours',
-        text: 'Acceptez une course dans l’onglet « Courses ».',
-        action: OutlinedButton(
-          onPressed: () => setState(() => _tab = 0),
+      return [
+        const _Title('AUCUNE COURSE EN COURS'),
+        const SizedBox(height: 6),
+        const Text(
+          'Acceptez une course ou proposez votre prix dans l’onglet « Courses ».',
+          style: TextStyle(color: Colors.black54, fontSize: 15),
+        ),
+        const SizedBox(height: 18),
+        OutlinedButton(
+          onPressed: () => _setTab(0),
           child: const Text('Voir les courses'),
         ),
-      );
+      ];
     }
     final d = _active.first;
-    return _ActiveCourse(
-      key: ValueKey('${d['id']}-${d['status']}'),
-      d: d,
-      me: _me,
-      onPickup: () => _run(
-        () => api.pickup(d['id']),
-        'Colis récupéré — direction le destinataire',
+    final toPickup = d['status'] == 'ACCEPTED';
+    final cod = (d['codAmount'] ?? 0) as num;
+    final contactName = toPickup
+        ? (d['pickupContactName'] ?? d['client']?['name'] ?? '')
+        : d['recipientName'];
+    final contactPhone = toPickup ? d['pickupPhone'] : d['recipientPhone'];
+    final photo = toPickup ? d['pickupPhotoUrl'] : d['dropoffPhotoUrl'];
+
+    return [
+      StatusSteps(d['status']),
+      const SizedBox(height: 16),
+      _Title(toPickup ? 'VERS LE DÉPART' : 'VERS LE DESTINATAIRE'),
+      if (_activeRoute != null)
+        Text(
+          '${_activeRoute!.durationMin} min · ${km(_activeRoute!.distanceKm)}',
+          style: const TextStyle(color: Colors.black54, fontSize: 15),
+        ),
+      const SizedBox(height: 12),
+      PointLine(
+        dropoff: !toPickup,
+        title: toPickup
+            ? '${d['pickupAddress']} (${d['pickupCommune']})'
+            : '${d['dropoffAddress']} (${d['dropoffCommune']})',
+        detail: toPickup ? d['pickupDetails'] : d['dropoffDetails'],
       ),
-      onDeliver: () => _askCode(d),
-    );
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Avatar(contactName, radius: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    contactName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    toPickup ? 'Expéditeur' : 'Destinataire',
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.phone, color: letoGreen, size: 18),
+            const SizedBox(width: 4),
+            SelectableText(
+              contactPhone,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+      if (photo != null) ...[
+        const SizedBox(height: 10),
+        Align(alignment: Alignment.centerLeft, child: AddressPhoto(photo)),
+      ],
+      if ((d['courierComment'] ?? '').toString().isNotEmpty) ...[
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            const Icon(Icons.chat_bubble_outline, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(d['courierComment'])),
+          ],
+        ),
+      ],
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          Pill(
+            'Course ${fcfa(d['price'])}',
+            bg: const Color(0xFFEDEDED),
+            fg: letoDark,
+          ),
+          const CashPill(),
+          if (cod > 0) CodBadge(cod),
+        ],
+      ),
+      if (!toPickup && cod > 0)
+        const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: Text(
+            'Encaissez le montant avant de remettre le colis.',
+            style: TextStyle(color: Color(0xFF9A4A00)),
+          ),
+        ),
+      const SizedBox(height: 16),
+      FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: toPickup ? letoDark : letoGreen,
+        ),
+        onPressed: toPickup
+            ? () => _run(
+                () => api.pickup(d['id']),
+                'Colis récupéré — direction le destinataire',
+              )
+            : () => _askCode(d),
+        child: Text(
+          toPickup ? 'J’ai récupéré le colis' : 'Livrer · saisir le code',
+        ),
+      ),
+    ];
   }
 
-  // ----- Onglet 3 : performance -----
-  Widget _performanceTab() {
+  // ----- Onglet Gains -----
+  List<Widget> _gainsTab() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final weekStart = today.subtract(Duration(days: today.weekday - 1));
@@ -391,107 +652,156 @@ class _DriverHomeState extends State<DriverHome> {
     final todayList = since(today);
     final weekList = since(weekStart);
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            'Performance',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.5,
-            children: [
-              _StatCard(
-                'Courses aujourd’hui',
-                '${todayList.length}',
-                Icons.check_circle_outline,
+    return [
+      const _Title('MES GAINS'),
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: letoDark,
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Aujourd’hui', style: TextStyle(color: Colors.white70)),
+            Text(
+              fcfa(sum(todayList, 'price')),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 34,
+                fontWeight: FontWeight.w900,
               ),
-              _StatCard(
-                'Gains aujourd’hui',
-                fcfa(sum(todayList, 'price')),
-                Icons.trending_up,
-              ),
-              _StatCard(
-                'Courses cette semaine',
-                '${weekList.length}',
-                Icons.calendar_today_outlined,
-              ),
-              _StatCard(
-                'Gains cette semaine',
-                fcfa(sum(weekList, 'price')),
-                Icons.account_balance_wallet_outlined,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _StatCard(
-            'Encaissé pour l’entreprise aujourd’hui (paiement à la livraison)',
-            fcfa(sum(todayList, 'codAmount')),
-            Icons.payments_outlined,
-            highlight: true,
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Dernières courses',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          ...delivered.take(10).map((d) => DeliveryCard(d)),
-          if (delivered.isEmpty)
-            const Text(
-              'Aucune course livrée pour l’instant.',
-              style: TextStyle(color: Colors.grey),
             ),
+            Text(
+              '${todayList.length} course(s) livrée(s)',
+              style: const TextStyle(color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          Expanded(
+            child: _StatCard(
+              'Cette semaine',
+              fcfa(sum(weekList, 'price')),
+              '${weekList.length} course(s)',
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatCard(
+              'Encaissé pour l’entreprise',
+              fcfa(sum(todayList, 'codAmount')),
+              'aujourd’hui (paiement à la livraison)',
+              highlight: true,
+            ),
+          ),
         ],
       ),
-    );
+      const SizedBox(height: 20),
+      const Text(
+        'Dernières courses',
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: 8),
+      ...delivered.take(10).map((d) => DeliveryCard(d)),
+      if (delivered.isEmpty)
+        const Text(
+          'Aucune course livrée pour l’instant.',
+          style: TextStyle(color: Colors.grey),
+        ),
+    ];
   }
 }
 
-/// Interrupteur En ligne / Hors ligne (pastille qui glisse)
-class _OnlineSwitch extends StatelessWidget {
+/// En-tête épinglé du panneau : poignée + onglets
+class _SheetHeader extends SliverPersistentHeaderDelegate {
+  final Widget tabs;
+  _SheetHeader(this.tabs);
+
+  @override
+  double get minExtent => 92;
+  @override
+  double get maxExtent => 92;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => Container(
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+    child: Column(children: [const Handle(), const SizedBox(height: 14), tabs]),
+  );
+
+  @override
+  bool shouldRebuild(_SheetHeader old) => true;
+}
+
+/// Grand titre façon Yango
+class _Title extends StatelessWidget {
+  final String text;
+  const _Title(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(
+      fontSize: 24,
+      fontWeight: FontWeight.w900,
+      letterSpacing: -0.5,
+    ),
+  );
+}
+
+/// Interrupteur En ligne / Hors ligne (pastille flottante)
+class _StatusPill extends StatelessWidget {
   final bool online;
-  final VoidCallback onTap;
-  const _OnlineSwitch({required this.online, required this.onTap});
+  final ValueChanged<bool> onChanged;
+  const _StatusPill({required this.online, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final color = online ? letoGreen : const Color(0xFFE53945);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 50,
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(25),
-          border: Border.all(color: color, width: 2),
-        ),
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 200),
-          alignment: online ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(21),
-            ),
-            child: Text(
-              online ? 'En ligne' : 'Hors ligne',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
+    return Material(
+      color: Colors.white,
+      elevation: 4,
+      borderRadius: BorderRadius.circular(30),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(30),
+        onTap: () => onChanged(!online),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
-            ),
+              const SizedBox(width: 8),
+              Text(
+                online ? 'En ligne' : 'Hors ligne',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Switch(
+                value: online,
+                activeTrackColor: letoGreen,
+                onChanged: onChanged,
+              ),
+            ],
           ),
         ),
       ),
@@ -499,404 +809,223 @@ class _OnlineSwitch extends StatelessWidget {
   }
 }
 
-/// Ligne de la liste des courses (style inDrive)
-class _OrderTile extends StatelessWidget {
+/// Onglets en pastilles
+class _Tabs extends StatelessWidget {
+  final int index;
+  final List<String> labels;
+  final ValueChanged<int> onChanged;
+  const _Tabs({
+    required this.index,
+    required this.labels,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF1F1F1),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Row(
+      children: [
+        for (var i = 0; i < labels.length; i++)
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: i == index ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: i == index
+                      ? const [BoxShadow(color: Colors.black12, blurRadius: 6)]
+                      : null,
+                ),
+                child: Text(
+                  labels[i],
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: i == index ? FontWeight.w800 : FontWeight.w500,
+                    color: i == index ? letoDark : Colors.black54,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+/// Carte d'une course disponible
+class _OrderCard extends StatelessWidget {
   final Map<String, dynamic> d;
   final double? distance;
+  final Map<String, dynamic>? myOffer;
   final VoidCallback onTap;
-  const _OrderTile({
+  const _OrderCard({
     required this.d,
     required this.distance,
+    required this.myOffer,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final cod = (d['codAmount'] ?? 0) as num;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 16, 16, 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 84,
-              child: Column(
-                children: [
-                  Avatar(d['client']?['name'] ?? '?', radius: 28),
-                  const SizedBox(height: 6),
-                  Text(
-                    d['client']?['name'] ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  Text(
-                    timeAgo(d['createdAt']),
-                    style: const TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (distance != null && distance!.isFinite)
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: const Color(0xFFF7F7F8),
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
                     Text(
-                      '~${km(distance!)}',
-                      style: const TextStyle(color: Colors.grey, fontSize: 16),
+                      fcfa(d['price']),
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  Row(
-                    children: [
-                      Text(
-                        fcfa(d['price']),
+                    const SizedBox(width: 8),
+                    if (d['speed'] == 'EXPRESS')
+                      const Pill(
+                        'Express',
+                        bg: Color(0xFFFFE0E0),
+                        fg: Color(0xFFB71C1C),
+                        icon: Icons.bolt,
+                      ),
+                    if (d['speed'] == 'SCHEDULED')
+                      const Pill(
+                        'Dans 2 h',
+                        bg: Color(0xFFE3F2FD),
+                        fg: Color(0xFF0D47A1),
+                        icon: Icons.schedule,
+                      ),
+                    const Spacer(),
+                    Icon(
+                      vehicleIcons[d['vehicleType']],
+                      color: letoDark,
+                      size: 28,
+                    ),
+                  ],
+                ),
+                Text(
+                  [
+                    if (distance != null && distance!.isFinite)
+                      'à ${km(distance!)}',
+                    if (d['distanceKm'] != null)
+                      'trajet ${km(d['distanceKm'])}',
+                  ].join(' · '),
+                  style: const TextStyle(color: Colors.black54),
+                ),
+                const SizedBox(height: 10),
+                PointLine(
+                  title: '${d['pickupAddress']} (${d['pickupCommune']})',
+                ),
+                PointLine(
+                  dropoff: true,
+                  title: '${d['dropoffAddress']} (${d['dropoffCommune']})',
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Avatar(d['client']?['name'] ?? '?', radius: 14),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${d['client']?['name'] ?? ''} · ${timeAgo(d['createdAt'])}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
+                          color: Colors.black54,
+                          fontSize: 13,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      if (d['speed'] == 'EXPRESS')
-                        const Pill(
-                          'Express',
-                          bg: Color(0xFFFFE0E0),
-                          fg: Color(0xFFB71C1C),
-                          icon: Icons.bolt,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${d['pickupAddress']} (${d['pickupCommune']})',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${d['dropoffAddress']} (${d['dropoffCommune']})',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      if (d['vehicleType'] != 'MOTO')
-                        Pill(
-                          vehicleLabels[d['vehicleType']]!,
-                          bg: const Color(0xFFEDEDED),
-                          fg: letoDark,
-                          icon: vehicleIcons[d['vehicleType']],
-                        ),
-                      if (d['paymentMethod'] != 'CASH')
-                        PaymentBadge(d['paymentMethod']),
-                      if (cod > 0) CodBadge(cod),
-                    ],
+                    if (cod > 0) CodBadge(cod),
+                  ],
+                ),
+                if (myOffer != null) ...[
+                  const SizedBox(height: 10),
+                  Pill(
+                    'Votre proposition : ${fcfa(myOffer!['price'])} · en attente',
+                    bg: letoOrange.withValues(alpha: 0.12),
+                    fg: const Color(0xFF9A4A00),
+                    icon: Icons.hourglass_top,
                   ),
                 ],
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Course en cours : carte vers la prochaine étape + infos + action
-class _ActiveCourse extends StatefulWidget {
-  final Map<String, dynamic> d;
-  final LatLng? me;
-  final VoidCallback onPickup;
-  final VoidCallback onDeliver;
-  const _ActiveCourse({
-    super.key,
-    required this.d,
-    required this.me,
-    required this.onPickup,
-    required this.onDeliver,
-  });
+/// Étiquette de prix sur la carte
+class _PriceTag extends StatelessWidget {
+  final num price;
+  const _PriceTag(this.price);
 
   @override
-  State<_ActiveCourse> createState() => _ActiveCourseState();
-}
-
-class _ActiveCourseState extends State<_ActiveCourse> {
-  final _map = MapController();
-  RouteInfo? _route;
-  bool _ready = false;
-
-  bool get _toPickup => widget.d['status'] == 'ACCEPTED';
-  LatLng? get _target => pointOf(widget.d, _toPickup ? 'pickup' : 'dropoff');
-
-  @override
-  void initState() {
-    super.initState();
-    _loadRoute();
-  }
-
-  Future<void> _loadRoute() async {
-    final from = widget.me ?? pointOf(widget.d, 'pickup');
-    final to = _target;
-    if (from == null || to == null) return;
-    try {
-      final r = await Api.instance.route(from, to);
-      if (!mounted) return;
-      setState(() => _route = r);
-      if (_ready) {
-        fitPoints(_map, [
-          from,
-          to,
-          ...r.points,
-        ], padding: const EdgeInsets.all(40));
-      }
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final d = widget.d;
-    final cod = (d['codAmount'] ?? 0) as num;
-    final target = _target;
-    final contactName = _toPickup
-        ? (d['pickupContactName'] ?? d['client']?['name'] ?? '')
-        : d['recipientName'];
-    final contactPhone = _toPickup ? d['pickupPhone'] : d['recipientPhone'];
-    final details = _toPickup ? d['pickupDetails'] : d['dropoffDetails'];
-    final photo = _toPickup ? d['pickupPhotoUrl'] : d['dropoffPhotoUrl'];
-
-    return Column(
-      children: [
-        SizedBox(
-          height: 260,
-          child: LetoMap(
-            controller: _map,
-            center: target ?? abidjan,
-            zoom: 14,
-            onReady: () {
-              _ready = true;
-              fitPoints(_map, [
-                widget.me,
-                target,
-                ...?_route?.points,
-              ], padding: const EdgeInsets.all(40));
-            },
-            layers: [
-              if (_route != null)
-                routeLayer(
-                  _route!.points,
-                  color: _toPickup
-                      ? const Color(0xFF3D5AFE)
-                      : const Color(0xFF2E7D32),
-                ),
-              MarkerLayer(
-                markers: [
-                  if (target != null) pointMarker(target, dropoff: !_toPickup),
-                  if (widget.me != null) myMarker(widget.me!),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              StatusSteps(d['status']),
-              const SizedBox(height: 14),
-              Text(
-                _toPickup
-                    ? 'Direction le point de départ'
-                    : 'Direction le destinataire',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (_route != null)
-                Text(
-                  '${_route!.durationMin} min · ${km(_route!.distanceKm)}',
-                  style: const TextStyle(color: Colors.grey, fontSize: 15),
-                ),
-              const SizedBox(height: 10),
-              PointLine(
-                dropoff: !_toPickup,
-                title: _toPickup
-                    ? '${d['pickupAddress']} (${d['pickupCommune']})'
-                    : '${d['dropoffAddress']} (${d['dropoffCommune']})',
-                detail: details,
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    Avatar(contactName, radius: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            contactName,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            _toPickup ? 'Expéditeur' : 'Destinataire',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.phone, color: letoGreen, size: 18),
-                    const SizedBox(width: 4),
-                    SelectableText(
-                      contactPhone,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-              if (photo != null) ...[
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: AddressPhoto(photo),
-                ),
-              ],
-              if ((d['courierComment'] ?? '').toString().isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(Icons.chat_bubble_outline, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(d['courierComment'])),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  Pill(
-                    'Course ${fcfa(d['price'])}',
-                    bg: const Color(0xFFEDEDED),
-                    fg: letoDark,
-                  ),
-                  PaymentBadge(d['paymentMethod']),
-                  if (cod > 0) CodBadge(cod),
-                ],
-              ),
-              if (!_toPickup && cod > 0)
-                const Padding(
-                  padding: EdgeInsets.only(top: 6),
-                  child: Text(
-                    'Encaissez le montant avant de remettre le colis.',
-                    style: TextStyle(color: Color(0xFF9A4A00)),
-                  ),
-                ),
-              const SizedBox(height: 16),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: _toPickup ? letoDark : letoGreen,
-                ),
-                onPressed: _toPickup ? widget.onPickup : widget.onDeliver,
-                child: Text(
-                  _toPickup
-                      ? 'J’ai récupéré le colis'
-                      : 'Livrer · saisir le code',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: letoDark,
+      borderRadius: BorderRadius.circular(19),
+      border: Border.all(color: Colors.white, width: 2),
+      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
+    ),
+    child: Text(
+      fcfa(price),
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: 13,
+      ),
+    ),
+  );
 }
 
 class _StatCard extends StatelessWidget {
   final String label;
   final String value;
-  final IconData icon;
+  final String sub;
   final bool highlight;
-  const _StatCard(this.label, this.value, this.icon, {this.highlight = false});
+  const _StatCard(this.label, this.value, this.sub, {this.highlight = false});
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: highlight ? const Color(0xFFFFF1E5) : const Color(0xFFF7F7F8),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Icon(icon, color: highlight ? const Color(0xFF9A4A00) : letoDark),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-        ),
         Text(
           label,
           style: const TextStyle(color: Colors.black54, fontSize: 13),
         ),
-      ],
-    ),
-  );
-}
-
-class _Empty extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String text;
-  final Widget? action;
-  const _Empty({
-    required this.icon,
-    required this.title,
-    required this.text,
-    this.action,
-  });
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(32, 80, 32, 32),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 64, color: Colors.black26),
-        const SizedBox(height: 16),
+        const SizedBox(height: 4),
         Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          value,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
         ),
-        const SizedBox(height: 6),
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.grey),
-        ),
-        if (action != null) ...[const SizedBox(height: 20), action!],
+        Text(sub, style: const TextStyle(color: Colors.black45, fontSize: 12)),
       ],
     ),
   );

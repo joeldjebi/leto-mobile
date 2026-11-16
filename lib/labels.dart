@@ -24,28 +24,6 @@ const speedLabels = {
   'SCHEDULED': 'Dans 2 heures',
 };
 
-const paymentLabels = {
-  'CASH': 'Espèces',
-  'WAVE': 'Wave',
-  'ORANGE_MONEY': 'Orange Money',
-  'MTN_MOMO': 'MTN MoMo',
-};
-
-/// Couleurs des badges de paiement (fond, texte)
-const paymentColors = {
-  'CASH': (Color(0xFFE8F5E9), Color(0xFF1B5E20)),
-  'WAVE': (Color(0xFFD7F5FF), Color(0xFF0B6E99)),
-  'ORANGE_MONEY': (Color(0xFFFFE8D1), Color(0xFFB35400)),
-  'MTN_MOMO': (Color(0xFFFFF4C2), Color(0xFF7A5D00)),
-};
-
-const paymentIcons = {
-  'CASH': Icons.payments_outlined,
-  'WAVE': Icons.waves,
-  'ORANGE_MONEY': Icons.phone_android,
-  'MTN_MOMO': Icons.phone_android,
-};
-
 String fcfa(num n) {
   final s = n.toInt().toString().replaceAllMapped(
     RegExp(r'\B(?=(\d{3})+(?!\d))'),

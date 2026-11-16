@@ -209,6 +209,18 @@ class Api {
   Future<dynamic> deliver(String id, String code) =>
       _request('POST', '/deliveries/$id/deliver', {'code': code});
 
+  // ---------- Proposez votre prix ----------
+  Future<dynamic> proposePrice(String deliveryId, int price) =>
+      _request('POST', '/deliveries/$deliveryId/offers', {'price': price});
+  Future<List<dynamic>> myOffers() async =>
+      await _request('GET', '/offers/mine');
+  Future<List<dynamic>> offersFor(String deliveryId) async =>
+      await _request('GET', '/deliveries/$deliveryId/offers');
+  Future<dynamic> acceptOffer(String offerId) =>
+      _request('POST', '/offers/$offerId/accept');
+  Future<dynamic> declineOffer(String offerId) =>
+      _request('POST', '/offers/$offerId/decline');
+
   Future<dynamic> _request(
     String method,
     String path, [

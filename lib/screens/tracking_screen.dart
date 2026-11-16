@@ -30,6 +30,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
   LatLng? _driverPos;
   bool _driverFitted = false;
   void Function()? _unsubscribe;
+  List<Map<String, dynamic>> _offers = []; // propositions de prix des livreurs
+  Timer? _ticker; // compte à rebours des propositions
 
   bool get _finished => ['DELIVERED', 'CANCELLED'].contains(_d?['status']);
   bool _active(Map d) => ['ACCEPTED', 'PICKED_UP'].contains(d['status']);
@@ -44,6 +46,11 @@ class _TrackingScreenState extends State<TrackingScreen> {
     final rt = Realtime.instance;
     rt.socket.on('driver:location', _onDriverLocation);
     rt.socket.on('delivery:updated', _onDeliveryUpdated);
+    rt.socket.on('delivery:offers', _onOffers);
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_offers.isEmpty || !mounted) return;
+      setState(() => _offers.removeWhere((o) => _secondsLeft(o) <= 0));
+    });
     _unsubscribe = rt.onConnected(
       () => rt.socket.emit('delivery:watch', widget.id),
     );
@@ -52,7 +59,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _ticker?.cancel();
     final s = Realtime.instance.socket;
+    s.off('delivery:offers', _onOffers);
     s.off('driver:location', _onDriverLocation);
     s.off('delivery:updated', _onDeliveryUpdated);
     s.emit('delivery:unwatch', widget.id);
@@ -73,6 +82,49 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
   void _onDeliveryUpdated(dynamic e) {
     if (e is Map && e['id'] == widget.id) _load();
+  }
+
+  void _onOffers(dynamic e) {
+    if (e is Map && e['deliveryId'] == widget.id) _loadOffers();
+  }
+
+  // ---------- Proposez votre prix ----------
+
+  int _secondsLeft(Map o) =>
+      DateTime.parse(o['expiresAt']).difference(DateTime.now()).inSeconds;
+
+  Future<void> _loadOffers() async {
+    if (_d?['status'] != 'PENDING') {
+      if (_offers.isNotEmpty) setState(() => _offers = []);
+      return;
+    }
+    try {
+      final list = await api.offersFor(widget.id);
+      if (mounted) setState(() => _offers = list.cast<Map<String, dynamic>>());
+    } catch (_) {}
+  }
+
+  Future<void> _acceptOffer(Map o) async {
+    try {
+      await api.acceptOffer(o['id']);
+      if (mounted) {
+        showInfo(
+          context,
+          '${o['driver']['name']} arrive pour ${fcfa(o['price'])}',
+        );
+      }
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, e);
+      _loadOffers();
+    }
+  }
+
+  Future<void> _declineOffer(Map o) async {
+    setState(() => _offers.remove(o));
+    try {
+      await api.declineOffer(o['id']);
+    } catch (_) {}
   }
 
   Future<void> _load() async {
@@ -97,6 +149,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
         _fit();
         _loadRoute(d);
       }
+      _loadOffers();
       _fitDriver();
     } catch (e) {
       if (mounted) showError(context, e);
@@ -236,7 +289,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
       'PENDING' => 'Recherche d’un livreur…',
       'ACCEPTED' => 'Le livreur arrive au point de départ',
       'PICKED_UP' => 'Votre colis est en route',
-      'DELIVERED' => 'Colis livré ✅',
+      'DELIVERED' => 'Colis livré',
       _ => 'Livraison annulée',
     };
     final cod = (d['codAmount'] ?? 0) as num;
@@ -257,6 +310,22 @@ class _TrackingScreenState extends State<TrackingScreen> {
           'Votre demande est visible par les livreurs à proximité.',
           style: TextStyle(color: Colors.grey),
         ),
+        const SizedBox(height: 10),
+      ],
+      if (status == 'PENDING' && _offers.isNotEmpty) ...[
+        const Text(
+          'Propositions des livreurs',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        for (final o in _offers)
+          _OfferTile(
+            offer: o,
+            original: d['price'],
+            secondsLeft: _secondsLeft(o),
+            onAccept: () => _acceptOffer(o),
+            onDecline: () => _declineOffer(o),
+          ),
         const SizedBox(height: 10),
       ],
       if (status != 'CANCELLED') StatusSteps(status),
@@ -301,7 +370,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
             fg: letoDark,
             icon: vehicleIcons[d['vehicleType']],
           ),
-          PaymentBadge(d['paymentMethod']),
+          const CashPill(),
           if (cod > 0) CodBadge(cod),
         ],
       ),
@@ -310,7 +379,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
           padding: const EdgeInsets.only(top: 6),
           child: Text(
             d['codRemittedAt'] != null
-                ? 'Montant reversé par l’entreprise de livraison ✅'
+                ? 'Montant reversé par l’entreprise de livraison'
                 : status == 'DELIVERED'
                 ? 'Encaissé par le livreur — l’entreprise vous le reversera'
                 : 'Le livreur encaissera ${fcfa(cod)} auprès du destinataire',
@@ -408,4 +477,112 @@ class _TrackingScreenState extends State<TrackingScreen> {
       ],
     ),
   );
+}
+
+/// Proposition de prix d'un livreur (accepter / refuser)
+class _OfferTile extends StatelessWidget {
+  final Map<String, dynamic> offer;
+  final num original;
+  final int secondsLeft;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+  const _OfferTile({
+    required this.offer,
+    required this.original,
+    required this.secondsLeft,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final mm = (secondsLeft ~/ 60).toString();
+    final ss = (secondsLeft % 60).toString().padLeft(2, '0');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: letoOrange.withValues(alpha: 0.4)),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Avatar(offer['driver']['name'], radius: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      offer['driver']['name'],
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      [
+                        if (offer['company'] != null) offer['company']['name'],
+                        if (offer['etaMin'] != null)
+                          'arrive en ~${offer['etaMin']} min',
+                      ].join(' · '),
+                      style: const TextStyle(
+                        color: Colors.black54,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    fcfa(offer['price']),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    '+${fcfa(offer['price'] - original)}',
+                    style: const TextStyle(
+                      color: letoOrange,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
+                '$mm:$ss',
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+              const Spacer(),
+              TextButton(onPressed: onDecline, child: const Text('Refuser')),
+              const SizedBox(width: 6),
+              FilledButton(
+                style: FilledButton.styleFrom(minimumSize: const Size(130, 44)),
+                onPressed: onAccept,
+                child: const Text('Accepter'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -56,31 +56,48 @@ void main() {
       final comment = find.widgetWithText(TextFormField, 'Commentaire pour le coursier (facultatif)');
       await t.scrollUntilVisible(comment, 200, scrollable: find.byType(Scrollable).first);
       await t.enterText(comment, 'Appelez en arrivant svp');
-      await t.tap(find.text('Wave'));
       FocusManager.instance.primaryFocus?.unfocus();
       await wait(t, 1);
       await shot(t, 'client_order_bottom');
 
       await t.tap(find.text('Commander'));
-      await wait(t, 6);
+      await wait(t, 4);
       await shot(t, 'client_tracking');
+
+      // Un livreur (script auto_offer.js) propose son prix → la proposition s'affiche
+      await wait(t, 6);
+      await shot(t, 'client_offers');
+      await t.tap(find.text('Accepter'));
+      await wait(t, 5);
+      await shot(t, 'client_accepted');
     } else {
       await shot(t, 'driver_offline');
       await t.tap(find.text('Passer en ligne'));
       await wait(t, 6);
       await shot(t, 'driver_list');
 
-      await t.tap(find.textContaining('Vlisco').first);
+      final course = find.textContaining('Riviera Golf').first;
+      await t.ensureVisible(course);
+      await wait(t, 1);
+      await t.tap(course);
       await wait(t, 7);
       await shot(t, 'driver_sheet');
 
-      await t.tap(find.textContaining('Accepter pour'));
-      await wait(t, 6);
+      // Proposez votre prix : +10 %
+      final chip = find.byKey(const ValueKey('propose-1.1'));
+      await t.ensureVisible(chip);
+      await wait(t, 1);
+      await t.tap(chip);
+      await wait(t, 3);
+      await shot(t, 'driver_offered');
+
+      // Le client (script auto_accept.js) accepte → onglet « En cours »
+      await wait(t, 8);
       await shot(t, 'driver_active');
 
-      await t.tap(find.text('Performance'));
+      await t.tap(find.text('Gains'));
       await wait(t, 2);
-      await shot(t, 'driver_performance');
+      await shot(t, 'driver_gains');
     }
   });
 }

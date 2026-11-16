@@ -452,21 +452,17 @@ class Pill extends StatelessWidget {
   );
 }
 
-/// Badge du mode de paiement (Wave, Orange Money…)
-class PaymentBadge extends StatelessWidget {
-  final String method;
-  const PaymentBadge(this.method, {super.key});
+/// Paiement de la course : espèces uniquement
+class CashPill extends StatelessWidget {
+  const CashPill({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final (bg, fg) = paymentColors[method] ?? paymentColors['CASH']!;
-    return Pill(
-      paymentLabels[method] ?? method,
-      bg: bg,
-      fg: fg,
-      icon: paymentIcons[method],
-    );
-  }
+  Widget build(BuildContext context) => const Pill(
+    'Espèces',
+    bg: Color(0xFFE8F5E9),
+    fg: Color(0xFF1B5E20),
+    icon: Icons.payments_outlined,
+  );
 }
 
 /// Badge « Encaisser 15 000 F » (paiement à la livraison)
