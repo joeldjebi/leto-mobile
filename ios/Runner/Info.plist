@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>LETO utilise l’appareil photo pour photographier l’adresse (portail, devanture).</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LETO accède à vos photos pour joindre une photo de l’adresse.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>LETO utilise votre position pour placer le point de départ de la livraison.</string>
 	<key>NSAppTransportSecurity</key>

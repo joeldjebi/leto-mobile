@@ -13,13 +13,13 @@ class Realtime {
   io.Socket? _socket;
 
   io.Socket get socket => _socket ??= io.io(
-        apiUrl,
-        io.OptionBuilder()
-            .setTransports(['websocket'])
-            .setAuth({'token': Api.instance.token})
-            .enableReconnection()
-            .build(),
-      );
+    apiUrl,
+    io.OptionBuilder()
+        .setTransports(['websocket'])
+        .setAuth({'token': Api.instance.token})
+        .enableReconnection()
+        .build(),
+  );
 
   /// Exécute [action] maintenant si connecté, et à chaque (re)connexion.
   /// Renvoie une fonction pour se désabonner.

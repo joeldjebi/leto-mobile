@@ -4,41 +4,38 @@ import 'package:latlong2/latlong.dart';
 /// Centre d'Abidjan (Plateau)
 const abidjan = LatLng(5.3364, -4.0267);
 
-/// Centre approximatif de chaque commune — sert à deviner la commune d'un point sur la carte
-const communeCenters = {
-  'Abobo': LatLng(5.4180, -4.0200),
-  'Adjamé': LatLng(5.3560, -4.0230),
-  'Attécoubé': LatLng(5.3370, -4.0420),
-  'Cocody': LatLng(5.3600, -3.9700),
-  'Koumassi': LatLng(5.2950, -3.9500),
-  'Marcory': LatLng(5.3000, -3.9830),
-  'Plateau': LatLng(5.3230, -4.0190),
-  'Port-Bouët': LatLng(5.2560, -3.9260),
-  'Treichville': LatLng(5.2930, -4.0080),
-  'Yopougon': LatLng(5.3450, -4.0890),
-  'Bingerville': LatLng(5.3550, -3.8850),
-  'Songon': LatLng(5.3200, -4.2600),
-  'Anyama': LatLng(5.4950, -4.0520),
-};
+const _distance = Distance();
 
-String nearestCommune(LatLng p) {
-  const distance = Distance();
-  return communeCenters.entries
-      .reduce((a, b) => distance(p, a.value) <= distance(p, b.value) ? a : b)
-      .key;
-}
+/// Distance à vol d'oiseau en km
+double distanceKm(LatLng a, LatLng b) =>
+    _distance.as(LengthUnit.Meter, a, b) / 1000;
 
-/// Position GPS actuelle, ou null si refusée / indisponible
+/// Dev / tests uniquement : position simulée avec --dart-define=DEV_LAT=5.36 --dart-define=DEV_LNG=-3.99
+const _devLat = String.fromEnvironment('DEV_LAT');
+const _devLng = String.fromEnvironment('DEV_LNG');
+final LatLng? devPosition = _devLat.isEmpty
+    ? null
+    : LatLng(double.parse(_devLat), double.parse(_devLng));
+
+/// Position GPS actuelle, ou null si refusée / indisponible / hors du Grand Abidjan
 Future<LatLng?> myPosition() async {
+  if (devPosition != null) return devPosition;
   try {
     if (!await Geolocator.isLocationServiceEnabled()) return null;
     var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return null;
-    final pos = await Geolocator.getCurrentPosition().timeout(const Duration(seconds: 10));
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.denied ||
+        perm == LocationPermission.deniedForever) {
+      return null;
+    }
+    final pos = await Geolocator.getCurrentPosition().timeout(
+      const Duration(seconds: 10),
+    );
     final p = LatLng(pos.latitude, pos.longitude);
-    // Hors zone de service (Grand Abidjan) : on garde la carte centrée sur Abidjan
-    return const Distance().as(LengthUnit.Kilometer, p, abidjan) > 80 ? null : p;
+    // Hors zone de service : on garde la carte centrée sur Abidjan
+    return distanceKm(p, abidjan) > 80 ? null : p;
   } catch (_) {
     return null;
   }

@@ -2,8 +2,10 @@
 
 Une seule app pour deux profils :
 
-- **Client** : carte plein écran, choix du départ puis de l'arrivée avec l'épingle centrale, détails (repères, destinataire), prix, commande, puis suivi en direct (recherche du livreur → livreur trouvé → colis récupéré → livré) avec le code de livraison à transmettre au destinataire.
-- **Livreur** : carte des courses disponibles avec leur prix, acceptation, « colis récupéré », puis validation par le code du destinataire.
+- **Client** (inspiré de Yango) :
+  - accueil : carte, épingle avec « Prise en charge ~X min », recherche de l'adresse de livraison, carrousel d'offres (Moto, Voiture, Cargo) et mode de paiement ;
+  - commande : délai (Express, Standard, Dans 2 h), paiement à la livraison, précisions, photos, expéditeur et destinataire, commentaire au coursier.
+- **Livreur** (inspiré d'inDrive) : interrupteur En ligne / Hors ligne, liste des courses (distance, prix, badges Wave et montant à encaisser), fiche avec les itinéraires moi → A et A → B, puis les onglets En cours et Performance.
 
 Carte : OpenStreetMap via `flutter_map` (sans clé API).
 
@@ -26,8 +28,20 @@ flutter run --dart-define=API_URL=http://192.168.1.10:3000   # téléphone réel
 
 > Les tuiles `tile.openstreetmap.org` conviennent au développement. En production, utilisez un fournisseur de tuiles (MapTiler, Stadia, Mapbox…) ou Google Maps.
 
-### Connexion automatique (développement)
+### Développement
 
 ```bash
-flutter run --dart-define=DEV_PHONE=0555555555 --dart-define=DEV_PASSWORD=secret12
+# Connexion automatique + position GPS simulée
+flutter run --dart-define=DEV_PHONE=0555555555 --dart-define=DEV_PASSWORD=secret12 \
+            --dart-define=DEV_LAT=5.36 --dart-define=DEV_LNG=-3.99
+```
+
+### Tests de parcours (simulateur)
+
+`integration_test/flow_test.dart` joue les parcours complets avec de vrais appuis et la vraie API :
+
+```bash
+flutter test integration_test/flow_test.dart -d <simulateur> --dart-define=FLOW=client \
+  --dart-define=DEV_PHONE=0555555555 --dart-define=DEV_PASSWORD=secret12 --dart-define=DEV_LAT=5.36 --dart-define=DEV_LNG=-3.99
+# FLOW=driver avec un compte livreur
 ```

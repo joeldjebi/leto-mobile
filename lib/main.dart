@@ -13,7 +13,10 @@ void main() async {
   if (devPhone.isNotEmpty) {
     await Api.instance.logout();
     try {
-      await Api.instance.login(devPhone, const String.fromEnvironment('DEV_PASSWORD'));
+      await Api.instance.login(
+        devPhone,
+        const String.fromEnvironment('DEV_PASSWORD'),
+      );
     } catch (_) {}
   }
   runApp(const LetoApp());
@@ -28,34 +31,52 @@ class LetoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+    );
     return MaterialApp(
       title: 'LETO',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: letoOrange, primary: letoOrange),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: letoOrange,
+          primary: letoOrange,
+        ),
         scaffoldBackgroundColor: Colors.white,
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
           foregroundColor: letoDark,
           elevation: 0,
-          titleTextStyle: TextStyle(color: letoDark, fontSize: 20, fontWeight: FontWeight.bold),
+          titleTextStyle: TextStyle(
+            color: letoDark,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(54),
             shape: shape,
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50), shape: shape),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(50),
+            shape: shape,
+          ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: const Color(0xFFF3F4F6),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
         ),
       ),
       home: homeFor(),
@@ -72,7 +93,10 @@ Widget homeFor() {
 
 /// Remplace toute la pile de navigation (après connexion / déconnexion)
 void goHome(BuildContext context) {
-  Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => homeFor()), (_) => false);
+  Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => homeFor()),
+    (_) => false,
+  );
 }
 
 void showError(BuildContext context, Object e) {

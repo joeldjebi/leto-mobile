@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'realtime.dart';
@@ -12,6 +14,9 @@ final String apiUrl = const String.fromEnvironment('API_URL').isNotEmpty
     ? const String.fromEnvironment('API_URL')
     : (Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000');
 
+/// URL complète d'une photo stockée par l'API (/uploads/...)
+String photoUrl(String path) => '$apiUrl$path';
+
 class ApiException implements Exception {
   final String message;
   ApiException(this.message);
@@ -19,17 +24,34 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-const statusLabels = {
-  'PENDING': 'En attente',
-  'ACCEPTED': 'Acceptée',
-  'PICKED_UP': 'En cours',
-  'DELIVERED': 'Livrée',
-  'CANCELLED': 'Annulée',
-};
+/// Lieu (recherche ou point sur la carte)
+class Place {
+  final String label;
+  final String sublabel;
+  final LatLng point;
+  const Place(this.label, this.sublabel, this.point);
 
-String fcfa(num n) {
-  final s = n.toInt().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ');
-  return '$s FCFA';
+  factory Place.fromJson(Map<String, dynamic> j) => Place(
+    j['label'] ?? '',
+    j['sublabel'] ?? '',
+    LatLng((j['lat'] as num).toDouble(), (j['lng'] as num).toDouble()),
+  );
+}
+
+/// Itinéraire calculé par l'API (Google ou OSRM)
+class RouteInfo {
+  final double distanceKm;
+  final int durationMin;
+  final List<LatLng> points;
+  const RouteInfo(this.distanceKm, this.durationMin, this.points);
+
+  factory RouteInfo.fromJson(Map<String, dynamic> j) => RouteInfo(
+    (j['distanceKm'] as num).toDouble(),
+    (j['durationMin'] as num).toInt(),
+    (j['points'] as List)
+        .map((p) => LatLng((p[0] as num).toDouble(), (p[1] as num).toDouble()))
+        .toList(),
+  );
 }
 
 class Api {
@@ -55,11 +77,18 @@ class Api {
     }
   }
 
-  Future<void> login(String phone, String password) =>
-      _saveSession(_request('POST', '/auth/login', {'phone': phone, 'password': password}));
+  Future<void> login(String phone, String password) => _saveSession(
+    _request('POST', '/auth/login', {'phone': phone, 'password': password}),
+  );
 
-  Future<void> register(String name, String phone, String password) => _saveSession(
-      _request('POST', '/auth/register', {'name': name, 'phone': phone, 'password': password}));
+  Future<void> register(String name, String phone, String password) =>
+      _saveSession(
+        _request('POST', '/auth/register', {
+          'name': name,
+          'phone': phone,
+          'password': password,
+        }),
+      );
 
   Future<void> logout() async {
     Realtime.instance.disconnect();
@@ -81,32 +110,110 @@ class Api {
     await prefs.setString('token', _token!);
   }
 
-  // ---------- Tarifs ----------
-  Future<List<String>> communes() async =>
-      List<String>.from(await _request('GET', '/pricing/communes'));
+  // ---------- Cartographie ----------
+  Future<List<Place>> search(String q, {LatLng? near}) async {
+    final params = {
+      'q': q,
+      if (near != null) 'lat': '${near.latitude}',
+      if (near != null) 'lng': '${near.longitude}',
+    };
+    final res = await _request(
+      'GET',
+      '/geo/search?${Uri(queryParameters: params).query}',
+    );
+    return (res as List).map((j) => Place.fromJson(j)).toList();
+  }
 
-  Future<int> quote(String from, String to) async {
-    final q = Uri(queryParameters: {'from': from, 'to': to}).query;
-    return (await _request('GET', '/pricing/quote?$q'))['price'];
+  Future<Place> reverse(LatLng p) async {
+    final res = await _request(
+      'GET',
+      '/geo/reverse?lat=${p.latitude}&lng=${p.longitude}',
+    );
+    return Place(res['label'] ?? '', res['sublabel'] ?? '', p);
+  }
+
+  Future<RouteInfo> route(LatLng a, LatLng b) async => RouteInfo.fromJson(
+    await _request(
+      'GET',
+      '/geo/route?fromLat=${a.latitude}&fromLng=${a.longitude}&toLat=${b.latitude}&toLng=${b.longitude}',
+    ),
+  );
+
+  // ---------- Tarifs ----------
+  Future<Map<String, dynamic>> quote(
+    LatLng a,
+    LatLng b, {
+    bool cod = false,
+  }) async => await _request('POST', '/pricing/quote', {
+    'pickupLat': a.latitude,
+    'pickupLng': a.longitude,
+    'dropoffLat': b.latitude,
+    'dropoffLng': b.longitude,
+    'cod': cod,
+  });
+
+  /// Délai de prise en charge (minutes) du livreur le plus proche, ou null
+  Future<int?> eta(LatLng p) async => (await _request(
+    'GET',
+    '/pricing/eta?lat=${p.latitude}&lng=${p.longitude}',
+  ))['minutes'];
+
+  // ---------- Photos ----------
+  Future<String> upload(File file) async {
+    final req = http.MultipartRequest('POST', Uri.parse('$apiUrl/uploads'))
+      ..headers['Authorization'] = 'Bearer $_token'
+      ..files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          file.path,
+          contentType: _imageType(file.path),
+        ),
+      );
+    final res = await http.Response.fromStream(await req.send());
+    final data = jsonDecode(utf8.decode(res.bodyBytes));
+    if (res.statusCode >= 400) {
+      throw ApiException(
+        data['message']?.toString() ?? 'Échec de l’envoi de la photo',
+      );
+    }
+    return data['url'];
+  }
+
+  MediaType _imageType(String path) {
+    final ext = path.split('.').last.toLowerCase();
+    return MediaType(
+      'image',
+      ext == 'png' ? 'png' : (ext == 'heic' ? 'heic' : 'jpeg'),
+    );
   }
 
   // ---------- Client ----------
-  Future<List<dynamic>> myDeliveries() async => await _request('GET', '/deliveries/mine');
-  Future<dynamic> createDelivery(Map<String, dynamic> body) =>
-      _request('POST', '/deliveries', body);
+  Future<List<dynamic>> myDeliveries() async =>
+      await _request('GET', '/deliveries/mine');
   Future<Map<String, dynamic>> getDelivery(String id) async =>
       await _request('GET', '/deliveries/mine/$id');
-  Future<dynamic> cancel(String id) => _request('POST', '/deliveries/$id/cancel');
+  Future<dynamic> createDelivery(Map<String, dynamic> body) =>
+      _request('POST', '/deliveries', body);
+  Future<dynamic> cancel(String id) =>
+      _request('POST', '/deliveries/$id/cancel');
 
   // ---------- Livreur ----------
-  Future<List<dynamic>> available() async => await _request('GET', '/deliveries/available');
-  Future<List<dynamic>> driverDeliveries() async => await _request('GET', '/deliveries/driver');
-  Future<dynamic> accept(String id) => _request('POST', '/deliveries/$id/accept');
-  Future<dynamic> pickup(String id) => _request('POST', '/deliveries/$id/pickup');
+  Future<List<dynamic>> available() async =>
+      await _request('GET', '/deliveries/available');
+  Future<List<dynamic>> driverDeliveries() async =>
+      await _request('GET', '/deliveries/driver');
+  Future<dynamic> accept(String id) =>
+      _request('POST', '/deliveries/$id/accept');
+  Future<dynamic> pickup(String id) =>
+      _request('POST', '/deliveries/$id/pickup');
   Future<dynamic> deliver(String id, String code) =>
       _request('POST', '/deliveries/$id/deliver', {'code': code});
 
-  Future<dynamic> _request(String method, String path, [Map<String, dynamic>? body]) async {
+  Future<dynamic> _request(
+    String method,
+    String path, [
+    Map<String, dynamic>? body,
+  ]) async {
     final req = http.Request(method, Uri.parse('$apiUrl$path'))
       ..headers['Content-Type'] = 'application/json';
     if (_token != null) req.headers['Authorization'] = 'Bearer $_token';
@@ -114,14 +221,24 @@ class Api {
 
     final http.Response res;
     try {
-      res = await http.Response.fromStream(await req.send().timeout(const Duration(seconds: 15)));
+      res = await http.Response.fromStream(
+        await req.send().timeout(const Duration(seconds: 15)),
+      );
     } catch (_) {
-      throw ApiException('Impossible de joindre le serveur. Vérifiez votre connexion.');
+      throw ApiException(
+        'Impossible de joindre le serveur. Vérifiez votre connexion.',
+      );
     }
-    final data = res.body.isEmpty ? null : jsonDecode(utf8.decode(res.bodyBytes));
+    final data = res.body.isEmpty
+        ? null
+        : jsonDecode(utf8.decode(res.bodyBytes));
     if (res.statusCode >= 400) {
       final msg = data is Map ? data['message'] : null;
-      throw ApiException(msg is List ? msg.join('\n') : (msg?.toString() ?? 'Erreur ${res.statusCode}'));
+      throw ApiException(
+        msg is List
+            ? msg.join('\n')
+            : (msg?.toString() ?? 'Erreur ${res.statusCode}'),
+      );
     }
     return data;
   }
