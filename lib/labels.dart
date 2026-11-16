@@ -15,6 +15,7 @@ const stopStatusLabels = {
   'PENDING': 'À livrer',
   'DELIVERED': 'Livré',
   'FAILED': 'Échec',
+  'CANCELLED': 'Annulé',
 };
 
 const failureLabels = {

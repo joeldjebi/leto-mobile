@@ -53,7 +53,20 @@ void main() {
     app.main();
     await wait(t, 8);
 
-    if (flow == 'register') {
+    if (flow == 'tracking') {
+      // Suivi de la livraison en cours (préparée par l'API)
+      await t.tap(find.textContaining('Livraison en cours').first);
+      await wait(t, 5);
+      await shot(t, const String.fromEnvironment('SHOT', defaultValue: 'track'));
+      final list = find.byType(Scrollable).last;
+      await t.drag(list, const Offset(0, -400));
+      await wait(t, 1.5);
+      await shot(t, '${const String.fromEnvironment('SHOT', defaultValue: 'track')}_b');
+    } else if (flow == 'driveractive') {
+      await t.tap(find.textContaining('En cours').first);
+      await wait(t, 4);
+      await shot(t, 'driver_active_now');
+    } else if (flow == 'register') {
       await t.tap(find.text('Nouveau ? Créer un compte'));
       await wait(t, 1);
       await shot(t, 'register_individual');

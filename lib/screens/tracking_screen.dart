@@ -56,6 +56,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
     s.on('delivery:offers', _onOffers);
     s.on('stop:arrived', _onStopArrived);
     s.on('stop:failed', _onStopFailed);
+    s.on('stop:cancel-request', _onCancelRequest);
+    s.on('stop:cancelled', _onStopCancelled);
+    s.on('delivery:return', _onReturn);
     _unsubscribe = Realtime.instance.onConnected(
       () => s.emit('delivery:watch', widget.id),
     );
@@ -71,6 +74,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
     s.off('delivery:offers', _onOffers);
     s.off('stop:arrived', _onStopArrived);
     s.off('stop:failed', _onStopFailed);
+    s.off('stop:cancel-request', _onCancelRequest);
+    s.off('stop:cancelled', _onStopCancelled);
+    s.off('delivery:return', _onReturn);
     s.emit('delivery:unwatch', widget.id);
     _unsubscribe?.call();
     super.dispose();
@@ -108,6 +114,29 @@ class _TrackingScreenState extends State<TrackingScreen> {
     showError(
       context,
       'Livraison impossible chez ${e['recipientName']} : voir la photo du livreur',
+    );
+    _load();
+  }
+
+  /// Le livreur indique que le destinataire annule : l'expéditeur confirme ou refuse
+  Future<void> _onCancelRequest(dynamic e) async {
+    if (e is! Map || e['deliveryId'] != widget.id || !mounted) return;
+    await _load();
+    final stop = _stops.where((s) => s['id'] == e['stopId']).firstOrNull;
+    if (stop != null && mounted) _answerCancel(stop);
+  }
+
+  void _onStopCancelled(dynamic e) {
+    if (e is! Map || e['deliveryId'] != widget.id || !mounted) return;
+    showInfo(context, 'Livraison de ${e['recipientName']} annulée');
+    _load();
+  }
+
+  void _onReturn(dynamic e) {
+    if (e is! Map || e['deliveryId'] != widget.id || !mounted) return;
+    showInfo(
+      context,
+      'Le livreur vous rapporte ${e['parcels']} colis : donnez-lui votre code de retour',
     );
     _load();
   }
@@ -237,17 +266,88 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
   // ---------- Actions ----------
 
+  /// Annuler toute la course (en attente, ou livreur en route : frais éventuels annoncés)
   Future<void> _cancel() async {
+    var fee = 0;
+    try {
+      final preview = await api.cancelPreview(widget.id);
+      if (preview['allowed'] != true) {
+        if (mounted)
+          showError(context, preview['reason'] ?? 'Annulation impossible');
+        return;
+      }
+      fee = (preview['fee'] ?? 0) as int;
+    } catch (e) {
+      if (mounted) showError(context, e);
+      return;
+    }
+    if (!mounted) return;
+    final enRoute = _d?['status'] == 'ACCEPTED';
     if (!await confirm(
       context,
       'Annuler la livraison ?',
-      ok: 'Oui, annuler',
+      message: fee > 0
+          ? 'Le livreur est déjà en route : des frais de déplacement de ${fcfa(fee)} seront dus à son entreprise.'
+          : enRoute
+          ? 'Le livreur sera prévenu immédiatement.'
+          : null,
+      ok: fee > 0 ? 'Annuler et payer ${fcfa(fee)}' : 'Oui, annuler',
       destructive: true,
     )) {
       return;
     }
     try {
       await api.cancel(widget.id);
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  /// Retirer un arrêt (un client de la boutique annule)
+  Future<void> _cancelStop(Map<String, dynamic> stop) async {
+    final pickedUp = _d?['status'] == 'PICKED_UP';
+    final reason = await prompt(
+      context,
+      'Annuler la livraison de ${stop['recipientName']} ?',
+      message: pickedUp
+          ? 'Le colis est déjà chez le livreur : le prix reste le même et le colis vous sera rapporté.'
+          : 'Le prix et l’itinéraire seront recalculés, le livreur est prévenu.',
+      placeholder: 'Motif (facultatif)',
+      ok: 'Annuler l’arrêt',
+    );
+    if (reason == null) return;
+    try {
+      await api.cancelStop(
+        widget.id,
+        stop['id'],
+        reason: reason.isEmpty ? null : reason,
+      );
+      hapticSuccess();
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  /// Réponse à une annulation signalée par le livreur
+  Future<void> _answerCancel(Map<String, dynamic> stop) async {
+    final choice = await showActions<bool>(
+      context,
+      title: 'Le livreur indique que ${stop['recipientName']} annule',
+      message: [
+        if ((stop['cancelRequestNote'] ?? '').toString().isNotEmpty)
+          '« ${stop['cancelRequestNote']} »',
+        'Sans réponse, l’annulation sera acceptée automatiquement.',
+      ].join('\n'),
+      actions: [
+        ('Confirmer l’annulation', true, true),
+        ('Maintenir la livraison', false, false),
+      ],
+    );
+    if (choice == null) return;
+    try {
+      await api.answerCancelRequest(widget.id, stop['id'], choice);
       await _load();
     } catch (e) {
       if (mounted) showError(context, e);
@@ -403,6 +503,58 @@ class _TrackingScreenState extends State<TrackingScreen> {
       ],
       if (status != 'CANCELLED') StatusSteps(status),
       const SizedBox(height: 14),
+      // Colis non livrés rapportés par le livreur : code de retour
+      if (d['returnRequired'] == true && d['returnedAt'] == null) ...[
+        _notice(
+          p,
+          icon: CupertinoIcons.arrow_uturn_left_circle_fill,
+          color: accent,
+          title: 'Colis en retour',
+          text:
+              'Le livreur vous rapporte les colis non livrés. Donnez-lui ce code en les récupérant.',
+          trailing: Text(
+            d['returnCode'] ?? '',
+            style: TextStyles.title2.copyWith(color: p.label, letterSpacing: 4),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (d['returnedAt'] != null) ...[
+        _notice(
+          p,
+          icon: CupertinoIcons.checkmark_seal_fill,
+          color: p.green,
+          title: 'Colis non livrés récupérés',
+          text: 'Retour confirmé avec votre code.',
+        ),
+        const SizedBox(height: 12),
+      ],
+      for (final s in _stops.where(
+        (s) => s['status'] == 'PENDING' && s['cancelRequestedAt'] != null,
+      )) ...[
+        _notice(
+          p,
+          icon: CupertinoIcons.exclamationmark_circle_fill,
+          color: p.yellow,
+          title: '${s['recipientName']} annule ?',
+          text:
+              'Le livreur signale une annulation. Confirmez ou maintenez la livraison.',
+          onTap: () => _answerCancel(s),
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (status == 'CANCELLED' && (d['cancellationFee'] ?? 0) > 0) ...[
+        _notice(
+          p,
+          icon: CupertinoIcons.money_dollar_circle_fill,
+          color: p.red,
+          title: 'Frais de déplacement : ${fcfa(d['cancellationFee'])}',
+          text: d['cancellationFeeSettledAt'] != null
+              ? 'Réglés auprès de l’entreprise de livraison.'
+              : 'Le livreur était en route. À régler auprès de l’entreprise de livraison.',
+        ),
+        const SizedBox(height: 12),
+      ],
       if (d['driver'] != null) _driverCard(d, p),
       const SizedBox(height: 12),
       // ----- Destinataires -----
@@ -440,6 +592,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 d: d,
                 stop: _stops[i],
                 onDispute: () => _dispute(_stops[i]),
+                onCancel: _active(d) || status == 'PENDING'
+                    ? () => _cancelStop(_stops[i])
+                    : null,
               ),
               if (i < n - 1)
                 Divider(
@@ -472,18 +627,69 @@ class _TrackingScreenState extends State<TrackingScreen> {
           ),
         ],
       ),
-      if (status == 'PENDING') ...[
+      if (status == 'PENDING' || status == 'ACCEPTED') ...[
         const SizedBox(height: 12),
         CupertinoButton(
           onPressed: _cancel,
           child: Text(
-            'Annuler la demande',
+            status == 'PENDING' ? 'Annuler la demande' : 'Annuler la livraison',
             style: TextStyles.body.copyWith(color: p.red),
           ),
         ),
       ],
     ];
   }
+
+  /// Encadré d'information (retour, annulation en attente, frais)
+  Widget _notice(
+    Palette p, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String text,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) => Pressable(
+    onTap: onTap,
+    pressedScale: 0.98,
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: ShapeDecoration(
+        color: color.withValues(alpha: 0.12),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 26),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyles.headline.copyWith(color: p.label),
+                ),
+                Text(
+                  text,
+                  style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 10), trailing],
+          if (onTap != null)
+            Icon(
+              CupertinoIcons.chevron_right,
+              color: p.tertiaryLabel,
+              size: 16,
+            ),
+        ],
+      ),
+    ),
+  );
 
   Widget _driverCard(Map<String, dynamic> d, Palette p) {
     final driver = d['driver'];
@@ -537,10 +743,12 @@ class _StopTile extends StatelessWidget {
   final Map<String, dynamic> d;
   final Map<String, dynamic> stop;
   final VoidCallback onDispute;
+  final VoidCallback? onCancel;
   const _StopTile({
     required this.d,
     required this.stop,
     required this.onDispute,
+    this.onCancel,
   });
 
   String _time(String iso) {
@@ -557,6 +765,8 @@ class _StopTile extends StatelessWidget {
       'DELIVERED' => 'Livré à ${_time(stop['deliveredAt'])}',
       'FAILED' =>
         '${failureLabels[stop['failureReason']]} · ${_time(stop['failedAt'])}',
+      'CANCELLED' =>
+        'Annulé · ${_time(stop['cancelledAt'])}${stop['cancelReason'] != null ? ' · ${stop['cancelReason']}' : ''}',
       _ =>
         stop['arrivedAt'] != null
             ? 'Le livreur est sur place'
@@ -582,6 +792,12 @@ class _StopTile extends StatelessWidget {
                         CupertinoIcons.checkmark_alt,
                         color: Colors.white,
                         size: 16,
+                      )
+                    : status == 'CANCELLED'
+                    ? const Icon(
+                        CupertinoIcons.minus,
+                        color: Colors.white,
+                        size: 14,
                       )
                     : status == 'FAILED'
                     ? const Icon(
@@ -638,6 +854,17 @@ class _StopTile extends StatelessWidget {
                     child: Icon(CupertinoIcons.share, size: 20, color: p.blue),
                   ),
                 ),
+                if (onCancel != null)
+                  CupertinoButton(
+                    padding: const EdgeInsets.only(left: 10),
+                    minimumSize: Size.zero,
+                    onPressed: onCancel,
+                    child: Icon(
+                      CupertinoIcons.xmark_circle_fill,
+                      size: 22,
+                      color: p.tertiaryLabel,
+                    ),
+                  ),
               ],
             ],
           ),

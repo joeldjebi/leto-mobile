@@ -282,6 +282,18 @@ class Api {
       _request('POST', '/deliveries', body);
   Future<dynamic> cancel(String id) =>
       _request('POST', '/deliveries/$id/cancel');
+
+  /// Frais éventuels si la course est annulée maintenant
+  Future<dynamic> cancelPreview(String id) =>
+      _request('GET', '/deliveries/mine/$id/cancel-preview');
+  Future<dynamic> cancelStop(String id, String stopId, {String? reason}) =>
+      _request('POST', '/deliveries/$id/stops/$stopId/cancel', {
+        'reason': ?reason,
+      });
+  Future<dynamic> answerCancelRequest(String id, String stopId, bool accept) =>
+      _request('POST', '/deliveries/$id/stops/$stopId/cancel-request/answer', {
+        'accept': accept,
+      });
   Future<dynamic> disputeStop(String id, String stopId, String? note) =>
       _request('POST', '/deliveries/$id/stops/$stopId/dispute', {
         'note': ?note,
@@ -319,6 +331,16 @@ class Api {
     'photoUrl': photoUrl,
     'note': ?note,
   });
+
+  /// Le destinataire annule : demande de confirmation envoyée à l'expéditeur
+  Future<dynamic> requestStopCancel(String id, String stopId, {String? note}) =>
+      _request('POST', '/deliveries/$id/stops/$stopId/cancel-request', {
+        'note': ?note,
+      });
+
+  /// Colis non livrés rapportés à l'expéditeur (code de retour)
+  Future<dynamic> confirmReturn(String id, String code) =>
+      _request('POST', '/deliveries/$id/return', {'code': code});
 
   // ---------- Proposez votre prix ----------
   Future<dynamic> proposePrice(String deliveryId, int price) =>

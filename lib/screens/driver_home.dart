@@ -59,14 +59,25 @@ class _DriverHomeState extends State<DriverHome> {
 
   List<Map<String, dynamic>> _stopsOf(Map d) =>
       ((d['stops'] as List?) ?? []).cast<Map<String, dynamic>>();
-  Map<String, dynamic>? _nextStop(Map d) =>
-      _stopsOf(d).where((s) => s['status'] == 'PENDING').firstOrNull;
+
+  /// Prochain arrêt : d'abord ceux sans annulation en attente de confirmation
+  Map<String, dynamic>? _nextStop(Map d) {
+    final pending = _stopsOf(d).where((s) => s['status'] == 'PENDING');
+    return pending.where((s) => s['cancelRequestedAt'] == null).firstOrNull ??
+        pending.firstOrNull;
+  }
+
+  /// Colis non livrés à rapporter à l'expéditeur
+  bool _returning(Map d) =>
+      d['returnRequired'] == true &&
+      d['returnedAt'] == null &&
+      _nextStop(d) == null;
   LatLng _pt(Map s) =>
       LatLng((s['lat'] as num).toDouble(), (s['lng'] as num).toDouble());
 
   /// Prochaine destination : le départ, puis chaque arrêt en attente
   LatLng? _targetOf(Map d) {
-    if (d['status'] == 'ACCEPTED') return pointOf(d, 'pickup');
+    if (d['status'] == 'ACCEPTED' || _returning(d)) return pointOf(d, 'pickup');
     final s = _nextStop(d);
     return s == null ? null : _pt(s);
   }
@@ -91,6 +102,9 @@ class _DriverHomeState extends State<DriverHome> {
     s.on('offer:accepted', _onOfferAccepted);
     s.on('offer:rejected', _onOfferRejected);
     s.on('stop:arrived', _onArrived);
+    s.on('stop:cancelled', _onStopCancelled);
+    s.on('stop:cancel-refused', _onCancelRefused);
+    s.on('delivery:cancelled', _onDeliveryCancelled);
     SharedPreferences.getInstance().then((p) {
       if (p.getBool('driver_online') == true) _goOnline();
     });
@@ -106,6 +120,9 @@ class _DriverHomeState extends State<DriverHome> {
     s.off('offer:accepted', _onOfferAccepted);
     s.off('offer:rejected', _onOfferRejected);
     s.off('stop:arrived', _onArrived);
+    s.off('stop:cancelled', _onStopCancelled);
+    s.off('stop:cancel-refused', _onCancelRefused);
+    s.off('delivery:cancelled', _onDeliveryCancelled);
     super.dispose();
   }
 
@@ -135,6 +152,79 @@ class _DriverHomeState extends State<DriverHome> {
         'Vous êtes chez ${e['recipientName']}. L’expéditeur est prévenu.',
       );
     }
+  }
+
+  void _onStopCancelled(dynamic e) {
+    _load();
+    if (mounted && e is Map) {
+      hapticTap();
+      showInfo(
+        context,
+        'Arrêt annulé : ${e['recipientName']} — passez au suivant',
+      );
+    }
+  }
+
+  void _onCancelRefused(dynamic e) {
+    _load();
+    if (mounted && e is Map) {
+      showError(
+        context,
+        'L’expéditeur maintient la livraison de ${e['recipientName']}',
+      );
+    }
+  }
+
+  void _onDeliveryCancelled(dynamic e) {
+    _load();
+    if (mounted && e is Map) {
+      final fee = (e['fee'] ?? 0) as num;
+      showError(
+        context,
+        fee > 0
+            ? 'Course annulée par l’expéditeur · frais de déplacement ${fcfa(fee)} (récupérés par votre entreprise)'
+            : 'Course annulée par l’expéditeur',
+      );
+    }
+  }
+
+  /// Le destinataire annule (il a appelé) : l'expéditeur doit confirmer
+  Future<void> _requestCancel(Map d, Map stop) async {
+    final note = await prompt(
+      context,
+      'Le destinataire annule',
+      message:
+          'L’expéditeur doit confirmer l’annulation. Sans réponse, elle est acceptée automatiquement. En attendant, continuez vers les autres arrêts.',
+      placeholder: 'Ex. : il a appelé, il ne veut plus du colis',
+      ok: 'Envoyer',
+    );
+    if (note == null) return;
+    await _run(
+      () => api.requestStopCancel(
+        d['id'],
+        stop['id'],
+        note: note.isEmpty ? null : note,
+      ),
+      'Demande envoyée à l’expéditeur',
+    );
+  }
+
+  /// Retour des colis non livrés : l'expéditeur donne son code
+  Future<void> _confirmReturn(Map d) async {
+    final code = await prompt(
+      context,
+      'Code de retour',
+      message:
+          'Demandez le code de retour à l’expéditeur en lui remettant ses colis',
+      placeholder: '••••',
+      keyboard: TextInputType.number,
+      large: true,
+    );
+    if (code == null || code.isEmpty) return;
+    await _run(
+      () => api.confirmReturn(d['id'], code),
+      'Colis rendus — tournée terminée',
+    );
   }
 
   void _setTab(int i) {
@@ -340,9 +430,12 @@ class _DriverHomeState extends State<DriverHome> {
       actions: [
         ('Destinataire absent ou injoignable', 'ABSENT', false),
         ('Le destinataire refuse le colis', 'REFUSED', true),
+        if (stop['cancelRequestedAt'] == null)
+          ('Le destinataire annule (il a appelé)', 'CANCEL', false),
       ],
     );
     if (reason == null || !mounted) return;
+    if (reason == 'CANCEL') return _requestCancel(d, stop);
     if (reason == 'ABSENT') {
       final left = _waitLeft(stop);
       if (left == null) {
@@ -720,6 +813,59 @@ class _DriverHomeState extends State<DriverHome> {
       ];
     }
 
+    // Étape 3 : retour des colis non livrés à l'expéditeur
+    if (_returning(d)) {
+      final back = stops.where((s) => s['status'] != 'DELIVERED').toList();
+      final sender =
+          (d['pickupContactName'] ?? d['client']?['name'] ?? '') as String;
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: StatusSteps(d['status']),
+        ),
+        _title(
+          'Retour à l’expéditeur',
+          p,
+          subtitle: ['${back.length} colis à rendre', ?routeInfo].join(' · '),
+        ),
+        InsetGroup(
+          footer:
+              'Remettez les colis à l’expéditeur : il vous donne son code de retour pour terminer la tournée.',
+          children: [
+            GroupRow(
+              leading: _dot('A', p.green),
+              title: '${d['pickupAddress']} (${d['pickupCommune']})',
+            ),
+            GroupRow(
+              leading: Avatar(sender, radius: 15),
+              title: sender,
+              subtitle: 'Expéditeur',
+              trailing: _phone(d['pickupPhone'], p),
+            ),
+            for (final s in back)
+              GroupRow(
+                leading: Icon(
+                  CupertinoIcons.cube_box,
+                  color: p.secondaryLabel,
+                  size: 20,
+                ),
+                title: s['recipientName'],
+                value: s['status'] == 'FAILED'
+                    ? failureLabels[s['failureReason']]
+                    : stopStatusLabels[s['status']],
+              ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: FilledButton(
+            onPressed: () => _confirmReturn(d),
+            child: const Text('Saisir le code de retour'),
+          ),
+        ),
+      ];
+    }
+
     // Étape 2 : tournée, arrêt par arrêt
     final next = _nextStop(d);
     final list = <Widget>[
@@ -767,6 +913,13 @@ class _DriverHomeState extends State<DriverHome> {
                 ),
                 title: 'Encaisser ${fcfa(cod)}',
                 subtitle: 'Avant de remettre le colis',
+              ),
+            if (next['cancelRequestedAt'] != null)
+              GroupRow(
+                leading: IconBadge(CupertinoIcons.hourglass, color: p.yellow),
+                title: 'Annulation en attente',
+                subtitle:
+                    'L’expéditeur doit confirmer · continuez vers les autres arrêts',
               ),
             // Présence sur place (détectée par le serveur)
             GroupRow(

@@ -169,6 +169,7 @@ Color stopColor(BuildContext context, String? status) {
   return switch (status) {
     'DELIVERED' => p.green,
     'FAILED' => p.red,
+    'CANCELLED' => p.tertiaryLabel,
     _ => accent,
   };
 }
