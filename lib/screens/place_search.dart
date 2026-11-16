@@ -88,13 +88,13 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final color = widget.dropoff ? letoOrange : p.green;
+    final color = widget.dropoff ? accent : p.green;
     return Scaffold(
       backgroundColor: p.background,
       appBar: AppBar(
         title: Text(widget.title),
         leading: CupertinoNavigationBarBackButton(
-          color: letoOrange,
+          color: accent,
           previousPageTitle: 'Carte',
         ),
         leadingWidth: 100,

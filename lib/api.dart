@@ -16,7 +16,8 @@ const prodApiUrl = 'https://api.leto.performx.online';
 ///                 ou --dart-define=API_URL=http://192.168.1.10:3000 (téléphone sur le même Wi-Fi).
 final String apiUrl = switch (const String.fromEnvironment('API_URL')) {
   '' => prodApiUrl,
-  'local' => Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000',
+  'local' =>
+    Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000',
   final url => url,
 };
 

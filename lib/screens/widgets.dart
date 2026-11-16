@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../api.dart';
 import '../geo.dart';
@@ -12,17 +13,78 @@ import '../labels.dart';
 import '../main.dart';
 
 // ============================================================================
-// Retours haptiques
+// Retours haptiques et pression
 // ============================================================================
 
 void hapticTap() => HapticFeedback.selectionClick();
 void hapticSuccess() => HapticFeedback.mediumImpact();
 
+/// Élément qui s'enfonce légèrement sous le doigt (retour visuel fluide)
+class Pressable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final double pressedScale;
+  const Pressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.pressedScale = 0.96,
+  });
+
+  @override
+  State<Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<Pressable> {
+  bool _down = false;
+
+  void _set(bool v) {
+    if (widget.onTap != null && v != _down) setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _set(true),
+      onTapUp: (_) => _set(false),
+      onTapCancel: () => _set(false),
+      onTap: widget.onTap == null
+          ? null
+          : () {
+              hapticTap();
+              widget.onTap!();
+            },
+      child: AnimatedScale(
+        scale: _down ? widget.pressedScale : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: AnimatedOpacity(
+          opacity: _down ? 0.85 : 1,
+          duration: const Duration(milliseconds: 120),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
 // ============================================================================
 // Carte
 // ============================================================================
 
-/// Carte OpenStreetMap (assombrie en mode sombre). Recherche et itinéraires : via l'API.
+/// Tuiles OpenStreetMap adoucies (couleurs désaturées, contraste réduit) pour un rendu épuré
+const _softTiles = ColorFilter.matrix(<double>[
+  0.4039, 0.4506, 0.0455, 0, 22, //
+  0.1339, 0.7206, 0.0455, 0, 22, //
+  0.1339, 0.4506, 0.3155, 0, 24, //
+  0, 0, 0, 1, 0,
+]);
+
+Widget _softTileBuilder(BuildContext context, Widget tile, TileImage image) =>
+    ColorFiltered(colorFilter: _softTiles, child: tile);
+
+/// Carte OpenStreetMap (adoucie en clair, assombrie en sombre). Recherche et itinéraires : via l'API.
 class LetoMap extends StatelessWidget {
   final MapController? controller;
   final LatLng center;
@@ -71,7 +133,10 @@ class LetoMap extends StatelessWidget {
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'ci.leto.leto',
-          tileBuilder: dark ? darkModeTileBuilder : null,
+          tileBuilder: dark ? darkModeTileBuilder : _softTileBuilder,
+          tileDisplay: const TileDisplay.fadeIn(
+            duration: Duration(milliseconds: 220),
+          ),
         ),
         ...layers,
       ],
@@ -84,19 +149,19 @@ Color stopColor(BuildContext context, String? status) {
   return switch (status) {
     'DELIVERED' => p.green,
     'FAILED' => p.red,
-    _ => letoOrange,
+    _ => accent,
   };
 }
 
-/// Départ (pastille verte « A »)
+/// Départ (pastille noire « A »)
 Marker pickupMarker(LatLng p) => Marker(
   point: p,
   width: 34,
   height: 34,
-  child: const _Dot(label: 'A', color: Color(0xFF34C759)),
+  child: const _Dot(label: 'A', color: ink),
 );
 
-/// Arrêt numéroté (orange = à livrer, vert = livré, rouge = échec)
+/// Arrêt numéroté (violet = à livrer, vert = livré, rouge = échec)
 Marker stopMarker(
   BuildContext context,
   LatLng p,
@@ -123,17 +188,18 @@ class _Dot extends StatelessWidget {
       border: Border.all(color: Colors.white, width: 3),
       boxShadow: const [
         BoxShadow(
-          color: Color(0x40000000),
-          blurRadius: 8,
-          offset: Offset(0, 2),
+          color: Color(0x33000000),
+          blurRadius: 10,
+          offset: Offset(0, 3),
         ),
       ],
     ),
     child: Text(
       label,
       style: const TextStyle(
+        fontFamily: 'Inter',
         color: Colors.white,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w700,
         fontSize: 13,
       ),
     ),
@@ -143,37 +209,45 @@ class _Dot extends StatelessWidget {
 /// Livreur (moto)
 Marker driverMarker(LatLng p) => Marker(
   point: p,
-  width: 44,
-  height: 44,
+  width: 46,
+  height: 46,
   child: Container(
     decoration: BoxDecoration(
-      color: const Color(0xFF1C1C1E),
+      color: ink,
       shape: BoxShape.circle,
       border: Border.all(color: Colors.white, width: 3),
       boxShadow: const [
         BoxShadow(
-          color: Color(0x59000000),
-          blurRadius: 10,
-          offset: Offset(0, 3),
+          color: Color(0x4D000000),
+          blurRadius: 12,
+          offset: Offset(0, 4),
         ),
       ],
     ),
-    child: const Icon(Icons.two_wheeler, color: Colors.white, size: 22),
+    child: Icon(
+      PhosphorIcons.moped(PhosphorIconsStyle.fill),
+      color: Colors.white,
+      size: 22,
+    ),
   ),
 );
 
-/// Ma position (point bleu façon Plans)
+/// Ma position (point violet)
 Marker myMarker(LatLng p) => Marker(
   point: p,
   width: 26,
   height: 26,
   child: Container(
     decoration: BoxDecoration(
-      color: const Color(0xFF007AFF),
+      color: accent,
       shape: BoxShape.circle,
       border: Border.all(color: Colors.white, width: 3.5),
-      boxShadow: const [
-        BoxShadow(color: Color(0x40007AFF), blurRadius: 12, spreadRadius: 4),
+      boxShadow: [
+        BoxShadow(
+          color: accent.withValues(alpha: 0.3),
+          blurRadius: 14,
+          spreadRadius: 5,
+        ),
       ],
     ),
   ),
@@ -182,20 +256,27 @@ Marker myMarker(LatLng p) => Marker(
 /// Étiquette « 9 min · 6,4 km » posée sur la carte
 Marker routeLabel(LatLng p, String text, Color color) => Marker(
   point: p,
-  width: 120,
-  height: 30,
+  width: 124,
+  height: 32,
   child: Container(
     alignment: Alignment.center,
     decoration: ShapeDecoration(
       color: color,
-      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(10)),
-      shadows: const [BoxShadow(color: Color(0x33000000), blurRadius: 6)],
+      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(12)),
+      shadows: const [
+        BoxShadow(
+          color: Color(0x33000000),
+          blurRadius: 8,
+          offset: Offset(0, 2),
+        ),
+      ],
     ),
     child: Text(
       text,
       style: const TextStyle(
+        fontFamily: 'Inter',
         color: Colors.white,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         fontSize: 12,
       ),
     ),
@@ -203,17 +284,14 @@ Marker routeLabel(LatLng p, String text, Color color) => Marker(
 );
 
 /// Tracé d'un itinéraire
-Widget routeLayer(
-  List<LatLng> points, {
-  Color color = const Color(0xFF007AFF),
-}) => PolylineLayer(
+Widget routeLayer(List<LatLng> points, {Color color = accent}) => PolylineLayer(
   polylines: [
     Polyline(
       points: points,
       color: color,
-      strokeWidth: 6,
+      strokeWidth: 5.5,
       borderColor: Colors.white,
-      borderStrokeWidth: 2,
+      borderStrokeWidth: 2.5,
     ),
   ],
 );
@@ -239,170 +317,302 @@ List<LatLng> latLngList(List points) => points
     .map((p) => LatLng((p[0] as num).toDouble(), (p[1] as num).toDouble()))
     .toList();
 
-/// Épingle fixe au centre de la carte, avec une bulle (ex. « Prise en charge · ~10 min »)
+/// Épingle au centre de la carte : bulle (« Prise en charge · ~10 min »), tige, point,
+/// et nom du lieu dessous. Se soulève pendant que la carte bouge.
 class CenterPin extends StatelessWidget {
   final bool dropoff;
   final String title;
   final String? subtitle;
   final bool loading;
+  final String? place;
   const CenterPin({
     super.key,
     this.dropoff = false,
     required this.title,
     this.subtitle,
     this.loading = false,
+    this.place,
   });
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final color = dropoff ? letoOrange : p.green;
+    final color = dropoff ? accent : ink;
+    final lifted = loading;
     return IgnorePointer(
-      child: Center(
-        child: Transform.translate(
-          offset: const Offset(0, -44),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final cy = c.maxHeight / 2;
+          return Stack(
+            clipBehavior: Clip.none,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
-                    decoration: BoxDecoration(
-                      color: p.glass,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(7),
-                          decoration: ShapeDecoration(
-                            color: color,
-                            shape: RoundedSuperellipseBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+              // Bulle + tige
+              AnimatedPositioned(
+                duration: Motion.medium,
+                curve: Motion.curve,
+                left: 0,
+                right: 0,
+                bottom: c.maxHeight - cy + (lifted ? 12 : 4),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(6, 6, 18, 6),
+                        decoration: ShapeDecoration(
+                          color: p.card,
+                          shape: RoundedSuperellipseBorder(
+                            borderRadius: BorderRadius.circular(22),
                           ),
-                          child: Icon(
-                            dropoff
-                                ? CupertinoIcons.flag_fill
-                                : Icons.two_wheeler,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              title,
-                              style: TextStyles.footnote.copyWith(
-                                color: p.secondaryLabel,
-                              ),
+                          shadows: const [
+                            BoxShadow(
+                              color: Color(0x26000000),
+                              blurRadius: 24,
+                              offset: Offset(0, 8),
                             ),
-                            loading
-                                ? const SizedBox(
-                                    width: 40,
-                                    height: 20,
-                                    child: CupertinoActivityIndicator(
-                                      radius: 8,
-                                    ),
-                                  )
-                                : Text(
-                                    subtitle ?? '',
-                                    style: TextStyles.headline.copyWith(
-                                      color: p.label,
-                                    ),
-                                  ),
                           ],
                         ),
-                      ],
-                    ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: ShapeDecoration(
+                                gradient: dropoff ? letoGradient : null,
+                                color: dropoff ? null : ink,
+                                shape: RoundedSuperellipseBorder(
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                              ),
+                              child: PhosphorIcon(
+                                dropoff
+                                    ? PhosphorIcons.flagCheckered(
+                                        PhosphorIconsStyle.fill,
+                                      )
+                                    : PhosphorIcons.package(
+                                        PhosphorIconsStyle.fill,
+                                      ),
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  title,
+                                  style: TextStyles.subheadline.copyWith(
+                                    color: p.secondaryLabel,
+                                  ),
+                                ),
+                                AnimatedSwitcher(
+                                  duration: Motion.fast,
+                                  child: loading
+                                      ? const SizedBox(
+                                          key: ValueKey('l'),
+                                          width: 44,
+                                          height: 24,
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: CupertinoActivityIndicator(
+                                              radius: 8,
+                                            ),
+                                          ),
+                                        )
+                                      : Text(
+                                          subtitle ?? '',
+                                          key: ValueKey(subtitle),
+                                          style: TextStyles.title3.copyWith(
+                                            color: p.label,
+                                          ),
+                                        ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 3,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              Container(width: 3, height: 14, color: color),
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
+              // Point d'ancrage (reste fixe au centre)
+              Positioned(
+                left: c.maxWidth / 2 - 7,
+                top: cy - 7,
+                child: AnimatedContainer(
+                  duration: Motion.fast,
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: color, width: 4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: lifted ? 0.25 : 0.15,
+                        ),
+                        blurRadius: lifted ? 8 : 4,
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              // Nom du lieu
+              if (place != null && place!.isNotEmpty)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: cy + 14,
+                  child: Center(
+                    child: AnimatedOpacity(
+                      opacity: lifted ? 0 : 1,
+                      duration: Motion.fast,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 230),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: ShapeDecoration(
+                          color: ink.withValues(alpha: 0.82),
+                          shape: RoundedSuperellipseBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          place!,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyles.subheadline.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 }
 
 // ============================================================================
-// Panneaux en verre dépoli, boutons
+// Panneaux, boutons
 // ============================================================================
 
-/// Panneau translucide (flou) posé sur la carte, façon Plans
+/// Panneau blanc posé sur la carte (grands arrondis). Si [contentKey] change,
+/// le contenu se remplace en fondu et le panneau change de taille en douceur.
 class GlassPanel extends StatelessWidget {
   final List<Widget> children;
   final EdgeInsets padding;
+  final Object? contentKey;
   const GlassPanel({
     super.key,
     required this.children,
-    this.padding = const EdgeInsets.fromLTRB(16, 8, 16, 12),
+    this.padding = const EdgeInsets.fromLTRB(20, 10, 20, 14),
+    this.contentKey,
   });
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-        child: Container(
-          width: double.infinity,
-          color: p.glass,
-          padding: padding,
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Grabber(),
-                const SizedBox(height: 10),
-                ...children,
-              ],
-            ),
+    final content = Column(
+      key: ValueKey(contentKey),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: p.card,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1F000000),
+            blurRadius: 30,
+            offset: Offset(0, -6),
           ),
+        ],
+      ),
+      padding: padding,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Grabber(),
+            const SizedBox(height: 14),
+            AnimatedSize(
+              duration: Motion.medium,
+              curve: Motion.curve,
+              alignment: Alignment.topCenter,
+              child: contentKey == null
+                  ? content
+                  : AnimatedSwitcher(
+                      duration: Motion.medium,
+                      switchInCurve: Motion.curve,
+                      switchOutCurve: Curves.easeIn,
+                      layoutBuilder: (current, previous) => Stack(
+                        alignment: Alignment.topCenter,
+                        children: [...previous, ?current],
+                      ),
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: SlideTransition(
+                          position: Tween(
+                            begin: const Offset(0, 0.04),
+                            end: Offset.zero,
+                          ).animate(anim),
+                          child: child,
+                        ),
+                      ),
+                      child: content,
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Poignée de feuille iOS
+/// Poignée de feuille
 class Grabber extends StatelessWidget {
   const Grabber({super.key});
   @override
   Widget build(BuildContext context) => Center(
     child: Container(
-      width: 36,
+      width: 40,
       height: 5,
       decoration: BoxDecoration(
-        color: Palette.of(context).tertiaryLabel,
+        color: Palette.of(context).separator,
         borderRadius: BorderRadius.circular(3),
       ),
     ),
   );
 }
 
-/// Bouton rond translucide sur la carte
+/// Bouton rond flottant sur la carte
 class MapButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
@@ -411,21 +621,24 @@ class MapButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return GestureDetector(
-      onTap: () {
-        hapticTap();
-        onTap();
-      },
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(color: p.glass, shape: BoxShape.circle),
-            child: Icon(icon, color: p.label, size: 21),
-          ),
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.9,
+      child: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: p.card,
+          shape: BoxShape.circle,
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x24000000),
+              blurRadius: 18,
+              offset: Offset(0, 6),
+            ),
+          ],
         ),
+        child: Icon(icon, color: p.label, size: 23),
       ),
     );
   }
@@ -442,7 +655,7 @@ class TintedButton extends StatelessWidget {
     super.key,
     this.icon,
     this.onPressed,
-    this.color = letoOrange,
+    this.color = accent,
   });
 
   @override
@@ -451,7 +664,7 @@ class TintedButton extends StatelessWidget {
     icon: icon == null ? null : Icon(icon, size: 19),
     label: Text(label),
     style: FilledButton.styleFrom(
-      backgroundColor: color.withValues(alpha: 0.14),
+      backgroundColor: color.withValues(alpha: 0.12),
       foregroundColor: color,
     ),
   );
@@ -779,7 +992,7 @@ class CodBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Pill(
     'Encaisser ${fcfa(amount)}',
-    color: const Color(0xFFC25E00),
+    color: accentDeep,
     icon: CupertinoIcons.creditcard,
   );
 }
@@ -875,7 +1088,7 @@ class PointLine extends StatelessWidget {
             margin: const EdgeInsets.only(top: 1),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: color ?? (marker == 'A' ? p.green : letoOrange),
+              color: color ?? (marker == 'A' ? p.green : accent),
               shape: BoxShape.circle,
             ),
             child: Text(

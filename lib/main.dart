@@ -6,7 +6,17 @@ import 'screens/driver_home.dart';
 import 'screens/login_screen.dart';
 import 'theme.dart';
 
-export 'theme.dart' show letoOrange, Palette, TextStyles;
+export 'theme.dart'
+    show
+        accent,
+        accentDeep,
+        accentLight,
+        ink,
+        letoGradient,
+        letoOrange,
+        Motion,
+        Palette,
+        TextStyles;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

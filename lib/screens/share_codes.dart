@@ -132,7 +132,7 @@ class _ShareRow extends StatelessWidget {
             height: 28,
             alignment: Alignment.center,
             decoration: const BoxDecoration(
-              color: letoOrange,
+              color: accent,
               shape: BoxShape.circle,
             ),
             child: Text(

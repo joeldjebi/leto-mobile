@@ -55,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 height: 92,
                 decoration: ShapeDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFFFF9F0A), letoOrange],
+                    colors: [accentLight, accent],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   shadows: const [
                     BoxShadow(
-                      color: Color(0x40F77F00),
+                      color: Color(0x406D28D9),
                       blurRadius: 24,
                       offset: Offset(0, 10),
                     ),
@@ -132,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 _registerMode
                     ? 'J’ai déjà un compte'
                     : 'Nouveau ? Créer un compte',
-                style: TextStyles.body.copyWith(color: letoOrange),
+                style: TextStyles.body.copyWith(color: accent),
               ),
             ),
           ],

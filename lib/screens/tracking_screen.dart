@@ -376,7 +376,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
         const LinearProgressIndicator(
           minHeight: 3,
           borderRadius: BorderRadius.all(Radius.circular(2)),
-          color: letoOrange,
+          color: accent,
         ),
         const SizedBox(height: 8),
         Text(
@@ -420,7 +420,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
               onPressed: () => showShareCodes(context, d),
               child: Text(
                 'Partager les codes',
-                style: TextStyles.subheadline.copyWith(color: letoOrange),
+                style: TextStyles.subheadline.copyWith(color: accent),
               ),
             ),
         ],
@@ -650,9 +650,7 @@ class _StopTile extends StatelessWidget {
                     : status == 'DELIVERED'
                     ? '${fcfa(cod)} encaissé'
                     : 'Encaisser ${fcfa(cod)}',
-                color: stop['codRemittedAt'] != null
-                    ? p.green
-                    : const Color(0xFFC25E00),
+                color: stop['codRemittedAt'] != null ? p.green : accentDeep,
                 icon: CupertinoIcons.creditcard,
               ),
             ),
@@ -742,7 +740,7 @@ class _OfferTile extends StatelessWidget {
         color: p.card,
         shape: RoundedSuperellipseBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: letoOrange.withValues(alpha: 0.5)),
+          side: BorderSide(color: accent.withValues(alpha: 0.5)),
         ),
       ),
       child: Column(
@@ -786,7 +784,7 @@ class _OfferTile extends StatelessWidget {
                   Text(
                     '+${fcfa(offer['price'] - original)}',
                     style: TextStyles.caption.copyWith(
-                      color: letoOrange,
+                      color: accent,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

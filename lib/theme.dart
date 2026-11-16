@@ -1,21 +1,44 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-/// Couleur d'accent LETO
-const letoOrange = Color(0xFFF77F00);
+// ============================================================================
+// Identité LETO : violet (accent), noir (texte, éléments forts), gris (surfaces)
+// ============================================================================
 
-/// Couleurs système façon iOS (clair / sombre), accessibles via `Palette.of(context)`.
+/// Violet LETO : boutons principaux, sélection, liens
+const accent = Color(0xFF6D28D9);
+
+/// Violet clair (dégradés, mode sombre)
+const accentLight = Color(0xFF8B5CF6);
+
+/// Violet profond (textes sur fond violet pâle)
+const accentDeep = Color(0xFF4C1D95);
+
+/// Noir LETO (titres, icônes fortes)
+const ink = Color(0xFF121214);
+
+/// Ancien nom conservé pour compatibilité
+const letoOrange = accent;
+
+const letoGradient = LinearGradient(
+  colors: [accentLight, accent],
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+);
+
+/// Couleurs système (clair / sombre), accessibles via `Palette.of(context)`.
 @immutable
 class Palette extends ThemeExtension<Palette> {
-  final Color background; // fond des écrans « groupés » (Réglages)
-  final Color card; // cellules / cartes
+  final Color background; // fond des écrans
+  final Color card; // panneaux, cartes
   final Color elevated; // éléments posés sur une carte
   final Color label;
   final Color secondaryLabel;
   final Color tertiaryLabel;
   final Color separator;
-  final Color fill; // champs, pastilles
-  final Color glass; // panneaux translucides au-dessus de la carte
+  final Color fill; // champs, pastilles, carte d'offre non sélectionnée
+  final Color glass; // panneaux au-dessus de la carte
+  final Color accentSoft; // fond violet pâle
   final Color green;
   final Color red;
   final Color blue;
@@ -31,6 +54,7 @@ class Palette extends ThemeExtension<Palette> {
     required this.separator,
     required this.fill,
     required this.glass,
+    required this.accentSoft,
     required this.green,
     required this.red,
     required this.blue,
@@ -38,35 +62,37 @@ class Palette extends ThemeExtension<Palette> {
   });
 
   static const light = Palette(
-    background: Color(0xFFF2F2F7),
+    background: Color(0xFFF3F3F6),
     card: Color(0xFFFFFFFF),
-    elevated: Color(0xFFF2F2F7),
-    label: Color(0xFF000000),
-    secondaryLabel: Color(0x993C3C43),
-    tertiaryLabel: Color(0x4D3C3C43),
-    separator: Color(0x4A3C3C43),
-    fill: Color(0x1F787880),
-    glass: Color(0xD9FFFFFF),
-    green: Color(0xFF34C759),
-    red: Color(0xFFFF3B30),
-    blue: Color(0xFF007AFF),
-    yellow: Color(0xFFFFCC00),
+    elevated: Color(0xFFF3F3F6),
+    label: ink,
+    secondaryLabel: Color(0xFF6B6B76),
+    tertiaryLabel: Color(0xFFA3A3AD),
+    separator: Color(0xFFE6E6EB),
+    fill: Color(0xFFF0F0F3),
+    glass: Color(0xFAFFFFFF),
+    accentSoft: Color(0xFFF1EBFE),
+    green: Color(0xFF16A34A),
+    red: Color(0xFFE11D48),
+    blue: Color(0xFF2563EB),
+    yellow: Color(0xFFD97706),
   );
 
   static const dark = Palette(
-    background: Color(0xFF000000),
-    card: Color(0xFF1C1C1E),
-    elevated: Color(0xFF2C2C2E),
-    label: Color(0xFFFFFFFF),
-    secondaryLabel: Color(0x99EBEBF5),
-    tertiaryLabel: Color(0x4DEBEBF5),
-    separator: Color(0x99545458),
-    fill: Color(0x3D787880),
-    glass: Color(0xCC1C1C1E),
-    green: Color(0xFF30D158),
-    red: Color(0xFFFF453A),
-    blue: Color(0xFF0A84FF),
-    yellow: Color(0xFFFFD60A),
+    background: Color(0xFF0B0B0D),
+    card: Color(0xFF18181B),
+    elevated: Color(0xFF232327),
+    label: Color(0xFFF4F4F5),
+    secondaryLabel: Color(0xFFA1A1AA),
+    tertiaryLabel: Color(0xFF71717A),
+    separator: Color(0xFF2A2A2F),
+    fill: Color(0xFF232327),
+    glass: Color(0xF518181B),
+    accentSoft: Color(0xFF2A1D4A),
+    green: Color(0xFF22C55E),
+    red: Color(0xFFFB7185),
+    blue: Color(0xFF60A5FA),
+    yellow: Color(0xFFFBBF24),
   );
 
   static Palette of(BuildContext context) =>
@@ -79,54 +105,141 @@ class Palette extends ThemeExtension<Palette> {
   Palette lerp(Palette? other, double t) => t < 0.5 ? this : (other ?? this);
 }
 
-/// Styles de texte de la charte Apple (Human Interface Guidelines)
+/// Typographie : Inter pour le texte, Barlow Condensed pour les grands titres
 class TextStyles {
+  static const _inter = 'Inter';
+
+  /// Grand titre condensé, en capitales (« ENVOYER UN COLIS »)
+  static const display = TextStyle(
+    fontFamily: 'BarlowCondensed',
+    fontSize: 38,
+    fontWeight: FontWeight.w800,
+    height: 1.0,
+    letterSpacing: -0.2,
+  );
+  static const displaySmall = TextStyle(
+    fontFamily: 'BarlowCondensed',
+    fontSize: 28,
+    fontWeight: FontWeight.w800,
+    height: 1.05,
+  );
+
   static const largeTitle = TextStyle(
-    fontSize: 34,
+    fontFamily: _inter,
+    fontSize: 32,
     fontWeight: FontWeight.w700,
-    letterSpacing: 0.37,
+    letterSpacing: -0.8,
   );
   static const title1 = TextStyle(
-    fontSize: 28,
+    fontFamily: _inter,
+    fontSize: 26,
     fontWeight: FontWeight.w700,
-    letterSpacing: 0.36,
+    letterSpacing: -0.6,
   );
   static const title2 = TextStyle(
-    fontSize: 22,
+    fontFamily: _inter,
+    fontSize: 21,
     fontWeight: FontWeight.w700,
-    letterSpacing: 0.35,
+    letterSpacing: -0.4,
   );
   static const title3 = TextStyle(
-    fontSize: 20,
+    fontFamily: _inter,
+    fontSize: 19,
     fontWeight: FontWeight.w600,
-    letterSpacing: 0.38,
+    letterSpacing: -0.3,
   );
   static const headline = TextStyle(
-    fontSize: 17,
+    fontFamily: _inter,
+    fontSize: 16.5,
     fontWeight: FontWeight.w600,
-    letterSpacing: -0.41,
+    letterSpacing: -0.2,
   );
   static const body = TextStyle(
-    fontSize: 17,
+    fontFamily: _inter,
+    fontSize: 16.5,
     fontWeight: FontWeight.w400,
-    letterSpacing: -0.41,
+    letterSpacing: -0.2,
   );
   static const callout = TextStyle(
-    fontSize: 16,
+    fontFamily: _inter,
+    fontSize: 15.5,
     fontWeight: FontWeight.w400,
-    letterSpacing: -0.32,
+    letterSpacing: -0.15,
   );
   static const subheadline = TextStyle(
-    fontSize: 15,
+    fontFamily: _inter,
+    fontSize: 14.5,
     fontWeight: FontWeight.w400,
-    letterSpacing: -0.24,
+    letterSpacing: -0.1,
   );
   static const footnote = TextStyle(
+    fontFamily: _inter,
     fontSize: 13,
     fontWeight: FontWeight.w400,
-    letterSpacing: -0.08,
+    letterSpacing: -0.05,
   );
-  static const caption = TextStyle(fontSize: 12, fontWeight: FontWeight.w400);
+  static const caption = TextStyle(
+    fontFamily: _inter,
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+  );
+
+  /// Prix (chiffres alignés)
+  static const price = TextStyle(
+    fontFamily: _inter,
+    fontSize: 22,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.6,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+}
+
+/// Durées et courbes des animations (légères et fluides)
+class Motion {
+  static const fast = Duration(milliseconds: 160);
+  static const medium = Duration(milliseconds: 260);
+  static const slow = Duration(milliseconds: 380);
+  static const curve = Curves.easeOutCubic;
+}
+
+/// Transition de page : léger glissement + fondu (plus doux que le glissement iOS complet)
+class LetoPageTransitionsBuilder extends PageTransitionsBuilder {
+  const LetoPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: Motion.curve,
+      reverseCurve: Curves.easeInCubic,
+    );
+    final behind = CurvedAnimation(
+      parent: secondaryAnimation,
+      curve: Motion.curve,
+    );
+    return SlideTransition(
+      position: Tween(
+        begin: const Offset(0.06, 0),
+        end: Offset.zero,
+      ).animate(curved),
+      child: FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween(
+            begin: Offset.zero,
+            end: const Offset(-0.03, 0),
+          ).animate(behind),
+          child: child,
+        ),
+      ),
+    );
+  }
 }
 
 ThemeData buildTheme(Brightness brightness) {
@@ -134,33 +247,45 @@ ThemeData buildTheme(Brightness brightness) {
   final base = ThemeData(
     useMaterial3: true,
     brightness: brightness,
+    fontFamily: 'Inter',
     colorScheme: ColorScheme.fromSeed(
-      seedColor: letoOrange,
+      seedColor: accent,
       brightness: brightness,
-      primary: letoOrange,
+      primary: accent,
       surface: p.card,
     ),
   );
-  final shape = RoundedSuperellipseBorder(
-    borderRadius: BorderRadius.circular(14),
+  final pill = RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.circular(18),
   );
   return base.copyWith(
     extensions: [p],
     scaffoldBackgroundColor: p.background,
     canvasColor: p.background,
     dividerColor: p.separator,
-    splashFactory: NoSplash
-        .splashFactory, // pas d'ondulation Material : effet de pression iOS
+    splashFactory: NoSplash.splashFactory,
     highlightColor: p.fill,
-    cupertinoOverrideTheme: CupertinoThemeData(
-      primaryColor: letoOrange,
-      brightness: brightness,
+    textTheme: base.textTheme.apply(
+      fontFamily: 'Inter',
+      bodyColor: p.label,
+      displayColor: p.label,
     ),
-    // Navigation iOS (glisser pour revenir) sur toutes les plateformes
+    cupertinoOverrideTheme: CupertinoThemeData(
+      primaryColor: accent,
+      brightness: brightness,
+      textTheme: CupertinoTextThemeData(
+        primaryColor: accent,
+        textStyle: TextStyles.body.copyWith(color: p.label),
+        navLargeTitleTextStyle: TextStyles.largeTitle.copyWith(color: p.label),
+        navTitleTextStyle: TextStyles.headline.copyWith(color: p.label),
+        actionTextStyle: TextStyles.body.copyWith(color: accent),
+      ),
+    ),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
-        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.android: LetoPageTransitionsBuilder(),
+        TargetPlatform.iOS:
+            CupertinoPageTransitionsBuilder(), // garde le glisser-pour-revenir d'iOS
       },
     ),
     appBarTheme: AppBarTheme(
@@ -174,16 +299,19 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: letoOrange,
+        backgroundColor: accent,
         foregroundColor: Colors.white,
-        minimumSize: const Size.fromHeight(50),
-        shape: shape,
-        textStyle: TextStyles.headline,
+        disabledBackgroundColor: accent.withValues(alpha: 0.35),
+        disabledForegroundColor: Colors.white,
+        minimumSize: const Size.fromHeight(56),
+        shape: pill,
+        textStyle: TextStyles.headline.copyWith(fontSize: 17),
+        animationDuration: Motion.fast,
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: letoOrange,
+        foregroundColor: accent,
         textStyle: TextStyles.body,
       ),
     ),
@@ -191,20 +319,29 @@ ThemeData buildTheme(Brightness brightness) {
       filled: true,
       fillColor: p.fill,
       hintStyle: TextStyles.body.copyWith(color: p.tertiaryLabel),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide.none,
       ),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: brightness == Brightness.dark
-          ? p.elevated
-          : const Color(0xF21C1C1E),
-      contentTextStyle: TextStyles.subheadline.copyWith(color: Colors.white),
-      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(14)),
+      backgroundColor: brightness == Brightness.dark ? p.elevated : ink,
+      contentTextStyle: TextStyles.subheadline.copyWith(
+        color: Colors.white,
+        fontWeight: FontWeight.w500,
+      ),
+      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
     ),
-    textSelectionTheme: const TextSelectionThemeData(cursorColor: letoOrange),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: p.card,
+      surfaceTintColor: Colors.transparent,
+    ),
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: accent,
+      selectionColor: accent.withValues(alpha: 0.25),
+    ),
   );
 }

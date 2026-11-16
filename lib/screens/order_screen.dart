@@ -123,14 +123,18 @@ class _OrderScreenState extends State<OrderScreen> {
   /// Premier champ manquant ou invalide, avec un message précis
   String? _missing() {
     final phoneOk = RegExp(r'^0\d{9}$');
-    if (_senderName.text.trim().isEmpty) return 'Départ : indiquez le nom de l’expéditeur';
-    if (!phoneOk.hasMatch(_pickupPhone.text.trim())) return 'Départ : téléphone invalide (10 chiffres)';
+    if (_senderName.text.trim().isEmpty)
+      return 'Départ : indiquez le nom de l’expéditeur';
+    if (!phoneOk.hasMatch(_pickupPhone.text.trim()))
+      return 'Départ : téléphone invalide (10 chiffres)';
     for (var i = 0; i < _forms.length; i++) {
       final f = _forms[i];
       final who = _forms.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire';
       if (f.name.text.trim().isEmpty) return '$who : indiquez le nom';
-      if (!phoneOk.hasMatch(f.phone.text.trim())) return '$who : téléphone invalide (10 chiffres)';
-      if (f.codOn && (int.tryParse(f.cod.text.replaceAll(' ', '')) ?? 0) <= 0) return '$who : montant à encaisser';
+      if (!phoneOk.hasMatch(f.phone.text.trim()))
+        return '$who : téléphone invalide (10 chiffres)';
+      if (f.codOn && (int.tryParse(f.cod.text.replaceAll(' ', '')) ?? 0) <= 0)
+        return '$who : montant à encaisser';
     }
     return null;
   }
@@ -191,7 +195,7 @@ class _OrderScreenState extends State<OrderScreen> {
               GroupRow(
                 leading: IconBadge(
                   vehicleIcons[widget.vehicle]!,
-                  color: letoOrange,
+                  color: accent,
                 ),
                 title: _offer['label'],
                 subtitle:
@@ -212,7 +216,7 @@ class _OrderScreenState extends State<OrderScreen> {
                     padding: const EdgeInsets.only(left: 10),
                     child: Icon(
                       CupertinoIcons.checkmark_alt,
-                      color: _speed == s ? letoOrange : Colors.transparent,
+                      color: _speed == s ? accent : Colors.transparent,
                     ),
                   ),
                   onTap: () => setState(() => _speed = s),
@@ -299,7 +303,7 @@ class _OrderScreenState extends State<OrderScreen> {
       header: _forms.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire',
       children: [
         GroupRow(
-          leading: _dot('${i + 1}', letoOrange),
+          leading: _dot('${i + 1}', accent),
           title: f.draft.place.label,
           subtitle: f.draft.place.sublabel,
         ),
@@ -404,7 +408,7 @@ class _PhotoRowState extends State<_PhotoRow> {
     return GroupRow(
       leading: Icon(CupertinoIcons.camera, size: 20, color: p.secondaryLabel),
       title: 'Ajouter une photo (portail, devanture…)',
-      titleColor: letoOrange,
+      titleColor: accent,
       trailing: _uploading ? const CupertinoActivityIndicator() : null,
       onTap: _uploading ? null : _pick,
     );

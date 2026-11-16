@@ -81,12 +81,21 @@ void main() {
 
       // 2e et 3e adresses : depuis le carnet d'adresses
       for (final name in ['Aya', 'Koffi']) {
-        await t.tap(find.text('Ajouter une adresse'));
+        await t.tap(find.textContaining('Arrêts'));
+        await wait(t, 1.5);
+        if (name == 'Koffi') await shot(t, 'client_stops');
+        await t.tap(find.text('Ajouter un arrêt'));
         await wait(t, 3);
         await t.tap(find.text(name).first);
         await wait(t, 6);
       }
       await shot(t, 'client_summary');
+      if (const bool.fromEnvironment('UI_ONLY')) {
+        await t.tap(find.textContaining('Continuer'));
+        await wait(t, 2);
+        await shot(t, 'client_order_top');
+        return;
+      }
 
       await t.tap(find.textContaining('Continuer'));
       await wait(t, 2);

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../api.dart';
 import '../geo.dart';
@@ -166,22 +167,6 @@ class _ClientHomeState extends State<ClientHome> {
     _showSummary();
   }
 
-  Future<void> _stopActions(int i) async {
-    final action = await showActions<String>(
-      context,
-      title: _stops[i].place.label,
-      actions: [
-        ('Changer l’adresse', 'edit', false),
-        ('Supprimer cet arrêt', 'delete', true),
-      ],
-    );
-    if (action == 'edit') _addStop(replace: i);
-    if (action == 'delete') {
-      setState(() => _stops.removeAt(i));
-      _stops.isEmpty ? _backToPickup() : _refreshQuote();
-    }
-  }
-
   void _showSummary() {
     setState(() => _mode = _Mode.summary);
     _refreshQuote();
@@ -290,7 +275,7 @@ class _ClientHomeState extends State<ClientHome> {
     items: [
       (
         CupertinoIcons.cube_box_fill,
-        letoOrange,
+        accent,
         'Mes livraisons',
         () => Navigator.push(
           context,
@@ -317,12 +302,172 @@ class _ClientHomeState extends State<ClientHome> {
     ],
   );
 
+  // ---------- Arrêts ----------
+
+  /// Feuille « Arrêts » : voir, ajouter et retirer les adresses de livraison
+  Future<void> _openStopsSheet() async {
+    final p = Palette.of(context);
+    var changed = false;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: p.card,
+      shape: const RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Grabber(),
+                const SizedBox(height: 16),
+                Text(
+                  'ARRÊTS',
+                  style: TextStyles.displaySmall.copyWith(color: p.label),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _stops.length > 1
+                      ? '${_stops.length} adresses · ordre de passage optimisé'
+                      : 'Ajoutez des adresses pour livrer plusieurs clients en une tournée',
+                  style: TextStyles.subheadline.copyWith(
+                    color: p.secondaryLabel,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.45,
+                  ),
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    children: [
+                      for (var i = 0; i < _stops.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              _numberDot('${i + 1}', accent),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => Navigator.pop(ctx, 'edit:$i'),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _stops[i].place.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyles.headline.copyWith(
+                                          color: p.label,
+                                        ),
+                                      ),
+                                      if (_stops[i].name.isNotEmpty ||
+                                          _stops[i].place.sublabel.isNotEmpty)
+                                        Text(
+                                          _stops[i].name.isNotEmpty
+                                              ? _stops[i].name
+                                              : _stops[i].place.sublabel,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyles.footnote.copyWith(
+                                            color: p.secondaryLabel,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Pressable(
+                                onTap: () {
+                                  setState(() => _stops.removeAt(i));
+                                  setSheet(() {});
+                                  changed = true;
+                                  if (_stops.isEmpty)
+                                    Navigator.pop(ctx, 'empty');
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Icon(
+                                    PhosphorIcons.minusCircle(
+                                      PhosphorIconsStyle.fill,
+                                    ),
+                                    color: p.red,
+                                    size: 26,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (_stops.length < _maxStops)
+                  Pressable(
+                    onTap: () => Navigator.pop(ctx, 'add'),
+                    child: Container(
+                      height: 54,
+                      decoration: ShapeDecoration(
+                        color: p.accentSoft,
+                        shape: RoundedSuperellipseBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            PhosphorIcons.plus(PhosphorIconsStyle.bold),
+                            color: accent,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Ajouter un arrêt',
+                            style: TextStyles.headline.copyWith(color: accent),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: ink),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Terminé'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'add') return _addStop();
+    if (action != null && action.startsWith('edit:'))
+      return _addStop(replace: int.parse(action.substring(5)));
+    if (action == 'empty' || _stops.isEmpty) return _backToPickup();
+    if (changed) _refreshQuote();
+  }
+
   // ---------- UI ----------
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final points = _quote == null ? <LatLng>[] : latLngList(_quote!['points']);
+    const overlap = 30.0; // la carte passe sous les coins arrondis du panneau
 
     return Scaffold(
       backgroundColor: p.background,
@@ -330,84 +475,112 @@ class _ClientHomeState extends State<ClientHome> {
         children: [
           Expanded(
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                LetoMap(
-                  controller: _map,
-                  onMove: _onMove,
-                  onMoveEnd: _onMoveEnd,
-                  layers: [
-                    if (_mode == _Mode.summary && points.isNotEmpty)
-                      routeLayer(points),
-                    MarkerLayer(
-                      markers: [
-                        if (_mode != _Mode.pickup && _pickup != null)
-                          pickupMarker(_pickup!.point),
-                        for (var i = 0; i < _stops.length; i++)
-                          stopMarker(context, _stops[i].place.point, i + 1),
-                      ],
-                    ),
-                  ],
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: -overlap,
+                  child: Stack(
+                    children: [
+                      LetoMap(
+                        controller: _map,
+                        onMove: _onMove,
+                        onMoveEnd: _onMoveEnd,
+                        layers: [
+                          if (_mode == _Mode.summary && points.isNotEmpty)
+                            routeLayer(points),
+                          MarkerLayer(
+                            markers: [
+                              if (_mode != _Mode.pickup && _pickup != null)
+                                pickupMarker(_pickup!.point),
+                              for (var i = 0; i < _stops.length; i++)
+                                stopMarker(
+                                  context,
+                                  _stops[i].place.point,
+                                  i + 1,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      if (_mode == _Mode.pickup)
+                        CenterPin(
+                          title: 'Prise en charge',
+                          subtitle: _eta == null
+                              ? 'Aucun livreur proche'
+                              : '~$_eta min',
+                          loading: _moving || _lookingUp,
+                          place: _centerPlace?.label,
+                        ),
+                      if (_mode == _Mode.dropoffOnMap)
+                        CenterPin(
+                          dropoff: true,
+                          title: 'Livraison ${_stops.length + 1}',
+                          subtitle: 'Livrer ici',
+                          loading: _moving,
+                          place: _centerPlace?.label,
+                        ),
+                    ],
+                  ),
                 ),
-                if (_mode == _Mode.pickup)
-                  CenterPin(
-                    title: 'Prise en charge',
-                    subtitle: _eta == null
-                        ? 'Aucun livreur proche'
-                        : '~$_eta min',
-                    loading: _moving || _lookingUp,
-                  ),
-                if (_mode == _Mode.dropoffOnMap)
-                  CenterPin(
-                    dropoff: true,
-                    title: 'Adresse ${_stops.length + 1}',
-                    subtitle: 'Livrer ici',
-                    loading: _moving,
-                  ),
                 SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Row(
                           children: [
-                            _mode == _Mode.pickup
-                                ? MapButton(
-                                    CupertinoIcons.person_crop_circle,
-                                    onTap: _openAccount,
-                                  )
-                                : MapButton(
-                                    CupertinoIcons.chevron_back,
-                                    onTap: _backToPickup,
-                                  ),
+                            AnimatedSwitcher(
+                              duration: Motion.fast,
+                              child: _mode == _Mode.pickup
+                                  ? MapButton(
+                                      PhosphorIcons.userCircle(),
+                                      key: const ValueKey('account'),
+                                      onTap: _openAccount,
+                                    )
+                                  : MapButton(
+                                      PhosphorIcons.arrowLeft(),
+                                      key: const ValueKey('back'),
+                                      onTap: _backToPickup,
+                                    ),
+                            ),
                           ],
                         ),
-                        if (_active != null && _mode == _Mode.pickup) ...[
-                          const SizedBox(height: 10),
-                          _ActiveBanner(
-                            _active!,
-                            onTap: () async {
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      TrackingScreen(_active!['id']),
-                                ),
-                              );
-                              _loadActive();
-                            },
-                          ),
-                        ],
+                        AnimatedSwitcher(
+                          duration: Motion.medium,
+                          child: _active != null && _mode == _Mode.pickup
+                              ? Padding(
+                                  key: ValueKey(_active!['id']),
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: _ActiveBanner(
+                                    _active!,
+                                    onTap: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              TrackingScreen(_active!['id']),
+                                        ),
+                                      );
+                                      _loadActive();
+                                    },
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                       ],
                     ),
                   ),
                 ),
                 if (_mode != _Mode.summary)
                   Positioned(
-                    right: 12,
-                    bottom: 16,
+                    right: 16,
+                    bottom: overlap + 14,
                     child: MapButton(
-                      CupertinoIcons.location_fill,
+                      PhosphorIcons.navigationArrow(),
                       onTap: _locateMe,
                     ),
                   ),
@@ -415,6 +588,7 @@ class _ClientHomeState extends State<ClientHome> {
             ),
           ),
           GlassPanel(
+            contentKey: _mode,
             children: switch (_mode) {
               _Mode.pickup => _pickupPanel(p),
               _Mode.dropoffOnMap => _dropoffOnMapPanel(p),
@@ -426,6 +600,7 @@ class _ClientHomeState extends State<ClientHome> {
     );
   }
 
+  /// Ligne d'adresse (icône, légende, valeur, élément à droite)
   Widget _row({
     required Widget leading,
     required String caption,
@@ -436,39 +611,46 @@ class _ClientHomeState extends State<ClientHome> {
   }) {
     final p = Palette.of(context);
     final empty = value == null || value.isEmpty;
-    return InkWell(
-      onTap: onTap == null
-          ? null
-          : () {
-              hapticTap();
-              onTap();
-            },
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.985,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 9),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            leading,
+            SizedBox(width: 52, child: Center(child: leading)),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!empty)
+              child: AnimatedSwitcher(
+                duration: Motion.fast,
+                layoutBuilder: (current, previous) => Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [...previous, ?current],
+                ),
+                child: Column(
+                  key: ValueKey('$caption$value'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!empty)
+                      Text(
+                        caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyles.subheadline.copyWith(
+                          color: p.secondaryLabel,
+                        ),
+                      ),
                     Text(
-                      caption,
-                      style: TextStyles.footnote.copyWith(
-                        color: p.secondaryLabel,
+                      empty ? placeholder : value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyles.title3.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: empty ? p.tertiaryLabel : p.label,
                       ),
                     ),
-                  Text(
-                    empty ? placeholder : value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: empty
-                        ? TextStyles.body.copyWith(color: p.tertiaryLabel)
-                        : TextStyles.headline.copyWith(color: p.label),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             ?trailing,
@@ -478,54 +660,101 @@ class _ClientHomeState extends State<ClientHome> {
     );
   }
 
+  /// Carré noir arrondi avec une icône blanche (départ)
+  Widget _inkTile(IconData icon) => Container(
+    width: 52,
+    height: 52,
+    decoration: ShapeDecoration(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF2E2E34)
+          : ink,
+      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+    child: Icon(icon, color: Colors.white, size: 26),
+  );
+
   Widget _numberDot(String label, Color color) => Container(
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     alignment: Alignment.center,
     decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     child: Text(
       label,
-      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+      style: const TextStyle(
+        fontFamily: 'Inter',
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+        fontSize: 13,
+      ),
     ),
   );
 
-  List<Widget> _pickupPanel(Palette p) => [
-    Text('Envoyer un colis', style: TextStyles.title1.copyWith(color: p.label)),
-    const SizedBox(height: 8),
-    _row(
-      leading: IconBadge(
-        CupertinoIcons.cube_box_fill,
-        color: p.green,
-        size: 32,
+  /// Pastille « Arrêts » (comme la ligne de livraison de Yango)
+  Widget _stopsPill(Palette p) => Pressable(
+    onTap: _stops.isEmpty ? _addStop : _openStopsSheet,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: ShapeDecoration(color: p.fill, shape: const StadiumBorder()),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            PhosphorIcons.plus(PhosphorIconsStyle.bold),
+            size: 15,
+            color: p.label,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _stops.length > 1 ? 'Arrêts · ${_stops.length}' : 'Arrêts',
+            style: TextStyles.headline.copyWith(fontSize: 15, color: p.label),
+          ),
+        ],
       ),
+    ),
+  );
+
+  Widget _divider(Palette p) => Padding(
+    padding: const EdgeInsets.only(left: 64),
+    child: Divider(height: 1, thickness: 1, color: p.separator),
+  );
+
+  List<Widget> _pickupPanel(Palette p) => [
+    Text(
+      'ENVOYER UN COLIS',
+      style: TextStyles.display.copyWith(color: p.label),
+    ),
+    const SizedBox(height: 10),
+    _row(
+      leading: _inkTile(PhosphorIcons.package(PhosphorIconsStyle.fill)),
       caption: 'Prise en charge',
       value: _moving ? '…' : _centerPlace?.label,
       placeholder: 'Recherche de l’adresse…',
       onTap: _searchPickup,
     ),
-    Divider(height: 1, indent: 44, color: p.separator),
+    _divider(p),
     _row(
-      leading: IconBadge(CupertinoIcons.flag_fill, color: letoOrange, size: 32),
+      leading: Icon(
+        PhosphorIcons.flagCheckered(PhosphorIconsStyle.fill),
+        color: p.label,
+        size: 30,
+      ),
       caption: 'Livraison',
       placeholder: 'Adresse de livraison',
       onTap: _addStop,
+      trailing: _stopsPill(p),
     ),
-    const SizedBox(height: 4),
-    Text(
-      'Boutique ? Ajoutez plusieurs adresses : une seule tournée, un seul livreur.',
-      style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
-    ),
+    const SizedBox(height: 8),
   ];
 
   List<Widget> _dropoffOnMapPanel(Palette p) => [
-    Text('Où livrer ?', style: TextStyles.title2.copyWith(color: p.label)),
-    const SizedBox(height: 6),
+    Text('OÙ LIVRER ?', style: TextStyles.display.copyWith(color: p.label)),
+    const SizedBox(height: 8),
     _row(
-      leading: _numberDot('${_stops.length + 1}', letoOrange),
+      leading: _numberDot('${_stops.length + 1}', accent),
       caption: 'Adresse ${_stops.length + 1}',
       value: _moving ? '…' : _centerPlace?.label,
     ),
-    const SizedBox(height: 10),
+    const SizedBox(height: 12),
     FilledButton(
       onPressed: _moving ? null : _confirmDropoffOnMap,
       child: const Text('Valider cette adresse'),
@@ -536,116 +765,91 @@ class _ClientHomeState extends State<ClientHome> {
     final offers =
         (_quote?['offers'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final selected = offers.where((o) => o['vehicle'] == _vehicle).firstOrNull;
+    final route = _quote == null
+        ? null
+        : '≈ ${_quote!['durationMin']} min · ${km(_quote!['distanceKm'])}';
     return [
       _row(
-        leading: _numberDot('A', p.green),
+        leading: _inkTile(PhosphorIcons.package(PhosphorIconsStyle.fill)),
         caption: 'Prise en charge',
         value: _pickup?.label,
         onTap: _searchPickup,
       ),
-      ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.22,
+      _divider(p),
+      _row(
+        leading: Icon(
+          PhosphorIcons.flagCheckered(PhosphorIconsStyle.fill),
+          color: p.label,
+          size: 30,
         ),
-        child: ListView(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          children: [
-            for (var i = 0; i < _stops.length; i++)
-              _row(
-                leading: _numberDot('${i + 1}', letoOrange),
-                caption: _stops[i].name.isEmpty
-                    ? 'Adresse ${i + 1}'
-                    : _stops[i].name,
-                value: _stops[i].place.label,
-                onTap: () => _stopActions(i),
-                trailing: Icon(
-                  CupertinoIcons.ellipsis,
-                  color: p.tertiaryLabel,
-                  size: 20,
-                ),
-              ),
-          ],
-        ),
+        caption: route ?? 'Calcul de l’itinéraire…',
+        value: _stops.length == 1
+            ? _stops.first.place.label
+            : '${_stops.first.place.label} + ${_stops.length - 1}',
+        onTap: _openStopsSheet,
+        trailing: _stopsPill(p),
       ),
-      if (_stops.length < _maxStops)
-        _row(
-          leading: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: letoOrange.withValues(alpha: 0.14),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(CupertinoIcons.plus, color: letoOrange, size: 18),
-          ),
-          caption: '',
-          placeholder: 'Ajouter une adresse',
-          onTap: _addStop,
-        ),
-      const SizedBox(height: 8),
+      const SizedBox(height: 14),
       SizedBox(
-        height: 118,
-        child: _quote == null
-            ? const Center(child: CupertinoActivityIndicator())
-            : ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: offers.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 10),
-                itemBuilder: (_, i) => _OfferCard(
-                  offer: offers[i],
-                  eta: _eta,
-                  selected: offers[i]['vehicle'] == _vehicle,
-                  onTap: () {
-                    hapticTap();
-                    setState(() => _vehicle = offers[i]['vehicle']);
-                  },
+        height: 162,
+        child: AnimatedSwitcher(
+          duration: Motion.medium,
+          child: _quote == null
+              ? const Center(
+                  key: ValueKey('loading'),
+                  child: CupertinoActivityIndicator(),
+                )
+              : ListView.separated(
+                  key: const ValueKey('offers'),
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  itemCount: offers.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => _OfferCard(
+                    offer: offers[i],
+                    eta: _eta,
+                    selected: offers[i]['vehicle'] == _vehicle,
+                    onTap: () =>
+                        setState(() => _vehicle = offers[i]['vehicle']),
+                  ),
                 ),
-              ),
-      ),
-      if (_quote != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            [
-              if (_stops.length > 1) '${_stops.length} arrêts · ordre optimisé',
-              km(_quote!['distanceKm']),
-              '~${_quote!['durationMin']} min',
-            ].join(' · '),
-            style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
-          ),
         ),
-      const SizedBox(height: 10),
+      ),
+      const SizedBox(height: 14),
       Row(
         children: [
+          // Paiement en espèces
           Container(
-            height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            width: 56,
+            height: 56,
             decoration: ShapeDecoration(
-              color: p.green.withValues(alpha: 0.14),
+              color: p.fill,
               shape: RoundedSuperellipseBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
               ),
             ),
-            child: Row(
-              children: [
-                Icon(CupertinoIcons.money_dollar_circle_fill, color: p.green),
-                const SizedBox(width: 6),
-                Text(
-                  'Espèces',
-                  style: TextStyles.headline.copyWith(color: p.green),
-                ),
-              ],
+            child: PhosphorIcon(
+              PhosphorIcons.money(PhosphorIconsStyle.duotone),
+              color: p.label,
+              size: 30,
+              duotoneSecondaryColor: p.green,
+              duotoneSecondaryOpacity: 0.55,
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: FilledButton(
               onPressed: selected == null || _quoting ? null : _continue,
-              child: Text(
-                selected == null
-                    ? 'Calcul du prix…'
-                    : 'Continuer · ${fcfa(selected['prices']['STANDARD'])}',
+              child: AnimatedSwitcher(
+                duration: Motion.fast,
+                child: Text(
+                  selected == null
+                      ? 'Calcul du prix…'
+                      : 'Continuer · ${fcfa(selected['prices']['STANDARD'])}',
+                  key: ValueKey(
+                    '${selected?['vehicle']}${selected?['prices']?['STANDARD']}',
+                  ),
+                ),
               ),
             ),
           ),
@@ -654,6 +858,13 @@ class _ClientHomeState extends State<ClientHome> {
     ];
   }
 }
+
+/// Icône d'offre (deux tons)
+PhosphorIconData _vehicleIcon(String v) => switch (v) {
+  'CAR' => PhosphorIcons.car(PhosphorIconsStyle.duotone),
+  'CARGO' => PhosphorIcons.truck(PhosphorIconsStyle.duotone),
+  _ => PhosphorIcons.moped(PhosphorIconsStyle.duotone),
+};
 
 /// Carte d'offre du carrousel (Moto, Voiture, Cargo)
 class _OfferCard extends StatelessWidget {
@@ -672,79 +883,98 @@ class _OfferCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final v = offer['vehicle'] as String;
-    return GestureDetector(
+    final ink2 = selected ? p.label : p.secondaryLabel;
+    return Pressable(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 146,
-        padding: const EdgeInsets.all(12),
+        duration: Motion.medium,
+        curve: Motion.curve,
+        width: 158,
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
         decoration: ShapeDecoration(
-          color: selected ? letoOrange.withValues(alpha: 0.12) : p.fill,
+          color: selected ? p.fill : Colors.transparent,
           shape: RoundedSuperellipseBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: BorderSide(
-              color: selected ? letoOrange : Colors.transparent,
-              width: 2,
-            ),
+            borderRadius: BorderRadius.circular(22),
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Stack(
+              clipBehavior: Clip.none,
               children: [
-                Icon(
-                  vehicleIcons[v],
-                  size: 30,
-                  color: selected ? letoOrange : p.label,
+                AnimatedContainer(
+                  duration: Motion.medium,
+                  width: 64,
+                  height: 52,
+                  decoration: ShapeDecoration(
+                    color: selected ? p.accentSoft : p.fill,
+                    shape: RoundedSuperellipseBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: PhosphorIcon(
+                    _vehicleIcon(v),
+                    size: 34,
+                    color: selected ? accent : p.secondaryLabel,
+                    duotoneSecondaryColor: selected ? accent : p.secondaryLabel,
+                    duotoneSecondaryOpacity: 0.25,
+                  ),
                 ),
-                const Spacer(),
-                if (eta != null && v == 'MOTO')
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: p.card,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '$eta min',
-                      style: TextStyles.caption.copyWith(
-                        color: p.label,
-                        fontWeight: FontWeight.w700,
+                if (eta != null)
+                  Positioned(
+                    left: 44,
+                    bottom: -6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: ShapeDecoration(
+                        color: p.card,
+                        shape: const StadiumBorder(),
+                        shadows: const [
+                          BoxShadow(
+                            color: Color(0x1F000000),
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        '${v == 'MOTO' ? eta : eta! + 4} min',
+                        style: TextStyles.caption.copyWith(
+                          color: p.label,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
               ],
             ),
             const Spacer(),
-            Text(
-              offer['label'],
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyles.subheadline.copyWith(
-                color: p.label,
-                fontWeight: FontWeight.w600,
+            AnimatedDefaultTextStyle(
+              duration: Motion.fast,
+              style: TextStyles.headline.copyWith(color: ink2),
+              child: Text(
+                offer['label'],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'dès ',
-                    style: TextStyles.caption.copyWith(color: p.secondaryLabel),
-                  ),
-                  TextSpan(
-                    text: fcfa(offer['prices']['SCHEDULED']),
-                    style: TextStyles.title3.copyWith(
-                      color: p.label,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 2),
+            Text(
+              'à partir de',
+              style: TextStyles.footnote.copyWith(
+                color: p.secondaryLabel,
+                fontWeight: FontWeight.w500,
               ),
+            ),
+            Text(
+              fcfa(offer['prices']['SCHEDULED']),
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyles.price.copyWith(color: ink2, fontSize: 20),
             ),
           ],
         ),
@@ -753,6 +983,7 @@ class _OfferCard extends StatelessWidget {
   }
 }
 
+/// Bandeau « livraison en cours »
 class _ActiveBanner extends StatelessWidget {
   final Map<String, dynamic> d;
   final VoidCallback onTap;
@@ -762,26 +993,41 @@ class _ActiveBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final stops = (d['stops'] as List? ?? []);
     final done = stops.where((s) => s['status'] != 'PENDING').length;
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
+      pressedScale: 0.98,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
         decoration: ShapeDecoration(
-          color: const Color(0xF21C1C1E),
+          color: ink,
           shape: RoundedSuperellipseBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
           ),
           shadows: const [
             BoxShadow(
               color: Color(0x33000000),
-              blurRadius: 16,
-              offset: Offset(0, 6),
+              blurRadius: 18,
+              offset: Offset(0, 8),
             ),
           ],
         ),
         child: Row(
           children: [
-            const Icon(Icons.two_wheeler, color: Colors.white),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: ShapeDecoration(
+                gradient: letoGradient,
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(13),
+                ),
+              ),
+              child: Icon(
+                PhosphorIcons.moped(PhosphorIconsStyle.fill),
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -805,8 +1051,8 @@ class _ActiveBanner extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(
-              CupertinoIcons.chevron_forward,
+            Icon(
+              PhosphorIcons.caretRight(PhosphorIconsStyle.bold),
               color: Colors.white54,
               size: 18,
             ),

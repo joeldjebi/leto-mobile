@@ -315,7 +315,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Pill(
                       'Votre proposition : ${fcfa(widget.myOffer!['price'])} · en attente du client',
-                      color: const Color(0xFFC25E00),
+                      color: accentDeep,
                       icon: CupertinoIcons.hourglass,
                     ),
                   ),

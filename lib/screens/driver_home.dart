@@ -723,7 +723,7 @@ class _DriverHomeState extends State<DriverHome> {
         InsetGroup(
           children: [
             GroupRow(
-              leading: _dot('${next['position'] + 1}', letoOrange),
+              leading: _dot('${next['position'] + 1}', accent),
               title: '${next['address']} (${next['commune']})',
               subtitle: next['details'],
             ),
@@ -742,7 +742,7 @@ class _DriverHomeState extends State<DriverHome> {
               GroupRow(
                 leading: const IconBadge(
                   CupertinoIcons.creditcard_fill,
-                  color: Color(0xFFC25E00),
+                  color: accentDeep,
                 ),
                 title: 'Encaisser ${fcfa(cod)}',
                 subtitle: 'Avant de remettre le colis',
@@ -878,7 +878,7 @@ class _DriverHomeState extends State<DriverHome> {
         padding: const EdgeInsets.all(18),
         decoration: ShapeDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFFFF9F0A), letoOrange],
+            colors: [accentLight, accent],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -915,7 +915,7 @@ class _DriverHomeState extends State<DriverHome> {
           GroupRow(
             leading: const IconBadge(
               CupertinoIcons.creditcard_fill,
-              color: Color(0xFFC25E00),
+              color: accentDeep,
             ),
             title: 'Encaissé pour l’entreprise',
             subtitle: 'Aujourd’hui · paiement à la livraison',
@@ -1111,7 +1111,7 @@ class _OrderCard extends StatelessWidget {
               const SizedBox(height: 10),
               Pill(
                 'Votre proposition : ${fcfa(myOffer!['price'])} · en attente',
-                color: const Color(0xFFC25E00),
+                color: accentDeep,
                 icon: CupertinoIcons.hourglass,
               ),
             ],

@@ -44,6 +44,7 @@ dependencies:
   http_parser: ^4.1.2
   share_plus: ^13.3.1
   url_launcher: ^6.3.2
+  phosphor_flutter: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +69,26 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Polices intégrées (licence SIL OFL 1.1, voir assets/fonts/*-OFL.txt)
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: BarlowCondensed
+      fonts:
+        - asset: assets/fonts/BarlowCondensed-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BarlowCondensed-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/BarlowCondensed-ExtraBold.ttf
+          weight: 800
 
   # To add assets to your application, add an assets section, like this:
   # assets:
