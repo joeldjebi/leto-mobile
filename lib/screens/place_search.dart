@@ -96,11 +96,11 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
       backgroundColor: p.background,
       appBar: AppBar(
         title: Text(widget.title),
-        leading: CupertinoNavigationBarBackButton(
-          color: accent,
-          previousPageTitle: 'Carte',
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.maybePop(context),
+          child: const Icon(CupertinoIcons.back, color: accent, size: 28),
         ),
-        leadingWidth: 100,
       ),
       body: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,

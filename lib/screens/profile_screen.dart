@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../api.dart';
 import '../main.dart';
@@ -21,6 +24,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _current = TextEditingController();
   final _newPassword = TextEditingController();
   bool _saving = false;
+  late String? _avatar = _user['avatarUrl'];
+  bool _uploading = false;
+
+  /// Photo de profil : selfie uniquement (caméra frontale, pas de photothèque)
+  Future<void> _takeSelfie() async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        maxWidth: 800,
+        imageQuality: 75,
+      );
+      if (file == null || !mounted) return;
+      setState(() => _uploading = true);
+      final url = await api.upload(File(file.path));
+      await api.updateProfile({'avatarUrl': url});
+      hapticSuccess();
+      if (mounted) setState(() => _avatar = url);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
 
   bool get _isClient => _user['role'] == 'CLIENT';
   bool get _phoneChanged => _phone.text.trim() != _user['phone'];
@@ -78,7 +105,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       children: [
         Center(
-          child: Avatar(_name.text.isEmpty ? '?' : _name.text, radius: 40),
+          child: Pressable(
+            onTap: _uploading ? null : _takeSelfie,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Avatar(
+                  _name.text.isEmpty ? '?' : _name.text,
+                  radius: 46,
+                  photo: _avatar,
+                ),
+                if (_uploading)
+                  const Positioned.fill(
+                    child: Center(child: CupertinoActivityIndicator()),
+                  ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: p.background, width: 3),
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.camera_fill,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _avatar == null ? 'Ajouter un selfie' : 'Reprendre un selfie',
+          textAlign: TextAlign.center,
+          style: TextStyles.subheadline.copyWith(color: accent),
         ),
         const SizedBox(height: 22),
         if (_isClient)

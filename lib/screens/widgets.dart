@@ -1218,7 +1218,10 @@ class AddressPhoto extends StatelessWidget {
 class Avatar extends StatelessWidget {
   final String name;
   final double radius;
-  const Avatar(this.name, {super.key, this.radius = 20});
+
+  /// Photo de profil (/uploads/…), sinon l'initiale
+  final String? photo;
+  const Avatar(this.name, {super.key, this.radius = 20, this.photo});
 
   @override
   Widget build(BuildContext context) {
@@ -1226,6 +1229,7 @@ class Avatar extends StatelessWidget {
     return CircleAvatar(
       radius: radius,
       backgroundColor: p.fill,
+      foregroundImage: photo == null ? null : NetworkImage(photoUrl(photo!)),
       child: Text(
         name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
         style: TextStyle(
@@ -1365,6 +1369,9 @@ class LargeTitlePage extends StatelessWidget {
   final Widget? trailing;
   final Widget? bottomBar;
   final Future<void> Function()? onRefresh;
+
+  /// Titre sur la même ligne que le bouton retour (au lieu du grand titre)
+  final bool inline;
   const LargeTitlePage({
     super.key,
     required this.title,
@@ -1372,11 +1379,21 @@ class LargeTitlePage extends StatelessWidget {
     this.trailing,
     this.bottomBar,
     this.onRefresh,
+    this.inline = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
+    // Retour : icône seule, sans libellé
+    final back = Navigator.canPop(context)
+        ? CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(44, 44),
+            onPressed: () => Navigator.maybePop(context),
+            child: Icon(CupertinoIcons.back, color: accent, size: 28),
+          )
+        : null;
     return Scaffold(
       backgroundColor: p.background,
       body: CustomScrollView(
@@ -1384,13 +1401,36 @@ class LargeTitlePage extends StatelessWidget {
           parent: AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          CupertinoSliverNavigationBar(
-            largeTitle: Text(title, style: TextStyle(color: p.label)),
-            backgroundColor: p.background.withValues(alpha: 0.85),
-            border: null,
-            trailing: trailing,
-            previousPageTitle: 'Retour',
-          ),
+          if (inline)
+            SliverAppBar(
+              pinned: true,
+              backgroundColor: p.background,
+              surfaceTintColor: Colors.transparent,
+              leading: back,
+              automaticallyImplyLeading: false,
+              centerTitle: false,
+              titleSpacing: back == null ? 16 : 0,
+              title: Text(
+                title,
+                style: TextStyles.title3.copyWith(color: p.label),
+              ),
+              actions: [
+                if (trailing != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: trailing,
+                  ),
+              ],
+            )
+          else
+            CupertinoSliverNavigationBar(
+              largeTitle: Text(title, style: TextStyle(color: p.label)),
+              backgroundColor: p.background.withValues(alpha: 0.85),
+              border: null,
+              trailing: trailing,
+              leading: back,
+              automaticallyImplyLeading: false,
+            ),
           if (onRefresh != null)
             CupertinoSliverRefreshControl(onRefresh: onRefresh),
           SliverPadding(
@@ -1513,7 +1553,7 @@ Future<void> showAccountSheet(
             const SizedBox(height: 8),
             const Grabber(),
             const SizedBox(height: 16),
-            Avatar(user['name'] ?? '?', radius: 36),
+            Avatar(user['name'] ?? '?', radius: 36, photo: user['avatarUrl']),
             const SizedBox(height: 10),
             Text(
               user['name'] ?? '',

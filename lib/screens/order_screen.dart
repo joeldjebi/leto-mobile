@@ -1,20 +1,19 @@
-import 'dart:io';
-
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../api.dart';
 import '../labels.dart';
 import '../main.dart';
 import '../models.dart';
+import 'map_picker.dart';
 import 'place_search.dart';
 import 'widgets.dart';
 
-/// Détails de la commande, réduits à l'essentiel : engin, délai, départ, destinataires.
-/// Les adresses restent modifiables (le prix est recalculé) et on peut ajouter des arrêts.
+/// Détails de la commande, réduits à l'essentiel : engin, délai, départ (et numéro appelé par
+/// le livreur), destinataires. Adresses modifiables (recherche ou carte), prix recalculé, arrêts.
 class OrderScreen extends StatefulWidget {
   final Place pickup;
   final List<StopDraft>
@@ -41,16 +40,21 @@ class OrderScreen extends StatefulWidget {
 class _StopForm {
   final name = TextEditingController();
   final phone = TextEditingController();
-  final description = TextEditingController();
   final cod = TextEditingController();
   bool codOn = false;
-  String? photo;
 
   _StopForm(StopDraft draft) {
     name.text = draft.name;
     phone.text = draft.phone;
-    photo = draft.photo;
   }
+}
+
+/// Numéro ivoirien à 10 chiffres à partir d'un numéro du répertoire (+225 07 01…, 00225…)
+String normalizePhone(String raw) {
+  var d = raw.replaceAll(RegExp(r'\D'), '');
+  if (d.startsWith('00225')) d = d.substring(5);
+  if (d.startsWith('225') && d.length == 13) d = d.substring(3);
+  return d;
 }
 
 class _OrderScreenState extends State<OrderScreen> {
@@ -63,7 +67,9 @@ class _OrderScreenState extends State<OrderScreen> {
   String _speed = 'STANDARD';
   bool _sending = false;
   bool _quoting = false;
-  String? _pickupPhoto;
+
+  /// Numéro que le livreur appellera au départ (celui du profil par défaut)
+  late final _pickupPhone = TextEditingController(text: api.user?['phone']);
 
   List<StopDraft> get _stops => widget.stops;
 
@@ -113,21 +119,34 @@ class _OrderScreenState extends State<OrderScreen> {
     }
   }
 
-  Future<Object?> _search(String title, {bool dropoff = false}) =>
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PlaceSearchScreen(
-            title: title,
-            near: _pickup.point,
-            dropoff: dropoff,
-            allowMap: false,
-          ),
+  /// Recherche d'une adresse, ou choix sur la carte. Renvoie un [Place] ou un [StopDraft] (carnet).
+  Future<Object?> _pickAddress(
+    String title,
+    LatLng around, {
+    bool dropoff = false,
+  }) async {
+    final res = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlaceSearchScreen(
+          title: title,
+          near: _pickup.point,
+          dropoff: dropoff,
         ),
-      );
+      ),
+    );
+    if (res != chooseOnMap || !mounted) return res;
+    return Navigator.push<Place>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            MapPickerScreen(title: title, initial: around, dropoff: dropoff),
+      ),
+    );
+  }
 
   Future<void> _changePickup() async {
-    final res = await _search('Départ');
+    final res = await _pickAddress('Départ', _pickup.point);
     if (res is! Place || !mounted) return;
     setState(() => _pickup = res);
     widget.onPickupChanged?.call(res);
@@ -135,7 +154,11 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   Future<void> _changeStop(StopDraft d) async {
-    final res = await _search('Adresse de livraison', dropoff: true);
+    final res = await _pickAddress(
+      'Adresse de livraison',
+      d.place.point,
+      dropoff: true,
+    );
     if (!mounted) return;
     if (res is Place) {
       d.place = res;
@@ -153,7 +176,8 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   Future<void> _addStop() async {
-    final res = await _search('Nouvel arrêt', dropoff: true);
+    final around = _stops.isEmpty ? _pickup.point : _stops.last.place.point;
+    final res = await _pickAddress('Nouvel arrêt', around, dropoff: true);
     if (!mounted) return;
     final draft = res is StopDraft
         ? res
@@ -170,13 +194,40 @@ class _OrderScreenState extends State<OrderScreen> {
       'Retirer cet arrêt ?',
       ok: 'Retirer',
       destructive: true,
-    ))
+    )) {
       return;
+    }
     setState(() {
       _stops.remove(d);
       _forms.remove(d);
     });
     _requote();
+  }
+
+  /// Répertoire du téléphone : numéro et nom du destinataire
+  Future<void> _pickContact(_StopForm f) async {
+    try {
+      final c = await FlutterNativeContactPicker().selectPhoneNumber();
+      if (c == null || !mounted) return;
+      final raw =
+          c.selectedPhoneNumber ??
+          (c.phoneNumbers?.isNotEmpty == true ? c.phoneNumbers!.first : '');
+      final phone = normalizePhone(raw);
+      setState(() {
+        if (phone.isNotEmpty) f.phone.text = phone;
+        if ((c.fullName ?? '').trim().isNotEmpty) {
+          f.name.text = c.fullName!.trim();
+        }
+      });
+      if (phone.isNotEmpty && !RegExp(r'^0\d{9}$').hasMatch(phone)) {
+        showError(
+          context,
+          'Ce numéro ne semble pas ivoirien (10 chiffres) : vérifiez-le',
+        );
+      }
+    } catch (e) {
+      if (mounted) showError(context, 'Répertoire indisponible');
+    }
   }
 
   // ---------- Commande ----------
@@ -188,9 +239,7 @@ class _OrderScreenState extends State<OrderScreen> {
       return;
     }
     setState(() => _sending = true);
-    String? opt(TextEditingController c) =>
-        c.text.trim().isEmpty ? null : c.text.trim();
-    String? optStr(String s) => s.trim().isEmpty ? null : s.trim();
+    String? optStr(String? s) => (s ?? '').trim().isEmpty ? null : s!.trim();
     try {
       final d = await api.createDelivery({
         'vehicleType': _vehicle,
@@ -198,10 +247,8 @@ class _OrderScreenState extends State<OrderScreen> {
         'pickupLat': _pickup.point.latitude,
         'pickupLng': _pickup.point.longitude,
         'pickupAddress': _pickup.label,
-        // Expéditeur : le profil du client (modifiable dans « Mon profil »)
-        'pickupContactName': ?optStr(api.user?['name'] ?? ''),
-        'pickupPhone': api.user?['phone'],
-        'pickupPhotoUrl': ?_pickupPhoto,
+        'pickupContactName': ?optStr(api.user?['name']),
+        'pickupPhone': _pickupPhone.text.trim(),
         'stops': [
           for (final s in _stops)
             {
@@ -211,8 +258,6 @@ class _OrderScreenState extends State<OrderScreen> {
               'recipientName': _formOf(s).name.text.trim(),
               'recipientPhone': _formOf(s).phone.text.trim(),
               'details': ?optStr(s.details),
-              'packageDescription': ?opt(_formOf(s).description),
-              'photoUrl': ?_formOf(s).photo,
               'codAmount': _codEnabled && _formOf(s).codOn
                   ? int.parse(_formOf(s).cod.text.replaceAll(' ', ''))
                   : 0,
@@ -231,6 +276,9 @@ class _OrderScreenState extends State<OrderScreen> {
   /// Premier champ manquant ou invalide, avec un message précis
   String? _missing() {
     final phoneOk = RegExp(r'^0\d{9}$');
+    if (!phoneOk.hasMatch(_pickupPhone.text.trim())) {
+      return 'Départ : votre numéro est invalide (10 chiffres)';
+    }
     for (var i = 0; i < _stops.length; i++) {
       final f = _formOf(_stops[i]);
       final who = _stops.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire';
@@ -247,11 +295,6 @@ class _OrderScreenState extends State<OrderScreen> {
     return null;
   }
 
-  String? _required(String? v) =>
-      (v == null || v.trim().isEmpty) ? 'Obligatoire' : null;
-  String? _phone(String? v) => RegExp(r'^0\d{9}$').hasMatch(v?.trim() ?? '')
-      ? null
-      : '10 chiffres, ex : 0701020304';
   String? _amount(String? v) {
     final n = int.tryParse((v ?? '').replaceAll(' ', ''));
     return (n == null || n <= 0) ? 'Montant à encaisser' : null;
@@ -265,6 +308,40 @@ class _OrderScreenState extends State<OrderScreen> {
     final n = _stops.length;
     return LargeTitlePage(
       title: n > 1 ? 'Tournée · $n arrêts' : 'Détails',
+      inline: true,
+      trailing: n < _maxStops
+          ? Pressable(
+              onTap: _quoting ? null : _addStop,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: ShapeDecoration(
+                  color: p.accentSoft,
+                  shape: const StadiumBorder(),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      PhosphorIcons.plus(PhosphorIconsStyle.bold),
+                      size: 14,
+                      color: accent,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Arrêt',
+                      style: TextStyles.subheadline.copyWith(
+                        color: accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
       bottomBar: GlassBottomBar(
         child: Row(
           children: [
@@ -304,16 +381,16 @@ class _OrderScreenState extends State<OrderScreen> {
         ),
       ),
       children: [
-        // ----- Engin (modifiable) -----
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: Text(
             '${km(_quote['distanceKm'])} · ~${_quote['durationMin']} min${n > 1 ? ' · ordre de passage optimisé' : ''}',
             style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
           ),
         ),
+        // ----- Engin : une ligne, une colonne par engin -----
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
           child: Row(
             children: [
               for (final o in _offers) ...[
@@ -323,54 +400,24 @@ class _OrderScreenState extends State<OrderScreen> {
             ],
           ),
         ),
-        // ----- Délai : une ligne par délai (nom | prix) -----
-        InsetGroup(
-          header: 'Délai',
-          children: [
-            for (final s in ['EXPRESS', 'STANDARD', 'SCHEDULED'])
-              Pressable(
-                pressedScale: 0.99,
-                onTap: () {
-                  hapticTap();
-                  setState(() => _speed = s);
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 13,
-                  ),
-                  child: Row(
-                    children: [
-                      _radio(_speed == s, p),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _speeds[s]['label'],
-                          style: TextStyles.body.copyWith(
-                            color: p.label,
-                            fontWeight: _speed == s
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        fcfa(_priceFor(s)),
-                        style: TextStyles.body.copyWith(
-                          color: _speed == s ? p.label : p.secondaryLabel,
-                          fontWeight: FontWeight.w600,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
+        // ----- Délai : une ligne, une colonne par délai -----
+        _sectionTitle('Délai', p),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
+          child: Row(
+            children: [
+              for (final s in ['EXPRESS', 'STANDARD', 'SCHEDULED']) ...[
+                if (s != 'EXPRESS') const SizedBox(width: 8),
+                Expanded(child: _speedChip(s, p)),
+              ],
+            ],
+          ),
         ),
         // ----- Départ -----
         InsetGroup(
           header: 'Départ',
+          footer:
+              'Le livreur vous appellera sur ce numéro pour récupérer le colis.',
           children: [
             GroupRow(
               leading: _dot('A', ink),
@@ -379,124 +426,110 @@ class _OrderScreenState extends State<OrderScreen> {
               chevron: true,
               onTap: _changePickup,
             ),
-            _PhotoRow(
-              url: _pickupPhoto,
-              onChanged: (u) => setState(() => _pickupPhoto = u),
+            GroupField(
+              controller: _pickupPhone,
+              placeholder: 'Votre numéro',
+              prefix: '+225',
+              keyboardType: TextInputType.phone,
             ),
           ],
         ),
         // ----- Destinataires -----
-        Padding(
-          padding: const EdgeInsets.fromLTRB(32, 6, 16, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  n > 1 ? 'DESTINATAIRES' : 'DESTINATAIRE',
-                  style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
-                ),
-              ),
-              if (n < _maxStops)
-                Pressable(
-                  onTap: _quoting ? null : _addStop,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: ShapeDecoration(
-                      color: p.accentSoft,
-                      shape: const StadiumBorder(),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          PhosphorIcons.plus(PhosphorIconsStyle.bold),
-                          size: 14,
-                          color: accent,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Arrêt',
-                          style: TextStyles.subheadline.copyWith(
-                            color: accent,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
         for (var i = 0; i < n; i++) _stopSection(i, p),
         const SizedBox(height: 8),
       ],
     );
   }
 
+  Widget _sectionTitle(String label, Palette p) => Padding(
+    padding: const EdgeInsets.fromLTRB(32, 0, 16, 8),
+    child: Text(
+      label.toUpperCase(),
+      style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
+    ),
+  );
+
+  /// Case sélectionnable (engin ou délai)
+  Widget _choice({
+    required bool on,
+    required VoidCallback onTap,
+    required Palette p,
+    required List<Widget> children,
+  }) => Pressable(
+    onTap: () {
+      hapticTap();
+      onTap();
+    },
+    child: AnimatedContainer(
+      duration: Motion.medium,
+      curve: Motion.curve,
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
+      decoration: ShapeDecoration(
+        color: on ? p.card : p.fill,
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: on ? accent : Colors.transparent, width: 1.6),
+        ),
+      ),
+      child: Column(children: children),
+    ),
+  );
+
   Widget _vehicleChip(Map<String, dynamic> o, Palette p) {
     final v = o['vehicle'] as String;
     final on = v == _vehicle;
-    return Pressable(
+    return _choice(
+      on: on,
+      p: p,
       onTap: () {
-        hapticTap();
         setState(() => _vehicle = v);
         widget.onVehicleChanged?.call(v);
       },
-      child: AnimatedContainer(
-        duration: Motion.medium,
-        curve: Motion.curve,
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-        decoration: ShapeDecoration(
-          color: on ? p.card : p.fill,
-          shape: RoundedSuperellipseBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: on ? accent : Colors.transparent,
-              width: 1.6,
-            ),
+      children: [
+        Icon(vehicleIcons[v], size: 24, color: on ? accent : p.secondaryLabel),
+        const SizedBox(height: 4),
+        Text(
+          vehicleLabels[v] ?? o['label'],
+          style: TextStyles.subheadline.copyWith(
+            color: p.label,
+            fontWeight: on ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
-        child: Column(
-          children: [
-            Icon(
-              vehicleIcons[v],
-              size: 24,
-              color: on ? accent : p.secondaryLabel,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              vehicleLabels[v] ?? o['label'],
-              style: TextStyles.subheadline.copyWith(
-                color: p.label,
-                fontWeight: on ? FontWeight.w600 : FontWeight.w500,
-              ),
-            ),
-            Text(
-              fcfa(_priceFor(_speed, o)),
-              style: TextStyles.caption.copyWith(color: p.secondaryLabel),
-            ),
-          ],
+        Text(
+          fcfa(_priceFor(_speed, o)),
+          style: TextStyles.caption.copyWith(color: p.secondaryLabel),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _radio(bool on, Palette p) => AnimatedContainer(
-    duration: Motion.fast,
-    width: 22,
-    height: 22,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      border: Border.all(
-        color: on ? accent : p.tertiaryLabel,
-        width: on ? 7 : 1.6,
-      ),
-    ),
-  );
+  Widget _speedChip(String s, Palette p) {
+    final on = s == _speed;
+    return _choice(
+      on: on,
+      p: p,
+      onTap: () => setState(() => _speed = s),
+      children: [
+        Text(
+          _speeds[s]['label'],
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyles.subheadline.copyWith(
+            color: p.label,
+            fontWeight: on ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          fcfa(_priceFor(s)),
+          style: TextStyles.headline.copyWith(
+            color: on ? accent : p.secondaryLabel,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _dot(String label, Color color) => Container(
     width: 28,
@@ -514,6 +547,7 @@ class _OrderScreenState extends State<OrderScreen> {
     final f = _formOf(d);
     return InsetGroup(
       key: ObjectKey(d),
+      header: _stops.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire',
       children: [
         GroupRow(
           leading: _dot('${i + 1}', accent),
@@ -538,23 +572,40 @@ class _OrderScreenState extends State<OrderScreen> {
           controller: f.name,
           placeholder: 'Nom du destinataire',
           icon: CupertinoIcons.person,
-          validator: _required,
         ),
-        GroupField(
-          controller: f.phone,
-          placeholder: 'Téléphone',
-          prefix: '+225',
-          keyboardType: TextInputType.phone,
-          validator: _phone,
-        ),
-        GroupField(
-          controller: f.description,
-          placeholder: 'Colis (facultatif)',
-          icon: CupertinoIcons.cube_box,
-        ),
-        _PhotoRow(
-          url: f.photo,
-          onChanged: (u) => setState(() => f.photo = d.photo = u),
+        Row(
+          children: [
+            Expanded(
+              child: GroupField(
+                controller: f.phone,
+                placeholder: 'Téléphone',
+                prefix: '+225',
+                keyboardType: TextInputType.phone,
+              ),
+            ),
+            CupertinoButton(
+              padding: const EdgeInsets.only(right: 14, left: 6),
+              onPressed: () => _pickContact(f),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    PhosphorIcons.addressBook(PhosphorIconsStyle.fill),
+                    color: accent,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Répertoire',
+                    style: TextStyles.subheadline.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         if (_codEnabled) ...[
           GroupSwitch(
@@ -573,71 +624,6 @@ class _OrderScreenState extends State<OrderScreen> {
             ),
         ],
       ],
-    );
-  }
-}
-
-/// Photo d'adresse : prise ou choisie, envoyée à l'API
-class _PhotoRow extends StatefulWidget {
-  final String? url;
-  final ValueChanged<String?> onChanged;
-  const _PhotoRow({required this.url, required this.onChanged});
-
-  @override
-  State<_PhotoRow> createState() => _PhotoRowState();
-}
-
-class _PhotoRowState extends State<_PhotoRow> {
-  bool _uploading = false;
-
-  Future<void> _pick() async {
-    final source = await showActions<ImageSource>(
-      context,
-      title: 'Photo de l’adresse',
-      actions: [
-        ('Prendre une photo', ImageSource.camera, false),
-        ('Choisir dans la photothèque', ImageSource.gallery, false),
-      ],
-    );
-    if (source == null) return;
-    try {
-      final file = await ImagePicker().pickImage(
-        source: source,
-        maxWidth: 1280,
-        imageQuality: 70,
-      );
-      if (file == null) return;
-      setState(() => _uploading = true);
-      widget.onChanged(await Api.instance.upload(File(file.path)));
-    } catch (e) {
-      if (mounted) {
-        showError(context, kDebugMode ? e : 'Impossible d’ajouter la photo');
-      }
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    if (widget.url != null) {
-      return GroupRow(
-        leading: AddressPhoto(widget.url!, size: 44),
-        title: 'Photo de l’adresse',
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => widget.onChanged(null),
-          child: Text('Retirer', style: TextStyles.body.copyWith(color: p.red)),
-        ),
-      );
-    }
-    return GroupRow(
-      leading: Icon(CupertinoIcons.camera, size: 20, color: p.secondaryLabel),
-      title: 'Ajouter une photo (portail, devanture…)',
-      titleColor: accent,
-      trailing: _uploading ? const CupertinoActivityIndicator() : null,
-      onTap: _uploading ? null : _pick,
     );
   }
 }

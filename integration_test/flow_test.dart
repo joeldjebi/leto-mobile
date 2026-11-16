@@ -83,7 +83,7 @@ void main() {
         await t.tap(find.text('Mon profil'));
         await wait(t, 1.5);
         await shot(t, 'client_profile');
-        await t.pageBack();
+        await t.tap(find.byIcon(CupertinoIcons.back).first);
         await wait(t, 1.5);
       }
 
@@ -111,6 +111,14 @@ void main() {
         await t.tap(find.textContaining('Continuer'));
         await wait(t, 2);
         await shot(t, 'client_order_top');
+        // Changer l'adresse de départ en la choisissant sur la carte
+        await t.tap(find.text('Modifier l’adresse').first);
+        await wait(t, 1.5);
+        await t.tap(find.text('Choisir sur la carte'));
+        await wait(t, 4);
+        await shot(t, 'client_map_picker');
+        await t.tap(find.text('Valider cette adresse'));
+        await wait(t, 5);
         final list = find.descendant(of: find.byType(CustomScrollView), matching: find.byType(Scrollable)).first;
         await t.drag(list, const Offset(0, -500));
         await wait(t, 1);
