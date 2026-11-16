@@ -1,5 +1,6 @@
 // Parcours réels joués sur simulateur (vrais taps, vraie API).
-// flutter test integration_test/flow_test.dart -d <simulateur> --dart-define=FLOW=client|driver
+// flutter test integration_test/flow_test.dart -d <simulateur> --dart-define=FLOW=client|driver|dispute|prodcheck
+//   (parcours client/driver/dispute : ajouter --dart-define=API_URL=local pour l'API de votre Mac)
 //   --dart-define=DEV_PHONE=... --dart-define=DEV_PASSWORD=... --dart-define=DEV_LAT=5.36 --dart-define=DEV_LNG=-3.99
 // Chaque ligne « SHOT:nom » marque un écran à capturer.
 import 'package:flutter/cupertino.dart';
@@ -51,7 +52,22 @@ void main() {
     app.main();
     await wait(t, 8);
 
-    if (flow == 'client') {
+    if (flow == 'prodcheck') {
+      // Vérifie que l'app joint l'API configurée : un mauvais mot de passe doit renvoyer l'erreur du serveur
+      await t.enterText(find.byType(TextField).at(0), '0700000001');
+      await t.enterText(find.byType(TextField).at(1), 'mauvais-mot-de-passe');
+      await t.tap(find.text('Continuer'));
+      final error = find.textContaining('mot de passe incorrect');
+      for (var i = 0; i < 20 && error.evaluate().isEmpty; i++) {
+        await wait(t, 0.5);
+      }
+      // ignore: avoid_print
+      print('API_RESPONSE:${error.evaluate().isNotEmpty ? 'serveur joint (erreur attendue reçue)' : 'AUCUNE réponse du serveur'}');
+      expect(error, findsOneWidget);
+      // ignore: avoid_print
+      print('SHOT:prodcheck');
+      await wait(t, 1);
+    } else if (flow == 'client') {
       await shot(t, 'client_home');
 
       // 1re adresse : recherche d'un lieu

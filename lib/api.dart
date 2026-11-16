@@ -8,11 +8,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'realtime.dart';
 
-/// URL de l'API. Surchargeable : flutter run --dart-define=API_URL=http://192.168.1.10:3000
-/// Par défaut : 10.0.2.2 sur émulateur Android (= localhost du Mac), localhost sinon.
-final String apiUrl = const String.fromEnvironment('API_URL').isNotEmpty
-    ? const String.fromEnvironment('API_URL')
-    : (Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000');
+/// API de production
+const prodApiUrl = 'https://api.leto.performx.online';
+
+/// URL de l'API : la production par défaut.
+/// Développement : --dart-define=API_URL=local (votre Mac : localhost, ou 10.0.2.2 sur émulateur Android)
+///                 ou --dart-define=API_URL=http://192.168.1.10:3000 (téléphone sur le même Wi-Fi).
+final String apiUrl = switch (const String.fromEnvironment('API_URL')) {
+  '' => prodApiUrl,
+  'local' => Platform.isAndroid ? 'http://10.0.2.2:3000' : 'http://localhost:3000',
+  final url => url,
+};
 
 /// URL complète d'une photo stockée par l'API (/uploads/...)
 String photoUrl(String path) => '$apiUrl$path';

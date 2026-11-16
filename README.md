@@ -24,19 +24,25 @@ Notifications push (Firebase) : prévues pour une prochaine étape.
 
 ## Démarrer
 
+L'app utilise **l'API de production par défaut** : `https://api.leto.performx.online`.
+
 ```bash
 flutter pub get
-flutter run                                   # API par défaut : localhost (iOS) / 10.0.2.2 (émulateur Android)
-flutter run --dart-define=API_URL=http://192.168.1.10:3000   # téléphone réel sur le même Wi-Fi
+flutter run                                    # API de production
+flutter build apk --release                    # Android (production)
+flutter build ipa --release                    # iOS (production)
+
+flutter run --dart-define=API_URL=local        # API de votre Mac (localhost, ou 10.0.2.2 sur émulateur Android)
+flutter run --dart-define=API_URL=http://192.168.1.10:3000   # téléphone sur le même Wi-Fi que le Mac
 ```
 
-> Les tuiles `tile.openstreetmap.org` conviennent au développement. En production, utilisez un fournisseur de tuiles (MapTiler, Stadia, Mapbox…) ou Google Maps.
+Le HTTP non chiffré n'est autorisé que vers le réseau local (iOS) et dans les versions de développement (Android).
 
 ### Développement
 
 ```bash
 # Connexion automatique + position GPS simulée (+ THEME=dark|light, DEV_PHOTO=/uploads/x.jpg pour les tests)
-flutter run --dart-define=DEV_PHONE=0555555555 --dart-define=DEV_PASSWORD=secret12 \
+flutter run --dart-define=API_URL=local --dart-define=DEV_PHONE=0555555555 --dart-define=DEV_PASSWORD=secret12 \
             --dart-define=DEV_LAT=5.36 --dart-define=DEV_LNG=-3.99
 ```
 
@@ -45,7 +51,7 @@ flutter run --dart-define=DEV_PHONE=0555555555 --dart-define=DEV_PASSWORD=secret
 `integration_test/flow_test.dart` joue les parcours complets avec de vrais appuis et la vraie API :
 
 ```bash
-flutter test integration_test/flow_test.dart -d <simulateur> --dart-define=FLOW=client \
+flutter test integration_test/flow_test.dart -d <simulateur> --dart-define=FLOW=client --dart-define=API_URL=local \
   --dart-define=DEV_PHONE=0555555555 --dart-define=DEV_PASSWORD=secret12 --dart-define=DEV_LAT=5.36 --dart-define=DEV_LNG=-3.99
-# FLOW=driver (livreur) · FLOW=dispute (contestation côté expéditeur)
+# FLOW=driver (livreur) · FLOW=dispute (contestation) · FLOW=prodcheck (vérifie que l'app joint l'API de production)
 ```
