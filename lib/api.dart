@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:latlong2/latlong.dart';
@@ -32,6 +33,60 @@ class ApiException implements Exception {
 }
 
 /// Lieu (recherche ou point sur la carte)
+/// Fond de carte choisi par le SA (OpenStreetMap, Carto, MapTiler, Mapbox, Google)
+class MapStyle {
+  final String provider;
+  final String light;
+  final String? dark; // null : le client assombrit les tuiles claires
+  final List<String> subdomains;
+  final double maxZoom;
+  final String attribution;
+  const MapStyle({
+    required this.provider,
+    required this.light,
+    this.dark,
+    this.subdomains = const [],
+    this.maxZoom = 19,
+    this.attribution = '© OpenStreetMap',
+  });
+
+  static const osm = MapStyle(
+    provider: 'osm',
+    light: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  );
+
+  factory MapStyle.fromJson(Map<String, dynamic> j) => MapStyle(
+    provider: j['provider'] ?? 'osm',
+    light: j['light'] ?? osm.light,
+    dark: j['dark'],
+    subdomains: (j['subdomains'] as List? ?? []).cast<String>(),
+    maxZoom: (j['maxZoom'] as num?)?.toDouble() ?? 19,
+    attribution: j['attribution'] ?? '',
+  );
+}
+
+/// Fond de carte actuel (les cartes se redessinent quand il change)
+final mapStyle = ValueNotifier<MapStyle>(MapStyle.osm);
+DateTime? _mapStyleLoadedAt;
+
+/// Charge le fond de carte choisi par le SA (au démarrage, puis au plus toutes les 5 min)
+Future<void> loadMapStyle({bool force = false}) async {
+  final last = _mapStyleLoadedAt;
+  if (!force && last != null && DateTime.now().difference(last).inMinutes < 5)
+    return;
+  _mapStyleLoadedAt = DateTime.now();
+  try {
+    final res = await http
+        .get(Uri.parse('$apiUrl/geo/map-style'))
+        .timeout(const Duration(seconds: 6));
+    if (res.statusCode == 200) {
+      mapStyle.value = MapStyle.fromJson(jsonDecode(res.body));
+    }
+  } catch (_) {
+    // Hors ligne : on garde le fond actuel
+  }
+}
+
 class Place {
   final String label;
   final String sublabel;

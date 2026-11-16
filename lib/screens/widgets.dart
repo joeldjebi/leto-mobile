@@ -98,7 +98,16 @@ class LetoMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    loadMapStyle(); // rafraîchi au plus toutes les 5 min
+    return ValueListenableBuilder<MapStyle>(
+      valueListenable: mapStyle,
+      builder: (context, style, _) => _map(context, style),
+    );
+  }
+
+  Widget _map(BuildContext context, MapStyle style) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final url = dark && style.dark != null ? style.dark! : style.light;
     return FlutterMap(
       mapController: controller,
       options: MapOptions(
@@ -122,14 +131,34 @@ class LetoMap extends StatelessWidget {
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          key: ValueKey(url),
+          urlTemplate: url,
+          subdomains: style.subdomains,
+          maxNativeZoom: style.maxZoom.round(),
           userAgentPackageName: 'ci.leto.leto',
-          tileBuilder: dark ? darkModeTileBuilder : null,
+          // Pas de variante sombre chez ce fournisseur : on assombrit les tuiles claires
+          tileBuilder: dark && style.dark == null ? darkModeTileBuilder : null,
           tileDisplay: const TileDisplay.fadeIn(
             duration: Duration(milliseconds: 220),
           ),
         ),
         ...layers,
+        if (style.attribution.isNotEmpty)
+          Align(
+            alignment: Alignment.bottomLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 6, bottom: 4),
+              child: Text(
+                style.attribution,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: (dark ? Colors.white : Colors.black).withValues(
+                    alpha: 0.45,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

@@ -32,6 +32,7 @@ void main() async {
       );
     } catch (_) {}
   }
+  loadMapStyle(); // fond de carte choisi par le SA (sans bloquer le démarrage)
   runApp(const LetoApp());
 }
 
