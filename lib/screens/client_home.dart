@@ -819,7 +819,7 @@ class _ClientHomeState extends State<ClientHome> {
       ),
       const SizedBox(height: 14),
       SizedBox(
-        height: 124,
+        height: 134,
         child: AnimatedSwitcher(
           duration: Motion.medium,
           child: _quote == null
@@ -933,17 +933,17 @@ class _OfferCard extends StatelessWidget {
               children: [
                 AnimatedContainer(
                   duration: Motion.medium,
-                  width: 50,
-                  height: 40,
+                  width: 62,
+                  height: 50,
                   decoration: ShapeDecoration(
                     color: selected ? p.accentSoft : p.fill,
                     shape: RoundedSuperellipseBorder(
-                      borderRadius: BorderRadius.circular(13),
+                      borderRadius: BorderRadius.circular(15),
                     ),
                   ),
                   child: PhosphorIcon(
                     _vehicleIcon(v),
-                    size: 26,
+                    size: 36,
                     color: selected ? accent : p.secondaryLabel,
                     duotoneSecondaryColor: selected ? accent : p.secondaryLabel,
                     duotoneSecondaryOpacity: 0.25,
@@ -951,7 +951,7 @@ class _OfferCard extends StatelessWidget {
                 ),
                 if (eta != null)
                   Positioned(
-                    left: 34,
+                    left: 46,
                     bottom: -6,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
