@@ -4,25 +4,33 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../api.dart';
 import '../labels.dart';
 import '../main.dart';
 import '../models.dart';
+import 'place_search.dart';
 import 'widgets.dart';
 
-/// Détails de la commande : délai, départ, un bloc par destinataire, commentaire.
+/// Détails de la commande, réduits à l'essentiel : engin, délai, départ, destinataires.
+/// Les adresses restent modifiables (le prix est recalculé) et on peut ajouter des arrêts.
 class OrderScreen extends StatefulWidget {
   final Place pickup;
-  final List<StopDraft> stops;
+  final List<StopDraft>
+  stops; // liste partagée avec l'accueil (modifiée sur place)
   final Map<String, dynamic> quote;
   final String vehicle;
+  final ValueChanged<Place>? onPickupChanged;
+  final ValueChanged<String>? onVehicleChanged;
   const OrderScreen({
     super.key,
     required this.pickup,
     required this.stops,
     required this.quote,
     required this.vehicle,
+    this.onPickupChanged,
+    this.onVehicleChanged,
   });
 
   @override
@@ -31,49 +39,149 @@ class OrderScreen extends StatefulWidget {
 
 /// Champs d'un destinataire
 class _StopForm {
-  final StopDraft draft;
   final name = TextEditingController();
   final phone = TextEditingController();
-  final details = TextEditingController();
   final description = TextEditingController();
   final cod = TextEditingController();
   bool codOn = false;
   String? photo;
 
-  _StopForm(this.draft) {
+  _StopForm(StopDraft draft) {
     name.text = draft.name;
     phone.text = draft.phone;
-    details.text = draft.details;
+    photo = draft.photo;
   }
 }
 
 class _OrderScreenState extends State<OrderScreen> {
+  static const _maxStops = 10;
   final api = Api.instance;
-  final _form = GlobalKey<FormState>();
 
+  late Place _pickup = widget.pickup;
+  late Map<String, dynamic> _quote = widget.quote;
+  late String _vehicle = widget.vehicle;
   String _speed = 'STANDARD';
   bool _sending = false;
+  bool _quoting = false;
   String? _pickupPhoto;
-  late final List<_StopForm> _forms = widget.stops.map(_StopForm.new).toList();
 
-  final _pickupDetails = TextEditingController();
-  late final _senderName = TextEditingController(text: api.user?['name']);
-  late final _pickupPhone = TextEditingController(text: api.user?['phone']);
-  final _comment = TextEditingController();
+  List<StopDraft> get _stops => widget.stops;
 
-  Map<String, dynamic> get _offer => (widget.quote['offers'] as List)
-      .cast<Map<String, dynamic>>()
-      .firstWhere((o) => o['vehicle'] == widget.vehicle);
-  Map<String, dynamic> get _speeds =>
-      widget.quote['speeds'] as Map<String, dynamic>;
-  int get _codFee => widget.quote['codFee'] as int;
-  int get _codStops => _forms.where((f) => f.codOn).length;
-  int _priceFor(String speed) =>
-      (_offer['prices'][speed] as int) + _codFee * _codStops;
+  /// Formulaire de chaque arrêt (suit l'arrêt quand l'ordre de passage change)
+  final _forms = <StopDraft, _StopForm>{};
+  _StopForm _formOf(StopDraft d) => _forms.putIfAbsent(d, () => _StopForm(d));
+
+  List<Map<String, dynamic>> get _offers =>
+      (_quote['offers'] as List).cast<Map<String, dynamic>>();
+  Map<String, dynamic> get _offer => _offers.firstWhere(
+    (o) => o['vehicle'] == _vehicle,
+    orElse: () => _offers.first,
+  );
+  Map<String, dynamic> get _speeds => _quote['speeds'] as Map<String, dynamic>;
+  bool get _codEnabled => _quote['codEnabled'] == true;
+  int get _codFee => _quote['codFee'] as int;
+  int get _codStops =>
+      _codEnabled ? _stops.where((s) => _formOf(s).codOn).length : 0;
+  int _priceFor(String speed, [Map<String, dynamic>? offer]) =>
+      ((offer ?? _offer)['prices'][speed] as int) + _codFee * _codStops;
+
+  // ---------- Adresses ----------
+
+  /// Nouveau devis après un changement d'adresse : prix, distance et ordre de passage
+  Future<void> _requote() async {
+    setState(() => _quoting = true);
+    try {
+      final q = await api.quote(_pickup.point, [
+        for (final s in _stops) (point: s.place.point, cod: false),
+      ]);
+      if (!mounted) return;
+      final order = (q['order'] as List).cast<int>();
+      final reordered = [for (final i in order) _stops[i]];
+      setState(() {
+        _stops
+          ..clear()
+          ..addAll(reordered);
+        _quote = q;
+        if (!_offers.any((o) => o['vehicle'] == _vehicle)) {
+          _vehicle = _offers.first['vehicle'];
+        }
+      });
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _quoting = false);
+    }
+  }
+
+  Future<Object?> _search(String title, {bool dropoff = false}) =>
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PlaceSearchScreen(
+            title: title,
+            near: _pickup.point,
+            dropoff: dropoff,
+            allowMap: false,
+          ),
+        ),
+      );
+
+  Future<void> _changePickup() async {
+    final res = await _search('Départ');
+    if (res is! Place || !mounted) return;
+    setState(() => _pickup = res);
+    widget.onPickupChanged?.call(res);
+    _requote();
+  }
+
+  Future<void> _changeStop(StopDraft d) async {
+    final res = await _search('Adresse de livraison', dropoff: true);
+    if (!mounted) return;
+    if (res is Place) {
+      d.place = res;
+    } else if (res is StopDraft) {
+      // Destinataire du carnet : adresse et coordonnées
+      d.place = res.place;
+      final f = _formOf(d);
+      if (f.name.text.trim().isEmpty) f.name.text = res.name;
+      if (f.phone.text.trim().isEmpty) f.phone.text = res.phone;
+      d.details = res.details;
+    } else {
+      return;
+    }
+    _requote();
+  }
+
+  Future<void> _addStop() async {
+    final res = await _search('Nouvel arrêt', dropoff: true);
+    if (!mounted) return;
+    final draft = res is StopDraft
+        ? res
+        : (res is Place ? StopDraft(res) : null);
+    if (draft == null) return;
+    hapticTap();
+    setState(() => _stops.add(draft));
+    _requote();
+  }
+
+  Future<void> _removeStop(StopDraft d) async {
+    if (!await confirm(
+      context,
+      'Retirer cet arrêt ?',
+      ok: 'Retirer',
+      destructive: true,
+    ))
+      return;
+    setState(() {
+      _stops.remove(d);
+      _forms.remove(d);
+    });
+    _requote();
+  }
+
+  // ---------- Commande ----------
 
   Future<void> _submit() async {
-    // Vérification sur les données (les champs hors de l'écran ne sont pas construits)
-    _form.currentState!.validate();
     final missing = _missing();
     if (missing != null) {
       showError(context, missing);
@@ -82,31 +190,31 @@ class _OrderScreenState extends State<OrderScreen> {
     setState(() => _sending = true);
     String? opt(TextEditingController c) =>
         c.text.trim().isEmpty ? null : c.text.trim();
+    String? optStr(String s) => s.trim().isEmpty ? null : s.trim();
     try {
       final d = await api.createDelivery({
-        'vehicleType': widget.vehicle,
+        'vehicleType': _vehicle,
         'speed': _speed,
-        'pickupLat': widget.pickup.point.latitude,
-        'pickupLng': widget.pickup.point.longitude,
-        'pickupAddress': widget.pickup.label,
-        'pickupDetails': ?opt(_pickupDetails),
-        'pickupContactName': ?opt(_senderName),
-        'pickupPhone': _pickupPhone.text.trim(),
+        'pickupLat': _pickup.point.latitude,
+        'pickupLng': _pickup.point.longitude,
+        'pickupAddress': _pickup.label,
+        // Expéditeur : le profil du client (modifiable dans « Mon profil »)
+        'pickupContactName': ?optStr(api.user?['name'] ?? ''),
+        'pickupPhone': api.user?['phone'],
         'pickupPhotoUrl': ?_pickupPhoto,
-        'courierComment': ?opt(_comment),
         'stops': [
-          for (final f in _forms)
+          for (final s in _stops)
             {
-              'lat': f.draft.place.point.latitude,
-              'lng': f.draft.place.point.longitude,
-              'address': f.draft.place.label,
-              'recipientName': f.name.text.trim(),
-              'recipientPhone': f.phone.text.trim(),
-              'details': ?opt(f.details),
-              'packageDescription': ?opt(f.description),
-              'photoUrl': ?f.photo,
-              'codAmount': f.codOn
-                  ? int.parse(f.cod.text.replaceAll(' ', ''))
+              'lat': s.place.point.latitude,
+              'lng': s.place.point.longitude,
+              'address': s.place.label,
+              'recipientName': _formOf(s).name.text.trim(),
+              'recipientPhone': _formOf(s).phone.text.trim(),
+              'details': ?optStr(s.details),
+              'packageDescription': ?opt(_formOf(s).description),
+              'photoUrl': ?_formOf(s).photo,
+              'codAmount': _codEnabled && _formOf(s).codOn
+                  ? int.parse(_formOf(s).cod.text.replaceAll(' ', ''))
                   : 0,
             },
         ],
@@ -123,18 +231,18 @@ class _OrderScreenState extends State<OrderScreen> {
   /// Premier champ manquant ou invalide, avec un message précis
   String? _missing() {
     final phoneOk = RegExp(r'^0\d{9}$');
-    if (_senderName.text.trim().isEmpty)
-      return 'Départ : indiquez le nom de l’expéditeur';
-    if (!phoneOk.hasMatch(_pickupPhone.text.trim()))
-      return 'Départ : téléphone invalide (10 chiffres)';
-    for (var i = 0; i < _forms.length; i++) {
-      final f = _forms[i];
-      final who = _forms.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire';
+    for (var i = 0; i < _stops.length; i++) {
+      final f = _formOf(_stops[i]);
+      final who = _stops.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire';
       if (f.name.text.trim().isEmpty) return '$who : indiquez le nom';
-      if (!phoneOk.hasMatch(f.phone.text.trim()))
+      if (!phoneOk.hasMatch(f.phone.text.trim())) {
         return '$who : téléphone invalide (10 chiffres)';
-      if (f.codOn && (int.tryParse(f.cod.text.replaceAll(' ', '')) ?? 0) <= 0)
+      }
+      if (_codEnabled &&
+          f.codOn &&
+          (int.tryParse(f.cod.text.replaceAll(' ', '')) ?? 0) <= 0) {
         return '$who : montant à encaisser';
+      }
     }
     return null;
   }
@@ -149,142 +257,246 @@ class _OrderScreenState extends State<OrderScreen> {
     return (n == null || n <= 0) ? 'Montant à encaisser' : null;
   }
 
+  // ---------- Interface ----------
+
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final n = _forms.length;
-    return Form(
-      key: _form,
-      child: LargeTitlePage(
-        title: n > 1 ? 'Tournée · $n arrêts' : 'Détails',
-        bottomBar: GlassBottomBar(
+    final n = _stops.length;
+    return LargeTitlePage(
+      title: n > 1 ? 'Tournée · $n arrêts' : 'Détails',
+      bottomBar: GlassBottomBar(
+        child: Row(
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Total · espèces',
+                  style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
+                ),
+                AnimatedSwitcher(
+                  duration: Motion.fast,
+                  child: _quoting
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: CupertinoActivityIndicator(),
+                        )
+                      : Text(
+                          fcfa(_priceFor(_speed)),
+                          key: ValueKey('$_vehicle$_speed${_priceFor(_speed)}'),
+                          style: TextStyles.title2.copyWith(color: p.label),
+                        ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: FilledButton(
+                onPressed: _sending || _quoting ? null : _submit,
+                child: _sending
+                    ? const CupertinoActivityIndicator(color: Colors.white)
+                    : const Text('Commander'),
+              ),
+            ),
+          ],
+        ),
+      ),
+      children: [
+        // ----- Engin (modifiable) -----
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            '${km(_quote['distanceKm'])} · ~${_quote['durationMin']} min${n > 1 ? ' · ordre de passage optimisé' : ''}',
+            style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
           child: Row(
             children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Total',
-                    style: TextStyles.footnote.copyWith(
-                      color: p.secondaryLabel,
-                    ),
-                  ),
-                  Text(
-                    fcfa(_priceFor(_speed)),
-                    style: TextStyles.title2.copyWith(color: p.label),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _sending ? null : _submit,
-                  child: _sending
-                      ? const CupertinoActivityIndicator(color: Colors.white)
-                      : const Text('Commander'),
-                ),
-              ),
+              for (final o in _offers) ...[
+                if (o != _offers.first) const SizedBox(width: 8),
+                Expanded(child: _vehicleChip(o, p)),
+              ],
             ],
           ),
         ),
-        children: [
-          // ----- Résumé -----
-          InsetGroup(
-            children: [
-              GroupRow(
-                leading: IconBadge(
-                  vehicleIcons[widget.vehicle]!,
-                  color: accent,
+        // ----- Délai : une ligne par délai (nom | prix) -----
+        InsetGroup(
+          header: 'Délai',
+          children: [
+            for (final s in ['EXPRESS', 'STANDARD', 'SCHEDULED'])
+              Pressable(
+                pressedScale: 0.99,
+                onTap: () {
+                  hapticTap();
+                  setState(() => _speed = s);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 13,
+                  ),
+                  child: Row(
+                    children: [
+                      _radio(_speed == s, p),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _speeds[s]['label'],
+                          style: TextStyles.body.copyWith(
+                            color: p.label,
+                            fontWeight: _speed == s
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        fcfa(_priceFor(s)),
+                        style: TextStyles.body.copyWith(
+                          color: _speed == s ? p.label : p.secondaryLabel,
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                title: _offer['label'],
-                subtitle:
-                    '${km(widget.quote['distanceKm'])} · ~${widget.quote['durationMin']} min${n > 1 ? ' · ordre optimisé' : ''}',
               ),
-            ],
-          ),
-          // ----- Délai -----
-          InsetGroup(
-            header: 'Délai',
+          ],
+        ),
+        // ----- Départ -----
+        InsetGroup(
+          header: 'Départ',
+          children: [
+            GroupRow(
+              leading: _dot('A', ink),
+              title: _pickup.label,
+              subtitle: 'Modifier l’adresse',
+              chevron: true,
+              onTap: _changePickup,
+            ),
+            _PhotoRow(
+              url: _pickupPhoto,
+              onChanged: (u) => setState(() => _pickupPhoto = u),
+            ),
+          ],
+        ),
+        // ----- Destinataires -----
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, 6, 16, 0),
+          child: Row(
             children: [
-              for (final s in ['EXPRESS', 'STANDARD', 'SCHEDULED'])
-                GroupRow(
-                  title: _speeds[s]['label'],
-                  subtitle: _speeds[s]['description'],
-                  value: fcfa(_priceFor(s)),
-                  trailing: Padding(
-                    padding: const EdgeInsets.only(left: 10),
-                    child: Icon(
-                      CupertinoIcons.checkmark_alt,
-                      color: _speed == s ? accent : Colors.transparent,
+              Expanded(
+                child: Text(
+                  n > 1 ? 'DESTINATAIRES' : 'DESTINATAIRE',
+                  style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
+                ),
+              ),
+              if (n < _maxStops)
+                Pressable(
+                  onTap: _quoting ? null : _addStop,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: ShapeDecoration(
+                      color: p.accentSoft,
+                      shape: const StadiumBorder(),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          PhosphorIcons.plus(PhosphorIconsStyle.bold),
+                          size: 14,
+                          color: accent,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Arrêt',
+                          style: TextStyles.subheadline.copyWith(
+                            color: accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  onTap: () => setState(() => _speed = s),
                 ),
             ],
           ),
-          // ----- Départ -----
-          InsetGroup(
-            header: 'Départ',
-            children: [
-              GroupRow(
-                leading: _dot('A', p.green),
-                title: widget.pickup.label,
-                subtitle: widget.pickup.sublabel,
-              ),
-              GroupField(
-                controller: _pickupDetails,
-                placeholder: 'Repère, étage, portail…',
-                icon: CupertinoIcons.placemark,
-              ),
-              _PhotoRow(
-                url: _pickupPhoto,
-                onChanged: (u) => setState(() => _pickupPhoto = u),
-              ),
-              GroupField(
-                controller: _senderName,
-                placeholder: 'Expéditeur',
-                icon: CupertinoIcons.person,
-                validator: _required,
-              ),
-              GroupField(
-                controller: _pickupPhone,
-                placeholder: 'Téléphone',
-                prefix: '+225',
-                keyboardType: TextInputType.phone,
-                validator: _phone,
-              ),
-            ],
+        ),
+        for (var i = 0; i < n; i++) _stopSection(i, p),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _vehicleChip(Map<String, dynamic> o, Palette p) {
+    final v = o['vehicle'] as String;
+    final on = v == _vehicle;
+    return Pressable(
+      onTap: () {
+        hapticTap();
+        setState(() => _vehicle = v);
+        widget.onVehicleChanged?.call(v);
+      },
+      child: AnimatedContainer(
+        duration: Motion.medium,
+        curve: Motion.curve,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        decoration: ShapeDecoration(
+          color: on ? p.card : p.fill,
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: on ? accent : Colors.transparent,
+              width: 1.6,
+            ),
           ),
-          // ----- Destinataires -----
-          for (var i = 0; i < n; i++) _stopSection(i, p),
-          // ----- Coursier -----
-          InsetGroup(
-            header: 'Pour le coursier',
-            children: [
-              GroupField(
-                controller: _comment,
-                placeholder: 'Commentaire (facultatif)',
-                icon: CupertinoIcons.chat_bubble,
-                maxLines: 3,
+        ),
+        child: Column(
+          children: [
+            Icon(
+              vehicleIcons[v],
+              size: 24,
+              color: on ? accent : p.secondaryLabel,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              vehicleLabels[v] ?? o['label'],
+              style: TextStyles.subheadline.copyWith(
+                color: p.label,
+                fontWeight: on ? FontWeight.w600 : FontWeight.w500,
               ),
-            ],
-          ),
-          InsetGroup(
-            footer:
-                'La livraison est due même si un destinataire est absent (absence vérifiée : GPS, attente, photo).',
-            children: [
-              GroupRow(
-                leading: IconBadge(CupertinoIcons.money_dollar, color: p.green),
-                title: 'Espèces',
-                subtitle: 'Payé au livreur',
-              ),
-            ],
-          ),
-        ],
+            ),
+            Text(
+              fcfa(_priceFor(_speed, o)),
+              style: TextStyles.caption.copyWith(color: p.secondaryLabel),
+            ),
+          ],
+        ),
       ),
     );
   }
+
+  Widget _radio(bool on, Palette p) => AnimatedContainer(
+    duration: Motion.fast,
+    width: 22,
+    height: 22,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(
+        color: on ? accent : p.tertiaryLabel,
+        width: on ? 7 : 1.6,
+      ),
+    ),
+  );
 
   Widget _dot(String label, Color color) => Container(
     width: 28,
@@ -298,14 +510,29 @@ class _OrderScreenState extends State<OrderScreen> {
   );
 
   Widget _stopSection(int i, Palette p) {
-    final f = _forms[i];
+    final d = _stops[i];
+    final f = _formOf(d);
     return InsetGroup(
-      header: _forms.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire',
+      key: ObjectKey(d),
       children: [
         GroupRow(
           leading: _dot('${i + 1}', accent),
-          title: f.draft.place.label,
-          subtitle: f.draft.place.sublabel,
+          title: d.place.label,
+          subtitle: 'Modifier l’adresse',
+          chevron: _stops.length == 1,
+          onTap: () => _changeStop(d),
+          trailing: _stops.length > 1
+              ? CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(32, 32),
+                  onPressed: () => _removeStop(d),
+                  child: Icon(
+                    PhosphorIcons.minusCircle(PhosphorIconsStyle.fill),
+                    color: p.red,
+                    size: 24,
+                  ),
+                )
+              : null,
         ),
         GroupField(
           controller: f.name,
@@ -321,30 +548,30 @@ class _OrderScreenState extends State<OrderScreen> {
           validator: _phone,
         ),
         GroupField(
-          controller: f.details,
-          placeholder: 'Repère, étage, portail…',
-          icon: CupertinoIcons.placemark,
-        ),
-        GroupField(
           controller: f.description,
           placeholder: 'Colis (facultatif)',
           icon: CupertinoIcons.cube_box,
         ),
-        GroupSwitch(
-          title: 'Paiement à la livraison',
-          subtitle: 'Le livreur encaisse la marchandise · +${fcfa(_codFee)}',
-          value: f.codOn,
-          onChanged: (v) => setState(() => f.codOn = v),
+        _PhotoRow(
+          url: f.photo,
+          onChanged: (u) => setState(() => f.photo = d.photo = u),
         ),
-        if (f.codOn)
-          GroupField(
-            controller: f.cod,
-            placeholder: 'Montant à encaisser',
-            icon: CupertinoIcons.creditcard,
-            keyboardType: TextInputType.number,
-            validator: _amount,
+        if (_codEnabled) ...[
+          GroupSwitch(
+            title: 'Paiement à la livraison',
+            subtitle: 'Le livreur encaisse la marchandise · +${fcfa(_codFee)}',
+            value: f.codOn,
+            onChanged: (v) => setState(() => f.codOn = v),
           ),
-        _PhotoRow(url: f.photo, onChanged: (u) => setState(() => f.photo = u)),
+          if (f.codOn)
+            GroupField(
+              controller: f.cod,
+              placeholder: 'Montant à encaisser',
+              icon: CupertinoIcons.creditcard,
+              keyboardType: TextInputType.number,
+              validator: _amount,
+            ),
+        ],
       ],
     );
   }

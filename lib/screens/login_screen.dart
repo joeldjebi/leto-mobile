@@ -13,6 +13,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _registerMode = false;
+  String _accountType = 'INDIVIDUAL';
   bool _loading = false;
   final _name = TextEditingController();
   final _phone = TextEditingController();
@@ -27,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
           _name.text.trim(),
           _phone.text.trim(),
           _password.text,
+          _accountType,
         );
       } else {
         await api.login(_phone.text.trim(), _password.text);
@@ -90,16 +92,64 @@ class _LoginScreenState extends State<LoginScreen> {
               style: TextStyles.body.copyWith(color: p.secondaryLabel),
             ),
             const SizedBox(height: 36),
+            AnimatedSize(
+              duration: Motion.medium,
+              curve: Motion.curve,
+              child: _registerMode
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 16, bottom: 8),
+                            child: Text(
+                              'VOUS ÊTES',
+                              style: TextStyles.footnote.copyWith(
+                                color: p.secondaryLabel,
+                              ),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _typeCard(
+                                  'INDIVIDUAL',
+                                  CupertinoIcons.person_fill,
+                                  'Particulier',
+                                  'J’envoie des colis',
+                                  p,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _typeCard(
+                                  'SHOP',
+                                  CupertinoIcons.bag_fill,
+                                  'Boutique',
+                                  'Je livre mes clients',
+                                  p,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
             InsetGroup(
               header: _registerMode ? 'Créer un compte' : 'Connexion',
               footer: _registerMode
-                  ? 'Particulier ou boutique : vous pourrez envoyer des colis à un ou plusieurs destinataires.'
+                  ? 'Vous pourrez envoyer des colis à un ou plusieurs destinataires.'
                   : 'Livreurs : votre compte est créé par votre entreprise.',
               children: [
                 if (_registerMode)
                   GroupField(
                     controller: _name,
-                    placeholder: 'Nom ou nom de la boutique',
+                    placeholder: _accountType == 'SHOP'
+                        ? 'Nom de la boutique'
+                        : 'Votre nom',
                     icon: CupertinoIcons.person,
                   ),
                 GroupField(
@@ -134,6 +184,50 @@ class _LoginScreenState extends State<LoginScreen> {
                     : 'Nouveau ? Créer un compte',
                 style: TextStyles.body.copyWith(color: accent),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Choix du type de compte (particulier / boutique)
+  Widget _typeCard(
+    String type,
+    IconData icon,
+    String title,
+    String subtitle,
+    Palette p,
+  ) {
+    final on = _accountType == type;
+    return Pressable(
+      onTap: () {
+        hapticTap();
+        setState(() => _accountType = type);
+      },
+      child: AnimatedContainer(
+        duration: Motion.medium,
+        curve: Motion.curve,
+        padding: const EdgeInsets.all(14),
+        decoration: ShapeDecoration(
+          color: on ? p.accentSoft : p.card,
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: on ? accent : p.separator,
+              width: on ? 1.6 : 1,
+            ),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: on ? accent : p.secondaryLabel, size: 24),
+            const SizedBox(height: 8),
+            Text(title, style: TextStyles.headline.copyWith(color: p.label)),
+            Text(
+              subtitle,
+              style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
             ),
           ],
         ),

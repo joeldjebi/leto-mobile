@@ -239,10 +239,21 @@ class _ClientHomeState extends State<ClientHome> {
           stops: _stops,
           quote: _quote!,
           vehicle: _vehicle,
+          onPickupChanged: (pl) => _pickup = pl,
+          onVehicleChanged: (v) => _vehicle = v,
         ),
       ),
     );
-    if (created == null || !mounted) return;
+    if (!mounted) return;
+    if (created == null) {
+      // Retour sans commander : les adresses ont pu changer dans l'écran de détails
+      if (_stops.isEmpty) {
+        _backToPickup();
+      } else {
+        _refreshQuote();
+      }
+      return;
+    }
     setState(() {
       _mode = _Mode.pickup;
       _stops.clear();
@@ -665,12 +676,28 @@ class _ClientHomeState extends State<ClientHome> {
     width: 52,
     height: 52,
     decoration: ShapeDecoration(
-      color: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF2E2E34)
-          : ink,
+      gradient: letoGradient,
       shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(16)),
+      shadows: [
+        BoxShadow(
+          color: accent.withValues(alpha: 0.35),
+          blurRadius: 12,
+          offset: const Offset(0, 5),
+        ),
+      ],
     ),
     child: Icon(icon, color: Colors.white, size: 26),
+  );
+
+  /// Carré violet pâle (livraison)
+  Widget _softTile(IconData icon, Palette p) => Container(
+    width: 52,
+    height: 52,
+    decoration: ShapeDecoration(
+      color: p.accentSoft,
+      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+    child: Icon(icon, color: accent, size: 26),
   );
 
   Widget _numberDot(String label, Color color) => Container(
@@ -694,19 +721,22 @@ class _ClientHomeState extends State<ClientHome> {
     onTap: _stops.isEmpty ? _addStop : _openStopsSheet,
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: ShapeDecoration(color: p.fill, shape: const StadiumBorder()),
+      decoration: ShapeDecoration(
+        color: p.accentSoft,
+        shape: const StadiumBorder(),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             PhosphorIcons.plus(PhosphorIconsStyle.bold),
             size: 15,
-            color: p.label,
+            color: accent,
           ),
           const SizedBox(width: 6),
           Text(
             _stops.length > 1 ? 'Arrêts · ${_stops.length}' : 'Arrêts',
-            style: TextStyles.headline.copyWith(fontSize: 15, color: p.label),
+            style: TextStyles.headline.copyWith(fontSize: 15, color: accent),
           ),
         ],
       ),
@@ -733,10 +763,9 @@ class _ClientHomeState extends State<ClientHome> {
     ),
     _divider(p),
     _row(
-      leading: Icon(
+      leading: _softTile(
         PhosphorIcons.flagCheckered(PhosphorIconsStyle.fill),
-        color: p.label,
-        size: 30,
+        p,
       ),
       caption: 'Livraison',
       placeholder: 'Adresse de livraison',
@@ -777,10 +806,9 @@ class _ClientHomeState extends State<ClientHome> {
       ),
       _divider(p),
       _row(
-        leading: Icon(
+        leading: _softTile(
           PhosphorIcons.flagCheckered(PhosphorIconsStyle.fill),
-          color: p.label,
-          size: 30,
+          p,
         ),
         caption: route ?? 'Calcul de l’itinéraire…',
         value: _stops.length == 1
@@ -791,7 +819,7 @@ class _ClientHomeState extends State<ClientHome> {
       ),
       const SizedBox(height: 14),
       SizedBox(
-        height: 162,
+        height: 124,
         child: AnimatedSwitcher(
           duration: Motion.medium,
           child: _quote == null
@@ -889,12 +917,12 @@ class _OfferCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: Motion.medium,
         curve: Motion.curve,
-        width: 158,
-        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        width: 128,
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
         decoration: ShapeDecoration(
           color: selected ? p.fill : Colors.transparent,
           shape: RoundedSuperellipseBorder(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(18),
           ),
         ),
         child: Column(
@@ -905,17 +933,17 @@ class _OfferCard extends StatelessWidget {
               children: [
                 AnimatedContainer(
                   duration: Motion.medium,
-                  width: 64,
-                  height: 52,
+                  width: 50,
+                  height: 40,
                   decoration: ShapeDecoration(
                     color: selected ? p.accentSoft : p.fill,
                     shape: RoundedSuperellipseBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(13),
                     ),
                   ),
                   child: PhosphorIcon(
                     _vehicleIcon(v),
-                    size: 34,
+                    size: 26,
                     color: selected ? accent : p.secondaryLabel,
                     duotoneSecondaryColor: selected ? accent : p.secondaryLabel,
                     duotoneSecondaryOpacity: 0.25,
@@ -923,7 +951,7 @@ class _OfferCard extends StatelessWidget {
                 ),
                 if (eta != null)
                   Positioned(
-                    left: 44,
+                    left: 34,
                     bottom: -6,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -955,26 +983,33 @@ class _OfferCard extends StatelessWidget {
             const Spacer(),
             AnimatedDefaultTextStyle(
               duration: Motion.fast,
-              style: TextStyles.headline.copyWith(color: ink2),
+              style: TextStyles.headline.copyWith(color: ink2, fontSize: 14.5),
               child: Text(
-                offer['label'],
+                vehicleLabels[v] ?? offer['label'],
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              'à partir de',
-              style: TextStyles.footnote.copyWith(
-                color: p.secondaryLabel,
-                fontWeight: FontWeight.w500,
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'dès ',
+                    style: TextStyles.footnote.copyWith(
+                      color: p.secondaryLabel,
+                    ),
+                  ),
+                  TextSpan(
+                    text: fcfa(offer['prices']['SCHEDULED']),
+                    style: TextStyles.price.copyWith(
+                      color: ink2,
+                      fontSize: 16.5,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            Text(
-              fcfa(offer['prices']['SCHEDULED']),
               maxLines: 1,
               softWrap: false,
-              style: TextStyles.price.copyWith(color: ink2, fontSize: 20),
             ),
           ],
         ),

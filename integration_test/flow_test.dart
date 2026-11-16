@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:leto/main.dart' as app;
+import 'package:leto/screens/widgets.dart';
 
 const flow = String.fromEnvironment('FLOW', defaultValue: 'client');
 
@@ -52,7 +53,14 @@ void main() {
     app.main();
     await wait(t, 8);
 
-    if (flow == 'prodcheck') {
+    if (flow == 'register') {
+      await t.tap(find.text('Nouveau ? Créer un compte'));
+      await wait(t, 1);
+      await shot(t, 'register_individual');
+      await t.tap(find.text('Boutique'));
+      await wait(t, 1);
+      await shot(t, 'register_shop');
+    } else if (flow == 'prodcheck') {
       // Vérifie que l'app joint l'API configurée : un mauvais mot de passe doit renvoyer l'erreur du serveur
       await t.enterText(find.byType(TextField).at(0), '0700000001');
       await t.enterText(find.byType(TextField).at(1), 'mauvais-mot-de-passe');
@@ -69,6 +77,15 @@ void main() {
       await wait(t, 1);
     } else if (flow == 'client') {
       await shot(t, 'client_home');
+      if (const bool.fromEnvironment('UI_ONLY')) {
+        await t.tap(find.byType(MapButton).first);
+        await wait(t, 1);
+        await t.tap(find.text('Mon profil'));
+        await wait(t, 1.5);
+        await shot(t, 'client_profile');
+        await t.pageBack();
+        await wait(t, 1.5);
+      }
 
       // 1re adresse : recherche d'un lieu
       await t.tap(find.text('Adresse de livraison'));
@@ -94,6 +111,13 @@ void main() {
         await t.tap(find.textContaining('Continuer'));
         await wait(t, 2);
         await shot(t, 'client_order_top');
+        final list = find.descendant(of: find.byType(CustomScrollView), matching: find.byType(Scrollable)).first;
+        await t.drag(list, const Offset(0, -500));
+        await wait(t, 1);
+        await shot(t, 'client_order_mid');
+        await t.drag(list, const Offset(0, -900));
+        await wait(t, 1);
+        await shot(t, 'client_order_bottom');
         return;
       }
 
@@ -107,10 +131,13 @@ void main() {
       await t.enterText(await scrollTo(t, name, list), 'Mariam');
       final phone = emptyField('Téléphone');
       await t.enterText(await scrollTo(t, phone, list), '0166666666');
+      // Paiement à la livraison : seulement si l'admin l'a activé
       final cod = find.byType(CupertinoSwitch);
-      await t.tap(await scrollTo(t, cod, list));
-      await wait(t, 0.8);
-      await t.enterText(await scrollTo(t, emptyField('Montant à encaisser'), list), '15000');
+      if (cod.evaluate().isNotEmpty) {
+        await t.tap(await scrollTo(t, cod, list));
+        await wait(t, 0.8);
+        await t.enterText(await scrollTo(t, emptyField('Montant à encaisser'), list), '15000');
+      }
       FocusManager.instance.primaryFocus?.unfocus();
       await wait(t, 1);
       await shot(t, 'client_order_mid');
@@ -121,6 +148,7 @@ void main() {
       print('SHOT:client_after_order');
       await wait(t, 5);
       await shot(t, 'client_share');
+      if (const bool.fromEnvironment('ORDER_ONLY')) return;
       await t.tap(find.text('Suivre la livraison'));
       await wait(t, 4);
       await shot(t, 'client_tracking');

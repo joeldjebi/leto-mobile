@@ -21,11 +21,14 @@ class PlaceSearchScreen extends StatefulWidget {
   final String title;
   final LatLng? near;
   final bool dropoff;
+  final bool
+  allowMap; // « Choisir sur la carte » (absent hors de l'écran carte)
   const PlaceSearchScreen({
     super.key,
     required this.title,
     this.near,
     this.dropoff = false,
+    this.allowMap = true,
   });
 
   @override
@@ -115,16 +118,17 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
               style: TextStyles.body.copyWith(color: p.label),
             ),
           ),
-          InsetGroup(
-            children: [
-              GroupRow(
-                leading: IconBadge(CupertinoIcons.map, color: color),
-                title: 'Choisir sur la carte',
-                chevron: true,
-                onTap: () => Navigator.pop(context, chooseOnMap),
-              ),
-            ],
-          ),
+          if (widget.allowMap)
+            InsetGroup(
+              children: [
+                GroupRow(
+                  leading: IconBadge(CupertinoIcons.map, color: color),
+                  title: 'Choisir sur la carte',
+                  chevron: true,
+                  onTap: () => Navigator.pop(context, chooseOnMap),
+                ),
+              ],
+            ),
           if (widget.dropoff && _saved.isNotEmpty)
             InsetGroup(
               header: 'Mes destinataires',

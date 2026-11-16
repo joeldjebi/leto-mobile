@@ -7,6 +7,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import 'profile_screen.dart';
+
 import '../api.dart';
 import '../geo.dart';
 import '../labels.dart';
@@ -73,18 +75,7 @@ class _PressableState extends State<Pressable> {
 // Carte
 // ============================================================================
 
-/// Tuiles OpenStreetMap adoucies (couleurs désaturées, contraste réduit) pour un rendu épuré
-const _softTiles = ColorFilter.matrix(<double>[
-  0.4039, 0.4506, 0.0455, 0, 22, //
-  0.1339, 0.7206, 0.0455, 0, 22, //
-  0.1339, 0.4506, 0.3155, 0, 24, //
-  0, 0, 0, 1, 0,
-]);
-
-Widget _softTileBuilder(BuildContext context, Widget tile, TileImage image) =>
-    ColorFiltered(colorFilter: _softTiles, child: tile);
-
-/// Carte OpenStreetMap (adoucie en clair, assombrie en sombre). Recherche et itinéraires : via l'API.
+/// Carte OpenStreetMap (en couleur en clair, assombrie en sombre). Recherche et itinéraires : via l'API.
 class LetoMap extends StatelessWidget {
   final MapController? controller;
   final LatLng center;
@@ -133,7 +124,7 @@ class LetoMap extends StatelessWidget {
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'ci.leto.leto',
-          tileBuilder: dark ? darkModeTileBuilder : _softTileBuilder,
+          tileBuilder: dark ? darkModeTileBuilder : null,
           tileDisplay: const TileDisplay.fadeIn(
             duration: Duration(milliseconds: 220),
           ),
@@ -849,6 +840,7 @@ class GroupField extends StatelessWidget {
   final bool obscure;
   final String? prefix;
   final int maxLines;
+  final ValueChanged<String>? onChanged;
   const GroupField({
     super.key,
     required this.controller,
@@ -859,6 +851,7 @@ class GroupField extends StatelessWidget {
     this.obscure = false,
     this.prefix,
     this.maxLines = 1,
+    this.onChanged,
   });
 
   @override
@@ -888,6 +881,7 @@ class GroupField extends StatelessWidget {
               obscureText: obscure,
               keyboardType: keyboardType,
               validator: validator,
+              onChanged: onChanged,
               minLines: 1,
               maxLines: maxLines,
               style: TextStyles.body.copyWith(color: p.label),
@@ -1532,6 +1526,21 @@ Future<void> showAccountSheet(
             const SizedBox(height: 22),
             InsetGroup(
               children: [
+                GroupRow(
+                  leading: IconBadge(
+                    CupertinoIcons.person_crop_circle_fill,
+                    color: accent,
+                  ),
+                  title: 'Mon profil',
+                  chevron: true,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                    );
+                  },
+                ),
                 for (final (icon, color, label, onTap) in items)
                   GroupRow(
                     leading: IconBadge(icon, color: color),

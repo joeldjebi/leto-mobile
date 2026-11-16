@@ -88,14 +88,25 @@ class Api {
     _request('POST', '/auth/login', {'phone': phone, 'password': password}),
   );
 
-  Future<void> register(String name, String phone, String password) =>
-      _saveSession(
-        _request('POST', '/auth/register', {
-          'name': name,
-          'phone': phone,
-          'password': password,
-        }),
-      );
+  /// Inscription d'un client : [accountType] = INDIVIDUAL (particulier) ou SHOP (boutique)
+  Future<void> register(
+    String name,
+    String phone,
+    String password,
+    String accountType,
+  ) => _saveSession(
+    _request('POST', '/auth/register', {
+      'name': name,
+      'phone': phone,
+      'password': password,
+      'accountType': accountType,
+    }),
+  );
+
+  /// Mise à jour du profil (nom, type, numéro, mot de passe)
+  Future<void> updateProfile(Map<String, dynamic> changes) async {
+    user = await _request('PATCH', '/auth/me', changes);
+  }
 
   Future<void> logout() async {
     Realtime.instance.disconnect();
