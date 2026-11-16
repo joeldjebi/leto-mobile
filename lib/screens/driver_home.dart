@@ -44,6 +44,9 @@ class _DriverHomeState extends State<DriverHome> {
 
   List<Map<String, dynamic>> _available = [];
 
+  /// Gains et versements (onglet « Gains »)
+  Map<String, dynamic>? _cash;
+
   /// Raison du blocage par l'entreprise (abonnement expiré, crédit épuisé), sinon null
   String? _blocked;
   List<Map<String, dynamic>> _mine = [];
@@ -105,6 +108,7 @@ class _DriverHomeState extends State<DriverHome> {
     s.on('stop:cancelled', _onStopCancelled);
     s.on('stop:cancel-refused', _onCancelRefused);
     s.on('delivery:cancelled', _onDeliveryCancelled);
+    s.on('remittance:updated', _onRemittance);
     SharedPreferences.getInstance().then((p) {
       if (p.getBool('driver_online') == true) _goOnline();
     });
@@ -123,6 +127,7 @@ class _DriverHomeState extends State<DriverHome> {
     s.off('stop:cancelled', _onStopCancelled);
     s.off('stop:cancel-refused', _onCancelRefused);
     s.off('delivery:cancelled', _onDeliveryCancelled);
+    s.off('remittance:updated', _onRemittance);
     super.dispose();
   }
 
@@ -188,6 +193,47 @@ class _DriverHomeState extends State<DriverHome> {
     }
   }
 
+  void _onRemittance(dynamic e) {
+    _load();
+    if (!mounted || e is! Map) return;
+    if (e['status'] == 'CONFIRMED') {
+      hapticSuccess();
+      showInfo(context, 'Versement confirmé par votre entreprise');
+    } else if (e['status'] == 'REJECTED') {
+      showError(
+        context,
+        'Versement refusé par votre entreprise : voir le motif dans Gains',
+      );
+    }
+  }
+
+  /// Déclarer un versement à l'entreprise
+  Future<void> _declareRemittance() async {
+    final b = (_cash?['balance'] ?? {}) as Map;
+    final max = ((b['toRemit'] ?? 0) as num) - ((b['pending'] ?? 0) as num);
+    if (max <= 0) {
+      showInfo(context, 'Rien à verser pour le moment');
+      return;
+    }
+    final res = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _RemittanceSheet(max: max.toInt()),
+    );
+    if (res == null) return;
+    await _run(
+      () => api.declareRemittance(
+        amount: res['amount'],
+        method: res['method'],
+        reference: res['reference'],
+        proofUrl: res['proofUrl'],
+        note: res['note'],
+      ),
+      'Versement déclaré — votre entreprise le confirme à réception',
+    );
+  }
+
   /// Le destinataire annule (il a appelé) : l'expéditeur doit confirmer
   Future<void> _requestCancel(Map d, Map stop) async {
     final note = await prompt(
@@ -239,10 +285,13 @@ class _DriverHomeState extends State<DriverHome> {
         api.driverDeliveries(),
         api.myOffers(),
         api.billingStatus().catchError((_) => <String, dynamic>{'ok': true}),
+        api.myCash().catchError((_) => <String, dynamic>{}),
       ]);
       if (!mounted) return;
       setState(() {
         final billing = r[3] as Map<String, dynamic>;
+        final cash = r[4] as Map<String, dynamic>;
+        if (cash.isNotEmpty) _cash = cash;
         _blocked = billing['ok'] == false ? billing['reason'] as String? : null;
         _available = r[0].cast<Map<String, dynamic>>();
         _mine = r[1].cast<Map<String, dynamic>>();
@@ -1025,6 +1074,103 @@ class _DriverHomeState extends State<DriverHome> {
     ],
   );
 
+  /// Reste à verser à l'entreprise, bouton de versement, historique
+  List<Widget> _cashSection(Palette p) {
+    final b = (_cash!['balance'] ?? {}) as Map;
+    final history = ((_cash!['history'] as List?) ?? [])
+        .cast<Map<String, dynamic>>();
+    final toRemit = (b['toRemit'] ?? 0) as num;
+    final pending = (b['pending'] ?? 0) as num;
+    final pct = (b['sharePercent'] ?? 0) as num;
+    const methods = {'CASH': 'Espèces', 'MOBILE_MONEY': 'Mobile Money'};
+    const statuses = {
+      'PENDING': 'À confirmer',
+      'CONFIRMED': 'Confirmé',
+      'REJECTED': 'Refusé',
+    };
+    return [
+      InsetGroup(
+        header: 'À verser à mon entreprise',
+        footer: pct > 0
+            ? 'Vous gardez $pct % du prix de vos courses (${fcfa(b['share'] ?? 0)} au total). Le reste, avec les paiements encaissés à la livraison, revient à votre entreprise.'
+            : 'Le prix des courses et les paiements encaissés à la livraison reviennent à votre entreprise.',
+        children: [
+          GroupRow(
+            leading: const IconBadge(
+              CupertinoIcons.tray_arrow_up_fill,
+              color: accent,
+            ),
+            title: 'Reste à verser',
+            subtitle: pending > 0
+                ? '${fcfa(pending)} en attente de confirmation'
+                : null,
+            value: fcfa(toRemit),
+          ),
+          GroupRow(
+            leading: IconBadge(
+              CupertinoIcons.checkmark_seal_fill,
+              color: p.green,
+            ),
+            title: 'Déjà versé',
+            value: fcfa(b['confirmed'] ?? 0),
+          ),
+          GroupRow(
+            leading: IconBadge(
+              CupertinoIcons.money_dollar_circle_fill,
+              color: p.blue,
+            ),
+            title: 'Gagné ce mois',
+            subtitle:
+                '${b['deliveries'] ?? 0} course(s) au total · ${fcfa(b['earned'] ?? 0)}',
+            value: fcfa(b['month'] ?? 0),
+          ),
+        ],
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
+        child: FilledButton.icon(
+          onPressed: toRemit - pending > 0 ? _declareRemittance : null,
+          icon: const Icon(CupertinoIcons.arrow_up_circle_fill),
+          label: const Text('Faire un versement'),
+        ),
+      ),
+      if (history.isNotEmpty)
+        InsetGroup(
+          header: 'Mes versements',
+          children: [
+            for (final h in history.take(8))
+              GroupRow(
+                leading: IconBadge(
+                  h['status'] == 'CONFIRMED'
+                      ? CupertinoIcons.checkmark_alt
+                      : h['status'] == 'REJECTED'
+                      ? CupertinoIcons.xmark
+                      : CupertinoIcons.hourglass,
+                  color: h['status'] == 'CONFIRMED'
+                      ? p.green
+                      : h['status'] == 'REJECTED'
+                      ? p.red
+                      : p.yellow,
+                ),
+                title: fcfa(h['amount']),
+                subtitle: [
+                  methods[h['method']] ?? '',
+                  statuses[h['status']] ?? '',
+                  if (h['reviewNote'] != null) h['reviewNote'],
+                ].join(' · '),
+                value: _shortDate(h['createdAt']),
+              ),
+          ],
+        ),
+    ];
+  }
+
+  String _shortDate(String iso) {
+    final t = DateTime.parse(iso).toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(t.day)}/${two(t.month)} ${two(t.hour)}:${two(t.minute)}';
+  }
+
   // ----- Gains -----
   List<Widget> _gainsTab(Palette p) {
     final now = DateTime.now();
@@ -1079,6 +1225,7 @@ class _DriverHomeState extends State<DriverHome> {
         ),
       ),
       const SizedBox(height: 18),
+      if (_cash != null) ..._cashSection(p),
       InsetGroup(
         children: [
           GroupRow(
@@ -1368,6 +1515,156 @@ class _BlockedBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Formulaire de versement : montant, mode, référence et capture (Mobile Money)
+class _RemittanceSheet extends StatefulWidget {
+  final int max;
+  const _RemittanceSheet({required this.max});
+  @override
+  State<_RemittanceSheet> createState() => _RemittanceSheetState();
+}
+
+class _RemittanceSheetState extends State<_RemittanceSheet> {
+  late final _amount = TextEditingController(text: '${widget.max}');
+  final _reference = TextEditingController();
+  final _note = TextEditingController();
+  String _method = 'CASH';
+  String? _proof;
+  bool _uploading = false;
+
+  Future<void> _pickProof() async {
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1280,
+      imageQuality: 70,
+    );
+    if (file == null) return;
+    setState(() => _uploading = true);
+    try {
+      final url = await Api.instance.upload(File(file.path));
+      if (mounted) setState(() => _proof = url);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  void _submit() {
+    final n = int.tryParse(_amount.text.replaceAll(' ', ''));
+    if (n == null || n < 100)
+      return showError(context, 'Montant : 100 F minimum');
+    if (n > widget.max) {
+      return showError(context, 'Il vous reste ${fcfa(widget.max)} à verser');
+    }
+    String? opt(TextEditingController c) =>
+        c.text.trim().isEmpty ? null : c.text.trim();
+    Navigator.pop(context, {
+      'amount': n,
+      'method': _method,
+      'reference': _method == 'MOBILE_MONEY' ? opt(_reference) : null,
+      'proofUrl': _method == 'MOBILE_MONEY' ? _proof : null,
+      'note': opt(_note),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 10),
+            const Center(child: Grabber()),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+              child: Text(
+                'FAIRE UN VERSEMENT',
+                style: TextStyles.displaySmall.copyWith(color: p.label),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+              child: Text(
+                'Reste à verser : ${fcfa(widget.max)}. Votre entreprise confirme à réception.',
+                style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: CupertinoSlidingSegmentedControl<String>(
+                groupValue: _method,
+                onValueChanged: (v) => setState(() => _method = v ?? 'CASH'),
+                children: const {
+                  'CASH': Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text('Espèces au bureau'),
+                  ),
+                  'MOBILE_MONEY': Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text('Mobile Money'),
+                  ),
+                },
+              ),
+            ),
+            InsetGroup(
+              children: [
+                GroupField(
+                  controller: _amount,
+                  placeholder: 'Montant (FCFA)',
+                  icon: CupertinoIcons.money_dollar,
+                  keyboardType: TextInputType.number,
+                ),
+                if (_method == 'MOBILE_MONEY') ...[
+                  GroupField(
+                    controller: _reference,
+                    placeholder: 'Référence de la transaction',
+                    icon: CupertinoIcons.number,
+                  ),
+                  GroupRow(
+                    leading: _proof != null
+                        ? AddressPhoto(_proof!, size: 40)
+                        : Icon(
+                            CupertinoIcons.photo,
+                            color: p.secondaryLabel,
+                            size: 20,
+                          ),
+                    title: _proof != null
+                        ? 'Capture ajoutée'
+                        : 'Ajouter la capture du transfert',
+                    titleColor: _proof != null ? null : accent,
+                    trailing: _uploading
+                        ? const CupertinoActivityIndicator()
+                        : null,
+                    onTap: _uploading ? null : _pickProof,
+                  ),
+                ],
+                GroupField(
+                  controller: _note,
+                  placeholder: 'Note (facultatif)',
+                  icon: CupertinoIcons.text_bubble,
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: FilledButton(
+                onPressed: _uploading ? null : _submit,
+                child: const Text('Déclarer le versement'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

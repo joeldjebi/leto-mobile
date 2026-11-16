@@ -338,6 +338,25 @@ class Api {
         'note': ?note,
       });
 
+  /// Gains, part du livreur, reste à verser et historique des versements
+  Future<Map<String, dynamic>> myCash() async =>
+      (await _request('GET', '/remittances/me')) as Map<String, dynamic>;
+
+  /// Déclare un versement à l'entreprise (elle confirme à réception)
+  Future<dynamic> declareRemittance({
+    required int amount,
+    required String method,
+    String? reference,
+    String? proofUrl,
+    String? note,
+  }) => _request('POST', '/remittances/me', {
+    'amount': amount,
+    'method': method,
+    'reference': ?reference,
+    'proofUrl': ?proofUrl,
+    'note': ?note,
+  });
+
   /// Colis non livrés rapportés à l'expéditeur (code de retour)
   Future<dynamic> confirmReturn(String id, String code) =>
       _request('POST', '/deliveries/$id/return', {'code': code});
