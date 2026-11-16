@@ -43,6 +43,9 @@ class _DriverHomeState extends State<DriverHome> {
   int _absenceWaitMin = 5;
 
   List<Map<String, dynamic>> _available = [];
+
+  /// Raison du blocage par l'entreprise (abonnement expiré, crédit épuisé), sinon null
+  String? _blocked;
   List<Map<String, dynamic>> _mine = [];
   Map<String, Map<String, dynamic>> _myOffers = {};
 
@@ -145,9 +148,12 @@ class _DriverHomeState extends State<DriverHome> {
         api.available(),
         api.driverDeliveries(),
         api.myOffers(),
+        api.billingStatus().catchError((_) => <String, dynamic>{'ok': true}),
       ]);
       if (!mounted) return;
       setState(() {
+        final billing = r[3] as Map<String, dynamic>;
+        _blocked = billing['ok'] == false ? billing['reason'] as String? : null;
         _available = r[0].cast<Map<String, dynamic>>();
         _mine = r[1].cast<Map<String, dynamic>>();
         _myOffers = {
@@ -461,38 +467,53 @@ class _DriverHomeState extends State<DriverHome> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  MapButton(
-                    CupertinoIcons.person_crop_circle,
-                    onTap: () => showAccountSheet(
-                      context,
-                      items: [
-                        (
-                          CupertinoIcons.clock_fill,
-                          p.blue,
-                          'Historique',
-                          () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  HistoryScreen(load: api.driverDeliveries),
+                  Row(
+                    children: [
+                      MapButton(
+                        CupertinoIcons.person_crop_circle,
+                        onTap: () => showAccountSheet(
+                          context,
+                          items: [
+                            (
+                              CupertinoIcons.clock_fill,
+                              p.blue,
+                              'Historique',
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      HistoryScreen(load: api.driverDeliveries),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const Spacer(),
+                      _StatusPill(
+                        online: _online,
+                        onChanged: (v) => v ? _goOnline() : _goOffline(),
+                      ),
+                      const Spacer(),
+                      MapButton(
+                        CupertinoIcons.location_fill,
+                        onTap: () =>
+                            _me != null ? _map.move(_me!, 15) : _goOnline(),
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  _StatusPill(
-                    online: _online,
-                    onChanged: (v) => v ? _goOnline() : _goOffline(),
-                  ),
-                  const Spacer(),
-                  MapButton(
-                    CupertinoIcons.location_fill,
-                    onTap: () =>
-                        _me != null ? _map.move(_me!, 15) : _goOnline(),
+                  AnimatedSwitcher(
+                    duration: Motion.medium,
+                    child: _blocked == null
+                        ? const SizedBox.shrink()
+                        : Padding(
+                            key: ValueKey(_blocked),
+                            padding: const EdgeInsets.only(top: 10),
+                            child: _BlockedBanner(_blocked!),
+                          ),
                   ),
                 ],
               ),
@@ -1145,4 +1166,56 @@ class _PriceTag extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Bandeau : l'entreprise ne peut pas faire travailler ses livreurs (abonnement, crédit)
+class _BlockedBanner extends StatelessWidget {
+  final String reason;
+  const _BlockedBanner(this.reason);
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: ShapeDecoration(
+        color: p.card,
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        shadows: const [
+          BoxShadow(
+            color: Color(0x26000000),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(
+            CupertinoIcons.exclamationmark_triangle_fill,
+            color: p.red,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Courses indisponibles',
+                  style: TextStyles.headline.copyWith(color: p.label),
+                ),
+                Text(
+                  reason,
+                  style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

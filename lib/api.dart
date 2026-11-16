@@ -230,6 +230,8 @@ class Api {
       _request('DELETE', '/addresses/$id');
 
   // ---------- Livreur ----------
+  /// L'entreprise peut-elle travailler ? (abonnement actif, crédit disponible)
+  Future<dynamic> billingStatus() => _request('GET', '/billing/driver-status');
   Future<List<dynamic>> available() async =>
       await _request('GET', '/deliveries/available');
   Future<List<dynamic>> driverDeliveries() async =>

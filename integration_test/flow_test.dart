@@ -151,6 +151,7 @@ void main() {
       await shot(t, 'dispute_sent');
     } else {
       await shot(t, 'driver_offline');
+      if (const bool.fromEnvironment('UI_ONLY')) return;
       await t.tap(find.text('Passer en ligne'));
       await wait(t, 6);
       await shot(t, 'driver_list');
