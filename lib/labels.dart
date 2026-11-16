@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 /// Libellés et icônes partagés (offres, délais, paiements, statuts)
@@ -6,16 +7,27 @@ const statusLabels = {
   'PENDING': 'En attente',
   'ACCEPTED': 'Acceptée',
   'PICKED_UP': 'En cours',
-  'DELIVERED': 'Livrée',
+  'DELIVERED': 'Terminée',
   'CANCELLED': 'Annulée',
+};
+
+const stopStatusLabels = {
+  'PENDING': 'À livrer',
+  'DELIVERED': 'Livré',
+  'FAILED': 'Échec',
+};
+
+const failureLabels = {
+  'ABSENT': 'Destinataire absent',
+  'REFUSED': 'Colis refusé',
 };
 
 const vehicleLabels = {'MOTO': 'Moto', 'CAR': 'Voiture', 'CARGO': 'Cargo'};
 
 const vehicleIcons = {
   'MOTO': Icons.two_wheeler,
-  'CAR': Icons.directions_car_filled,
-  'CARGO': Icons.local_shipping,
+  'CAR': CupertinoIcons.car_detailed,
+  'CARGO': CupertinoIcons.cube_box_fill,
 };
 
 const speedLabels = {

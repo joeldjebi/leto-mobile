@@ -4,6 +4,9 @@ import 'api.dart';
 import 'screens/client_home.dart';
 import 'screens/driver_home.dart';
 import 'screens/login_screen.dart';
+import 'theme.dart';
+
+export 'theme.dart' show letoOrange, Palette, TextStyles;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,63 +25,24 @@ void main() async {
   runApp(const LetoApp());
 }
 
-const letoOrange = Color(0xFFF77F00);
-const letoGreen = Color(0xFF009E60);
-const letoDark = Color(0xFF1D2330);
+/// Dev / tests : forcer le thème avec --dart-define=THEME=dark|light
+const _forcedTheme = String.fromEnvironment('THEME');
 
 class LetoApp extends StatelessWidget {
   const LetoApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(14),
-    );
     return MaterialApp(
       title: 'LETO',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: letoOrange,
-          primary: letoOrange,
-        ),
-        scaffoldBackgroundColor: Colors.white,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: letoDark,
-          elevation: 0,
-          titleTextStyle: TextStyle(
-            color: letoDark,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(54),
-            shape: shape,
-            textStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(50),
-            shape: shape,
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFFF3F4F6),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
+      themeMode: switch (_forcedTheme) {
+        'dark' => ThemeMode.dark,
+        'light' => ThemeMode.light,
+        _ => ThemeMode.system,
+      },
       home: homeFor(),
     );
   }
@@ -100,11 +64,18 @@ void goHome(BuildContext context) {
 }
 
 void showError(BuildContext context, Object e) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
-  );
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(e.toString()),
+        backgroundColor: Palette.of(context).red,
+      ),
+    );
 }
 
 void showInfo(BuildContext context, String msg) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(msg)));
 }

@@ -132,6 +132,14 @@ class Api {
     return Place(res['label'] ?? '', res['sublabel'] ?? '', p);
   }
 
+  /// Itinéraire passant par plusieurs points (départ → arrêts)
+  Future<RouteInfo> routeVia(List<LatLng> pts) async => RouteInfo.fromJson(
+    await _request(
+      'GET',
+      '/geo/route-via?points=${pts.map((p) => '${p.latitude},${p.longitude}').join(';')}',
+    ),
+  );
+
   Future<RouteInfo> route(LatLng a, LatLng b) async => RouteInfo.fromJson(
     await _request(
       'GET',
@@ -140,17 +148,22 @@ class Api {
   );
 
   // ---------- Tarifs ----------
+  /// Devis : ordre optimisé (`order`), itinéraire et prix de chaque offre
   Future<Map<String, dynamic>> quote(
-    LatLng a,
-    LatLng b, {
-    bool cod = false,
-  }) async => await _request('POST', '/pricing/quote', {
-    'pickupLat': a.latitude,
-    'pickupLng': a.longitude,
-    'dropoffLat': b.latitude,
-    'dropoffLng': b.longitude,
-    'cod': cod,
+    LatLng pickup,
+    List<({LatLng point, bool cod})> stops,
+  ) async => await _request('POST', '/pricing/quote', {
+    'pickupLat': pickup.latitude,
+    'pickupLng': pickup.longitude,
+    'stops': [
+      for (final s in stops)
+        {'lat': s.point.latitude, 'lng': s.point.longitude, 'cod': s.cod},
+    ],
   });
+
+  /// Règles affichées dans l'app (attente avant absence, nombre max d'arrêts…)
+  Future<Map<String, dynamic>> grid() async =>
+      await _request('GET', '/pricing/grid');
 
   /// Délai de prise en charge (minutes) du livreur le plus proche, ou null
   Future<int?> eta(LatLng p) async => (await _request(
@@ -196,6 +209,18 @@ class Api {
       _request('POST', '/deliveries', body);
   Future<dynamic> cancel(String id) =>
       _request('POST', '/deliveries/$id/cancel');
+  Future<dynamic> disputeStop(String id, String stopId, String? note) =>
+      _request('POST', '/deliveries/$id/stops/$stopId/dispute', {
+        'note': ?note,
+      });
+
+  // ---------- Carnet d'adresses ----------
+  Future<List<dynamic>> addresses({String q = ''}) async => await _request(
+    'GET',
+    '/addresses?${Uri(queryParameters: {'q': q}).query}',
+  );
+  Future<dynamic> deleteAddress(String id) =>
+      _request('DELETE', '/addresses/$id');
 
   // ---------- Livreur ----------
   Future<List<dynamic>> available() async =>
@@ -206,8 +231,19 @@ class Api {
       _request('POST', '/deliveries/$id/accept');
   Future<dynamic> pickup(String id) =>
       _request('POST', '/deliveries/$id/pickup');
-  Future<dynamic> deliver(String id, String code) =>
-      _request('POST', '/deliveries/$id/deliver', {'code': code});
+  Future<dynamic> deliverStop(String id, String stopId, String code) =>
+      _request('POST', '/deliveries/$id/stops/$stopId/deliver', {'code': code});
+  Future<dynamic> failStop(
+    String id,
+    String stopId, {
+    required String reason,
+    required String photoUrl,
+    String? note,
+  }) => _request('POST', '/deliveries/$id/stops/$stopId/fail', {
+    'reason': reason,
+    'photoUrl': photoUrl,
+    'note': ?note,
+  });
 
   // ---------- Proposez votre prix ----------
   Future<dynamic> proposePrice(String deliveryId, int price) =>

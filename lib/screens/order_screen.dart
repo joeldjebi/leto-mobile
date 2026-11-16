@@ -1,23 +1,26 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../api.dart';
 import '../labels.dart';
 import '../main.dart';
+import '../models.dart';
 import 'widgets.dart';
 
-/// Options et informations de la commande : délai, paiement à la livraison, adresses, contacts.
+/// Détails de la commande : délai, départ, un bloc par destinataire, commentaire.
 class OrderScreen extends StatefulWidget {
   final Place pickup;
-  final Place dropoff;
+  final List<StopDraft> stops;
   final Map<String, dynamic> quote;
   final String vehicle;
   const OrderScreen({
     super.key,
     required this.pickup,
-    required this.dropoff,
+    required this.stops,
     required this.quote,
     required this.vehicle,
   });
@@ -26,24 +29,36 @@ class OrderScreen extends StatefulWidget {
   State<OrderScreen> createState() => _OrderScreenState();
 }
 
+/// Champs d'un destinataire
+class _StopForm {
+  final StopDraft draft;
+  final name = TextEditingController();
+  final phone = TextEditingController();
+  final details = TextEditingController();
+  final description = TextEditingController();
+  final cod = TextEditingController();
+  bool codOn = false;
+  String? photo;
+
+  _StopForm(this.draft) {
+    name.text = draft.name;
+    phone.text = draft.phone;
+    details.text = draft.details;
+  }
+}
+
 class _OrderScreenState extends State<OrderScreen> {
   final api = Api.instance;
   final _form = GlobalKey<FormState>();
 
   String _speed = 'STANDARD';
-  bool _cod = false;
   bool _sending = false;
   String? _pickupPhoto;
-  String? _dropoffPhoto;
+  late final List<_StopForm> _forms = widget.stops.map(_StopForm.new).toList();
 
-  final _codAmount = TextEditingController();
   final _pickupDetails = TextEditingController();
   late final _senderName = TextEditingController(text: api.user?['name']);
   late final _pickupPhone = TextEditingController(text: api.user?['phone']);
-  final _dropoffDetails = TextEditingController();
-  final _recipientName = TextEditingController();
-  final _recipientPhone = TextEditingController();
-  final _description = TextEditingController();
   final _comment = TextEditingController();
 
   Map<String, dynamic> get _offer => (widget.quote['offers'] as List)
@@ -52,46 +67,72 @@ class _OrderScreenState extends State<OrderScreen> {
   Map<String, dynamic> get _speeds =>
       widget.quote['speeds'] as Map<String, dynamic>;
   int get _codFee => widget.quote['codFee'] as int;
+  int get _codStops => _forms.where((f) => f.codOn).length;
   int _priceFor(String speed) =>
-      (_offer['prices'][speed] as int) + (_cod ? _codFee : 0);
+      (_offer['prices'][speed] as int) + _codFee * _codStops;
 
   Future<void> _submit() async {
-    if (!_form.currentState!.validate()) return;
+    // Vérification sur les données (les champs hors de l'écran ne sont pas construits)
+    _form.currentState!.validate();
+    final missing = _missing();
+    if (missing != null) {
+      showError(context, missing);
+      return;
+    }
     setState(() => _sending = true);
     String? opt(TextEditingController c) =>
         c.text.trim().isEmpty ? null : c.text.trim();
     try {
-      final d = await api.createDelivery(
-        {
-          'vehicleType': widget.vehicle,
-          'speed': _speed,
-          'pickupLat': widget.pickup.point.latitude,
-          'pickupLng': widget.pickup.point.longitude,
-          'pickupAddress': widget.pickup.label,
-          'pickupDetails': opt(_pickupDetails),
-          'pickupContactName': opt(_senderName),
-          'pickupPhone': _pickupPhone.text.trim(),
-          'pickupPhotoUrl': _pickupPhoto,
-          'dropoffLat': widget.dropoff.point.latitude,
-          'dropoffLng': widget.dropoff.point.longitude,
-          'dropoffAddress': widget.dropoff.label,
-          'dropoffDetails': opt(_dropoffDetails),
-          'recipientName': _recipientName.text.trim(),
-          'recipientPhone': _recipientPhone.text.trim(),
-          'dropoffPhotoUrl': _dropoffPhoto,
-          'packageDescription': opt(_description),
-          'courierComment': opt(_comment),
-          'codAmount': _cod
-              ? int.parse(_codAmount.text.replaceAll(' ', ''))
-              : 0,
-        }..removeWhere((_, v) => v == null),
-      );
+      final d = await api.createDelivery({
+        'vehicleType': widget.vehicle,
+        'speed': _speed,
+        'pickupLat': widget.pickup.point.latitude,
+        'pickupLng': widget.pickup.point.longitude,
+        'pickupAddress': widget.pickup.label,
+        'pickupDetails': ?opt(_pickupDetails),
+        'pickupContactName': ?opt(_senderName),
+        'pickupPhone': _pickupPhone.text.trim(),
+        'pickupPhotoUrl': ?_pickupPhoto,
+        'courierComment': ?opt(_comment),
+        'stops': [
+          for (final f in _forms)
+            {
+              'lat': f.draft.place.point.latitude,
+              'lng': f.draft.place.point.longitude,
+              'address': f.draft.place.label,
+              'recipientName': f.name.text.trim(),
+              'recipientPhone': f.phone.text.trim(),
+              'details': ?opt(f.details),
+              'packageDescription': ?opt(f.description),
+              'photoUrl': ?f.photo,
+              'codAmount': f.codOn
+                  ? int.parse(f.cod.text.replaceAll(' ', ''))
+                  : 0,
+            },
+        ],
+      });
+      hapticSuccess();
       if (mounted) Navigator.pop(context, d);
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  /// Premier champ manquant ou invalide, avec un message précis
+  String? _missing() {
+    final phoneOk = RegExp(r'^0\d{9}$');
+    if (_senderName.text.trim().isEmpty) return 'Départ : indiquez le nom de l’expéditeur';
+    if (!phoneOk.hasMatch(_pickupPhone.text.trim())) return 'Départ : téléphone invalide (10 chiffres)';
+    for (var i = 0; i < _forms.length; i++) {
+      final f = _forms[i];
+      final who = _forms.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire';
+      if (f.name.text.trim().isEmpty) return '$who : indiquez le nom';
+      if (!phoneOk.hasMatch(f.phone.text.trim())) return '$who : téléphone invalide (10 chiffres)';
+      if (f.codOn && (int.tryParse(f.cod.text.replaceAll(' ', '')) ?? 0) <= 0) return '$who : montant à encaisser';
+    }
+    return null;
   }
 
   String? _required(String? v) =>
@@ -106,335 +147,226 @@ class _OrderScreenState extends State<OrderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF3F4F6),
-        title: Row(
-          children: [
-            Icon(vehicleIcons[widget.vehicle], color: letoOrange),
-            const SizedBox(width: 8),
-            Text(_offer['label']),
-          ],
-        ),
-      ),
-      body: Form(
-        key: _form,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-          children: [
-            // ----- Délai -----
-            _Section(
-              title: 'Délai de livraison',
-              children: [
-                for (final s in ['EXPRESS', 'STANDARD', 'SCHEDULED'])
-                  _SpeedTile(
-                    label: _speeds[s]['label'],
-                    description: _speeds[s]['description'],
-                    price: _priceFor(s),
-                    selected: _speed == s,
-                    onTap: () => setState(() => _speed = s),
-                  ),
-              ],
-            ),
-            // ----- Paiement à la livraison -----
-            _Section(
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _cod,
-                  onChanged: (v) => setState(() => _cod = v),
-                  secondary: const Icon(
-                    Icons.account_balance_wallet_outlined,
-                    color: letoDark,
-                  ),
-                  title: const Text(
-                    'Paiement à la livraison',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    'Le livreur encaisse le prix de la marchandise auprès du destinataire. '
-                    'L’entreprise de livraison vous le reverse. Frais : ${fcfa(_codFee)}',
-                  ),
-                ),
-                if (_cod)
-                  TextFormField(
-                    controller: _codAmount,
-                    keyboardType: TextInputType.number,
-                    validator: _amount,
-                    decoration: const InputDecoration(
-                      hintText: 'Montant à encaisser (FCFA)',
-                      prefixIcon: Icon(Icons.payments_outlined),
+    final p = Palette.of(context);
+    final n = _forms.length;
+    return Form(
+      key: _form,
+      child: LargeTitlePage(
+        title: n > 1 ? 'Tournée · $n arrêts' : 'Détails',
+        bottomBar: GlassBottomBar(
+          child: Row(
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Total',
+                    style: TextStyles.footnote.copyWith(
+                      color: p.secondaryLabel,
                     ),
                   ),
-              ],
-            ),
-            // ----- Départ -----
-            _Section(
-              children: [
-                PointLine(
-                  title: widget.pickup.label,
-                  detail: widget.pickup.sublabel,
-                ),
-                _field(
-                  _pickupDetails,
-                  'Repère, étage, portail…',
-                  Icons.signpost_outlined,
-                ),
-                _PhotoField(
-                  url: _pickupPhoto,
-                  onChanged: (u) => setState(() => _pickupPhoto = u),
-                ),
-                _field(
-                  _senderName,
-                  'Expéditeur',
-                  Icons.person_outline,
-                  validator: _required,
-                ),
-                _field(
-                  _pickupPhone,
-                  'Téléphone de l’expéditeur',
-                  Icons.phone_outlined,
-                  validator: _phone,
-                  phone: true,
-                ),
-              ],
-            ),
-            // ----- Arrivée -----
-            _Section(
-              children: [
-                PointLine(
-                  dropoff: true,
-                  title: widget.dropoff.label,
-                  detail: widget.dropoff.sublabel,
-                ),
-                _field(
-                  _dropoffDetails,
-                  'Repère, étage, portail…',
-                  Icons.signpost_outlined,
-                ),
-                _PhotoField(
-                  url: _dropoffPhoto,
-                  onChanged: (u) => setState(() => _dropoffPhoto = u),
-                ),
-                _field(
-                  _recipientName,
-                  'Nom du destinataire',
-                  Icons.person_outline,
-                  validator: _required,
-                ),
-                _field(
-                  _recipientPhone,
-                  'Téléphone du destinataire',
-                  Icons.phone_outlined,
-                  validator: _phone,
-                  phone: true,
-                ),
-              ],
-            ),
-            // ----- Colis -----
-            _Section(
-              children: [
-                _field(
-                  _description,
-                  'Que livre-t-on ? (facultatif)',
-                  Icons.inventory_2_outlined,
-                ),
-                _field(
-                  _comment,
-                  'Commentaire pour le coursier (facultatif)',
-                  Icons.chat_bubble_outline,
-                ),
-              ],
-            ),
-            // ----- Paiement -----
-            const _Section(
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.payments_outlined, color: letoGreen),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Paiement de la course en espèces, au livreur',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: FilledButton(
-            onPressed: _sending ? null : _submit,
-            child: _sending
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Commander'),
-                      Text(
-                        fcfa(_priceFor(_speed)),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    fcfa(_priceFor(_speed)),
+                    style: TextStyles.title2.copyWith(color: p.label),
                   ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _sending ? null : _submit,
+                  child: _sending
+                      ? const CupertinoActivityIndicator(color: Colors.white)
+                      : const Text('Commander'),
+                ),
+              ),
+            ],
           ),
         ),
+        children: [
+          // ----- Résumé -----
+          InsetGroup(
+            children: [
+              GroupRow(
+                leading: IconBadge(
+                  vehicleIcons[widget.vehicle]!,
+                  color: letoOrange,
+                ),
+                title: _offer['label'],
+                subtitle:
+                    '${km(widget.quote['distanceKm'])} · ~${widget.quote['durationMin']} min${n > 1 ? ' · ordre optimisé' : ''}',
+              ),
+            ],
+          ),
+          // ----- Délai -----
+          InsetGroup(
+            header: 'Délai',
+            children: [
+              for (final s in ['EXPRESS', 'STANDARD', 'SCHEDULED'])
+                GroupRow(
+                  title: _speeds[s]['label'],
+                  subtitle: _speeds[s]['description'],
+                  value: fcfa(_priceFor(s)),
+                  trailing: Padding(
+                    padding: const EdgeInsets.only(left: 10),
+                    child: Icon(
+                      CupertinoIcons.checkmark_alt,
+                      color: _speed == s ? letoOrange : Colors.transparent,
+                    ),
+                  ),
+                  onTap: () => setState(() => _speed = s),
+                ),
+            ],
+          ),
+          // ----- Départ -----
+          InsetGroup(
+            header: 'Départ',
+            children: [
+              GroupRow(
+                leading: _dot('A', p.green),
+                title: widget.pickup.label,
+                subtitle: widget.pickup.sublabel,
+              ),
+              GroupField(
+                controller: _pickupDetails,
+                placeholder: 'Repère, étage, portail…',
+                icon: CupertinoIcons.placemark,
+              ),
+              _PhotoRow(
+                url: _pickupPhoto,
+                onChanged: (u) => setState(() => _pickupPhoto = u),
+              ),
+              GroupField(
+                controller: _senderName,
+                placeholder: 'Expéditeur',
+                icon: CupertinoIcons.person,
+                validator: _required,
+              ),
+              GroupField(
+                controller: _pickupPhone,
+                placeholder: 'Téléphone',
+                prefix: '+225',
+                keyboardType: TextInputType.phone,
+                validator: _phone,
+              ),
+            ],
+          ),
+          // ----- Destinataires -----
+          for (var i = 0; i < n; i++) _stopSection(i, p),
+          // ----- Coursier -----
+          InsetGroup(
+            header: 'Pour le coursier',
+            children: [
+              GroupField(
+                controller: _comment,
+                placeholder: 'Commentaire (facultatif)',
+                icon: CupertinoIcons.chat_bubble,
+                maxLines: 3,
+              ),
+            ],
+          ),
+          InsetGroup(
+            footer:
+                'La livraison est due même si un destinataire est absent (absence vérifiée : GPS, attente, photo).',
+            children: [
+              GroupRow(
+                leading: IconBadge(CupertinoIcons.money_dollar, color: p.green),
+                title: 'Espèces',
+                subtitle: 'Payé au livreur',
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _field(
-    TextEditingController c,
-    String hint,
-    IconData icon, {
-    String? Function(String?)? validator,
-    bool phone = false,
-  }) => Padding(
-    padding: const EdgeInsets.only(top: 10),
-    child: TextFormField(
-      controller: c,
-      keyboardType: phone ? TextInputType.phone : TextInputType.text,
-      decoration: InputDecoration(hintText: hint, prefixIcon: Icon(icon)),
-      validator: validator,
+  Widget _dot(String label, Color color) => Container(
+    width: 28,
+    height: 28,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    child: Text(
+      label,
+      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
     ),
   );
-}
 
-class _Section extends StatelessWidget {
-  final String? title;
-  final List<Widget> children;
-  const _Section({this.title, required this.children});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(top: 12),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _stopSection(int i, Palette p) {
+    final f = _forms[i];
+    return InsetGroup(
+      header: _forms.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire',
       children: [
-        if (title != null) ...[
-          Text(
-            title!,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+        GroupRow(
+          leading: _dot('${i + 1}', letoOrange),
+          title: f.draft.place.label,
+          subtitle: f.draft.place.sublabel,
+        ),
+        GroupField(
+          controller: f.name,
+          placeholder: 'Nom du destinataire',
+          icon: CupertinoIcons.person,
+          validator: _required,
+        ),
+        GroupField(
+          controller: f.phone,
+          placeholder: 'Téléphone',
+          prefix: '+225',
+          keyboardType: TextInputType.phone,
+          validator: _phone,
+        ),
+        GroupField(
+          controller: f.details,
+          placeholder: 'Repère, étage, portail…',
+          icon: CupertinoIcons.placemark,
+        ),
+        GroupField(
+          controller: f.description,
+          placeholder: 'Colis (facultatif)',
+          icon: CupertinoIcons.cube_box,
+        ),
+        GroupSwitch(
+          title: 'Paiement à la livraison',
+          subtitle: 'Le livreur encaisse la marchandise · +${fcfa(_codFee)}',
+          value: f.codOn,
+          onChanged: (v) => setState(() => f.codOn = v),
+        ),
+        if (f.codOn)
+          GroupField(
+            controller: f.cod,
+            placeholder: 'Montant à encaisser',
+            icon: CupertinoIcons.creditcard,
+            keyboardType: TextInputType.number,
+            validator: _amount,
           ),
-          const SizedBox(height: 6),
-        ],
-        ...children,
+        _PhotoRow(url: f.photo, onChanged: (u) => setState(() => f.photo = u)),
       ],
-    ),
-  );
-}
-
-class _SpeedTile extends StatelessWidget {
-  final String label;
-  final String description;
-  final int price;
-  final bool selected;
-  final VoidCallback onTap;
-  const _SpeedTile({
-    required this.label,
-    required this.description,
-    required this.price,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  description,
-                  style: const TextStyle(color: Colors.black54, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            fcfa(price),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(width: 12),
-          Icon(
-            selected ? Icons.check_circle : Icons.circle_outlined,
-            color: selected ? letoOrange : Colors.black26,
-            size: 28,
-          ),
-        ],
-      ),
-    ),
-  );
+    );
+  }
 }
 
 /// Photo d'adresse : prise ou choisie, envoyée à l'API
-class _PhotoField extends StatefulWidget {
+class _PhotoRow extends StatefulWidget {
   final String? url;
   final ValueChanged<String?> onChanged;
-  const _PhotoField({required this.url, required this.onChanged});
+  const _PhotoRow({required this.url, required this.onChanged});
 
   @override
-  State<_PhotoField> createState() => _PhotoFieldState();
+  State<_PhotoRow> createState() => _PhotoRowState();
 }
 
-class _PhotoFieldState extends State<_PhotoField> {
+class _PhotoRowState extends State<_PhotoRow> {
   bool _uploading = false;
 
   Future<void> _pick() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Prendre une photo'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choisir dans la galerie'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
+    final source = await showActions<ImageSource>(
+      context,
+      title: 'Photo de l’adresse',
+      actions: [
+        ('Prendre une photo', ImageSource.camera, false),
+        ('Choisir dans la photothèque', ImageSource.gallery, false),
+      ],
     );
     if (source == null) return;
     try {
@@ -447,7 +379,9 @@ class _PhotoFieldState extends State<_PhotoField> {
       setState(() => _uploading = true);
       widget.onChanged(await Api.instance.upload(File(file.path)));
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (mounted) {
+        showError(context, kDebugMode ? e : 'Impossible d’ajouter la photo');
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -455,31 +389,24 @@ class _PhotoFieldState extends State<_PhotoField> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: widget.url == null
-          ? OutlinedButton.icon(
-              onPressed: _uploading ? null : _pick,
-              icon: _uploading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_a_photo_outlined),
-              label: const Text('Photo de l’adresse (portail, devanture…)'),
-            )
-          : Row(
-              children: [
-                AddressPhoto(widget.url!),
-                const SizedBox(width: 12),
-                TextButton.icon(
-                  onPressed: () => widget.onChanged(null),
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Retirer'),
-                ),
-              ],
-            ),
+    final p = Palette.of(context);
+    if (widget.url != null) {
+      return GroupRow(
+        leading: AddressPhoto(widget.url!, size: 44),
+        title: 'Photo de l’adresse',
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => widget.onChanged(null),
+          child: Text('Retirer', style: TextStyles.body.copyWith(color: p.red)),
+        ),
+      );
+    }
+    return GroupRow(
+      leading: Icon(CupertinoIcons.camera, size: 20, color: p.secondaryLabel),
+      title: 'Ajouter une photo (portail, devanture…)',
+      titleColor: letoOrange,
+      trailing: _uploading ? const CupertinoActivityIndicator() : null,
+      onTap: _uploading ? null : _pick,
     );
   }
 }

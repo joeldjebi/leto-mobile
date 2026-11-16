@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -8,9 +9,9 @@ import '../labels.dart';
 import '../main.dart';
 import 'widgets.dart';
 
-/// Fiche d'une course disponible (style inDrive) : carte avec trajets
-/// moi → A (bleu) et A → B (vert), détails, « Accepter pour X F » ou « Proposez votre prix ».
-/// Renvoie 'accepted', 'offered' (proposition envoyée) ou null.
+/// Fiche d'une course disponible : carte (moi → départ en bleu, tournée en vert),
+/// arrêts, « Accepter pour X F » ou « Proposez votre prix ».
+/// Renvoie 'accepted', 'offered' ou null.
 Future<String?> showCourseSheet(
   BuildContext context,
   Map<String, dynamic> d,
@@ -21,9 +22,9 @@ Future<String?> showCourseSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    backgroundColor: Palette.of(context).background,
+    shape: const RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (_) => _CourseSheet(d, me, myOffer),
   );
@@ -41,64 +42,18 @@ class _CourseSheet extends StatefulWidget {
 
 class _CourseSheetState extends State<_CourseSheet> {
   final _map = MapController();
-  RouteInfo? _toPickup; // moi → A
-  RouteInfo? _trip; // A → B
-  bool _accepting = false;
-  bool _proposing = false;
-
-  /// Prix arrondi aux 50 F supérieurs
-  int _round50(num v) => ((v / 50).ceil() * 50).toInt();
-
-  Future<void> _propose(int price) async {
-    setState(() => _proposing = true);
-    try {
-      await Api.instance.proposePrice(widget.d['id'], price);
-      if (mounted) Navigator.pop(context, 'offered');
-    } catch (e) {
-      if (mounted) showError(context, e);
-    } finally {
-      if (mounted) setState(() => _proposing = false);
-    }
-  }
-
-  Future<void> _customPrice() async {
-    final base = widget.d['price'] as int;
-    final ctrl = TextEditingController(text: '${_round50(base * 1.3)}');
-    final price = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Votre prix'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          decoration: InputDecoration(
-            suffixText: 'F',
-            helperText: 'Entre ${fcfa(base + 50)} et ${fcfa(base * 2)}',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(minimumSize: const Size(110, 44)),
-            onPressed: () =>
-                Navigator.pop(ctx, int.tryParse(ctrl.text.replaceAll(' ', ''))),
-            child: const Text('Proposer'),
-          ),
-        ],
-      ),
-    );
-    if (price != null) await _propose(price);
-  }
-
+  RouteInfo? _toPickup;
+  RouteInfo? _trip;
+  bool _busy = false;
   bool _ready = false;
 
-  LatLng? get _a => pointOf(widget.d, 'pickup');
-  LatLng? get _b => pointOf(widget.d, 'dropoff');
+  List<Map<String, dynamic>> get _stops =>
+      (widget.d['stops'] as List).cast<Map<String, dynamic>>();
+  LatLng get _a => pointOf(widget.d, 'pickup')!;
+  List<LatLng> get _stopPoints => [
+    for (final s in _stops)
+      LatLng((s['lat'] as num).toDouble(), (s['lng'] as num).toDouble()),
+  ];
 
   @override
   void initState() {
@@ -108,36 +63,36 @@ class _CourseSheetState extends State<_CourseSheet> {
 
   Future<void> _loadRoutes() async {
     final api = Api.instance;
-    final a = _a, b = _b, me = widget.me;
     try {
-      final results = await Future.wait([
-        if (a != null && b != null) api.route(a, b),
-        if (me != null && a != null) api.route(me, a),
-      ]);
+      final trip = await api.routeVia([_a, ..._stopPoints]);
+      final toA = widget.me == null ? null : await api.route(widget.me!, _a);
       if (!mounted) return;
       setState(() {
-        if (a != null && b != null) _trip = results.first;
-        if (me != null && a != null) _toPickup = results.last;
+        _trip = trip;
+        _toPickup = toA;
       });
       _fit();
     } catch (_) {}
   }
 
   void _fit() {
-    if (!_ready) return;
-    fitPoints(_map, [
-      widget.me,
-      _a,
-      _b,
-      ...?_trip?.points,
-      ...?_toPickup?.points,
-    ], padding: const EdgeInsets.fromLTRB(40, 70, 40, 30));
+    if (_ready) {
+      fitPoints(_map, [
+        widget.me,
+        _a,
+        ..._stopPoints,
+        ...?_trip?.points,
+      ], padding: const EdgeInsets.fromLTRB(36, 50, 36, 30));
+    }
   }
 
+  int _round50(num v) => ((v / 50).ceil() * 50).toInt();
+
   Future<void> _accept() async {
-    setState(() => _accepting = true);
+    setState(() => _busy = true);
     try {
       await Api.instance.accept(widget.d['id']);
+      hapticSuccess();
       if (mounted) Navigator.pop(context, 'accepted');
     } catch (e) {
       if (!mounted) return;
@@ -146,51 +101,75 @@ class _CourseSheetState extends State<_CourseSheet> {
     }
   }
 
+  Future<void> _propose(int price) async {
+    setState(() => _busy = true);
+    try {
+      await Api.instance.proposePrice(widget.d['id'], price);
+      hapticSuccess();
+      if (mounted) Navigator.pop(context, 'offered');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _customPrice() async {
+    final base = widget.d['price'] as int;
+    final value = await prompt(
+      context,
+      'Votre prix',
+      message: 'Entre ${fcfa(base + 50)} et ${fcfa(base * 2)}',
+      initial: '${_round50(base * 1.3)}',
+      keyboard: TextInputType.number,
+      ok: 'Proposer',
+      large: true,
+    );
+    final price = int.tryParse((value ?? '').replaceAll(' ', ''));
+    if (price != null) await _propose(price);
+  }
+
   LatLng _mid(List<LatLng> pts) => pts[pts.length ~/ 2];
 
   @override
   Widget build(BuildContext context) {
+    final p = Palette.of(context);
     final d = widget.d;
-    final a = _a, b = _b;
-    final cod = (d['codAmount'] ?? 0) as num;
+    final cod = _stops.fold<num>(0, (s, x) => s + (x['codAmount'] ?? 0));
+    final n = _stops.length;
 
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.92,
-      maxChildSize: 0.95,
+      initialChildSize: 0.94,
+      maxChildSize: 0.96,
       builder: (context, scroll) => ListView(
         controller: scroll,
         padding: EdgeInsets.zero,
         children: [
           // ----- Carte -----
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ClipRSuperellipse(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             child: SizedBox(
               height: 230,
               child: Stack(
                 children: [
                   LetoMap(
                     controller: _map,
-                    center: a ?? abidjan,
+                    center: _a,
                     onReady: () {
                       _ready = true;
                       _fit();
                     },
                     layers: [
                       if (_toPickup != null)
-                        routeLayer(
-                          _toPickup!.points,
-                          color: const Color(0xFF3D5AFE),
-                        ),
+                        routeLayer(_toPickup!.points, color: p.blue),
                       if (_trip != null)
-                        routeLayer(
-                          _trip!.points,
-                          color: const Color(0xFF2E7D32),
-                        ),
+                        routeLayer(_trip!.points, color: p.green),
                       MarkerLayer(
                         markers: [
-                          if (a != null) pointMarker(a),
-                          if (b != null) pointMarker(b, dropoff: true),
+                          pickupMarker(_a),
+                          for (var i = 0; i < n; i++)
+                            stopMarker(context, _stopPoints[i], i + 1),
                           if (widget.me != null) myMarker(widget.me!),
                           if (_toPickup != null &&
                               _toPickup!.points.length > 1 &&
@@ -198,189 +177,154 @@ class _CourseSheetState extends State<_CourseSheet> {
                             routeLabel(
                               _mid(_toPickup!.points),
                               '${_toPickup!.durationMin} min · ${km(_toPickup!.distanceKm)}',
-                              const Color(0xFF3D5AFE),
+                              p.blue,
                             ),
                           if (_trip != null && _trip!.points.length > 1)
                             routeLabel(
                               _mid(_trip!.points),
                               '${_trip!.durationMin} min · ${km(_trip!.distanceKm)}',
-                              const Color(0xFF2E7D32),
+                              p.green,
                             ),
                         ],
                       ),
                     ],
                   ),
-                  const Positioned(
-                    top: 14,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Text(
-                        'Commande de course',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          shadows: [
-                            Shadow(color: Colors.white, blurRadius: 12),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                  const Positioned(top: 8, left: 0, right: 0, child: Grabber()),
                 ],
               ),
             ),
           ),
           // ----- Détails -----
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      children: [
-                        Avatar(d['client']?['name'] ?? '?', radius: 28),
-                        const SizedBox(height: 6),
-                        SizedBox(
-                          width: 80,
-                          child: Text(
-                            d['client']?['name'] ?? '',
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          timeAgo(d['createdAt']),
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (d['distanceKm'] != null)
-                            Text(
-                              '~${km(d['distanceKm'])}',
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 16,
-                              ),
+                          Text(
+                            [
+                              if (n > 1) 'Tournée · $n arrêts',
+                              if (d['distanceKm'] != null) km(d['distanceKm']),
+                            ].join(' · '),
+                            style: TextStyles.subheadline.copyWith(
+                              color: p.secondaryLabel,
                             ),
+                          ),
                           Text(
                             fcfa(d['price']),
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w900,
+                            style: TextStyles.largeTitle.copyWith(
+                              color: p.label,
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          PointLine(
-                            title:
-                                '${d['pickupAddress']} (${d['pickupCommune']})',
-                            detail: d['pickupDetails'],
-                          ),
-                          PointLine(
-                            dropoff: true,
-                            title:
-                                '${d['dropoffAddress']} (${d['dropoffCommune']})',
-                            detail: d['dropoffDetails'],
                           ),
                         ],
                       ),
                     ),
+                    Column(
+                      children: [
+                        Avatar(d['client']?['name'] ?? '?', radius: 22),
+                        const SizedBox(height: 4),
+                        Text(
+                          timeAgo(d['createdAt']),
+                          style: TextStyles.caption.copyWith(
+                            color: p.secondaryLabel,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
                   children: [
                     Pill(
                       '${vehicleLabels[d['vehicleType']]} · ${speedLabels[d['speed']]}',
-                      bg: const Color(0xFFEDEDED),
-                      fg: letoDark,
+                      color: p.label,
                       icon: vehicleIcons[d['vehicleType']],
                     ),
                     const CashPill(),
                     if (cod > 0) CodBadge(cod),
                   ],
                 ),
-                if (d['pickupPhotoUrl'] != null ||
-                    d['dropoffPhotoUrl'] != null) ...[
-                  const SizedBox(height: 12),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: ShapeDecoration(
+                    color: p.card,
+                    shape: RoundedSuperellipseBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      PointLine(
+                        title: '${d['pickupAddress']} (${d['pickupCommune']})',
+                        detail: d['pickupDetails'],
+                      ),
+                      for (final s in _stops)
+                        PointLine(
+                          marker: '${s['position'] + 1}',
+                          title: '${s['address']} (${s['commune']})',
+                          detail: [
+                            s['details'],
+                            if ((s['codAmount'] ?? 0) > 0)
+                              'Encaisser ${fcfa(s['codAmount'])}',
+                          ].whereType<String>().join(' · '),
+                        ),
+                    ],
+                  ),
+                ),
+                if ((d['courierComment'] ?? '').toString().isNotEmpty) ...[
+                  const SizedBox(height: 10),
                   Row(
                     children: [
-                      if (d['pickupPhotoUrl'] != null) ...[
-                        AddressPhoto(d['pickupPhotoUrl']),
-                        const SizedBox(width: 8),
-                      ],
-                      if (d['dropoffPhotoUrl'] != null)
-                        AddressPhoto(d['dropoffPhotoUrl']),
+                      Icon(
+                        CupertinoIcons.chat_bubble_text,
+                        size: 18,
+                        color: p.secondaryLabel,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          d['courierComment'],
+                          style: TextStyles.subheadline.copyWith(
+                            color: p.label,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ],
-                if ((d['courierComment'] ?? '').toString().isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.chat_bubble_outline, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(d['courierComment'])),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
                 FilledButton(
                   style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(58),
+                    minimumSize: const Size.fromHeight(54),
                   ),
-                  onPressed: _accepting ? null : _accept,
-                  child: Text(
-                    _accepting
-                        ? 'Acceptation…'
-                        : 'Accepter pour ${fcfa(d['price'])}',
-                    style: const TextStyle(fontSize: 18),
-                  ),
+                  onPressed: _busy ? null : _accept,
+                  child: Text('Accepter pour ${fcfa(d['price'])}'),
                 ),
                 const SizedBox(height: 16),
-                // ----- Proposez votre prix -----
                 if (widget.myOffer != null)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 10),
-                    decoration: BoxDecoration(
-                      color: letoOrange.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Pill(
                       'Votre proposition : ${fcfa(widget.myOffer!['price'])} · en attente du client',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF9A4A00),
-                      ),
+                      color: const Color(0xFFC25E00),
+                      icon: CupertinoIcons.hourglass,
                     ),
                   ),
-                const Text(
+                Text(
                   'Proposez votre prix',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.black54, fontSize: 15),
+                  style: TextStyles.subheadline.copyWith(
+                    color: p.secondaryLabel,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -390,7 +334,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                         child: _PriceChip(
                           key: ValueKey('propose-$f'),
                           label: fcfa(_round50(d['price'] * f)),
-                          onTap: _proposing
+                          onTap: _busy
                               ? null
                               : () => _propose(_round50(d['price'] * f)),
                         ),
@@ -399,20 +343,19 @@ class _CourseSheetState extends State<_CourseSheet> {
                     ],
                     Expanded(
                       child: _PriceChip(
-                        icon: Icons.edit_outlined,
-                        onTap: _proposing ? null : _customPrice,
+                        icon: CupertinoIcons.pencil,
+                        onTap: _busy ? null : _customPrice,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFF1F1EF),
-                    foregroundColor: letoDark,
-                  ),
+                const SizedBox(height: 8),
+                CupertinoButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Fermer'),
+                  child: Text(
+                    'Fermer',
+                    style: TextStyles.body.copyWith(color: p.secondaryLabel),
+                  ),
                 ),
               ],
             ),
@@ -431,26 +374,28 @@ class _PriceChip extends StatelessWidget {
   const _PriceChip({super.key, this.label, this.icon, this.onTap});
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: const Color(0xFFF1F1EF),
-    borderRadius: BorderRadius.circular(16),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: SizedBox(
-        height: 60,
-        child: Center(
-          child: icon != null
-              ? Icon(icon, color: letoDark)
-              : Text(
-                  label!,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return GestureDetector(
+      onTap: onTap == null
+          ? null
+          : () {
+              hapticTap();
+              onTap!();
+            },
+      child: Container(
+        height: 54,
+        alignment: Alignment.center,
+        decoration: ShapeDecoration(
+          color: p.card,
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
+        child: icon != null
+            ? Icon(icon, color: p.label)
+            : Text(label!, style: TextStyles.headline.copyWith(color: p.label)),
       ),
-    ),
-  );
+    );
+  }
 }

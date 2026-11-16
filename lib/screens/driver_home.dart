@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,8 +18,10 @@ import '../realtime.dart';
 import 'driver_course_sheet.dart';
 import 'widgets.dart';
 
-/// Accueil livreur (esprit Yango) : carte plein écran + panneau glissant
-/// avec trois onglets : Courses, En cours, Gains.
+/// Dev / tests : photo déjà envoyée utilisée à la place de l'appareil photo (--dart-define=DEV_PHOTO=/uploads/x.jpg)
+const _devPhoto = String.fromEnvironment('DEV_PHOTO');
+
+/// Accueil livreur : carte plein écran + panneau (Courses · En cours · Gains)
 class DriverHome extends StatefulWidget {
   const DriverHome({super.key});
   @override
@@ -24,30 +30,21 @@ class DriverHome extends StatefulWidget {
 
 class _DriverHomeState extends State<DriverHome> {
   final api = Api.instance;
-  final _scaffold = GlobalKey<ScaffoldState>();
   final _map = MapController();
-  final _sheet = DraggableScrollableController();
 
-  int _tab = 0; // 0 Courses · 1 En cours · 2 Gains
+  int _tab = 0;
   ScrollController? _sheetScroll;
-
-  /// Change d'onglet et remonte en haut du panneau
-  void _setTab(int i) {
-    setState(() => _tab = i);
-    if (_sheetScroll?.hasClients == true) _sheetScroll!.jumpTo(0);
-  }
-
   bool _online = false;
   LatLng? _me;
   Timer? _timer;
   Timer? _heartbeat;
-  Timer? _clock; // rafraîchit les « il y a X sec. »
+  Timer? _clock;
   StreamSubscription<Position>? _gps;
+  int _absenceWaitMin = 5;
 
   List<Map<String, dynamic>> _available = [];
   List<Map<String, dynamic>> _mine = [];
-  Map<String, Map<String, dynamic>> _myOffers =
-      {}; // deliveryId → ma proposition
+  Map<String, Map<String, dynamic>> _myOffers = {};
 
   RouteInfo? _activeRoute;
   String? _activeRouteKey;
@@ -55,20 +52,42 @@ class _DriverHomeState extends State<DriverHome> {
   List<Map<String, dynamic>> get _active => _mine
       .where((d) => ['ACCEPTED', 'PICKED_UP'].contains(d['status']))
       .toList();
+  Map<String, dynamic>? get _current => _active.isEmpty ? null : _active.first;
+
+  List<Map<String, dynamic>> _stopsOf(Map d) =>
+      ((d['stops'] as List?) ?? []).cast<Map<String, dynamic>>();
+  Map<String, dynamic>? _nextStop(Map d) =>
+      _stopsOf(d).where((s) => s['status'] == 'PENDING').firstOrNull;
+  LatLng _pt(Map s) =>
+      LatLng((s['lat'] as num).toDouble(), (s['lng'] as num).toDouble());
+
+  /// Prochaine destination : le départ, puis chaque arrêt en attente
+  LatLng? _targetOf(Map d) {
+    if (d['status'] == 'ACCEPTED') return pointOf(d, 'pickup');
+    final s = _nextStop(d);
+    return s == null ? null : _pt(s);
+  }
 
   @override
   void initState() {
     super.initState();
     _load();
+    api
+        .grid()
+        .then(
+          (g) => _absenceWaitMin = (g['absenceWaitMin'] as num?)?.ceil() ?? 5,
+        )
+        .catchError((_) => 5);
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _load());
-    _clock = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => mounted ? setState(() {}) : null,
-    );
+    // Rafraîchit les compteurs (« il y a X sec. », attente sur place)
+    _clock = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (mounted && (_tab == 1 || t.tick % 15 == 0)) setState(() {});
+    });
     final s = Realtime.instance.socket;
-    s.on('deliveries:changed', _onDeliveriesChanged);
+    s.on('deliveries:changed', _onChanged);
     s.on('offer:accepted', _onOfferAccepted);
     s.on('offer:rejected', _onOfferRejected);
+    s.on('stop:arrived', _onArrived);
     SharedPreferences.getInstance().then((p) {
       if (p.getBool('driver_online') == true) _goOnline();
     });
@@ -80,22 +99,21 @@ class _DriverHomeState extends State<DriverHome> {
     _clock?.cancel();
     _stopGps();
     final s = Realtime.instance.socket;
-    s.off('deliveries:changed', _onDeliveriesChanged);
+    s.off('deliveries:changed', _onChanged);
     s.off('offer:accepted', _onOfferAccepted);
     s.off('offer:rejected', _onOfferRejected);
+    s.off('stop:arrived', _onArrived);
     super.dispose();
   }
 
-  void _onDeliveriesChanged(dynamic _) => _load();
+  void _onChanged(dynamic _) => _load();
 
   Future<void> _onOfferAccepted(dynamic _) async {
     await _load();
     if (!mounted) return;
+    hapticSuccess();
     _setTab(1);
-    showInfo(
-      context,
-      'Le client a accepté votre prix — direction le point de départ',
-    );
+    showInfo(context, 'Le client a accepté votre prix — direction le départ');
   }
 
   void _onOfferRejected(dynamic _) {
@@ -103,6 +121,22 @@ class _DriverHomeState extends State<DriverHome> {
     if (mounted) {
       showInfo(context, 'Le client n’a pas retenu votre proposition');
     }
+  }
+
+  void _onArrived(dynamic e) {
+    _load();
+    if (mounted && e is Map) {
+      hapticSuccess();
+      showInfo(
+        context,
+        'Vous êtes chez ${e['recipientName']}. L’expéditeur est prévenu.',
+      );
+    }
+  }
+
+  void _setTab(int i) {
+    setState(() => _tab = i);
+    if (_sheetScroll?.hasClients == true) _sheetScroll!.jumpTo(0);
   }
 
   Future<void> _load() async {
@@ -135,32 +169,34 @@ class _DriverHomeState extends State<DriverHome> {
     return (_me == null || p == null) ? double.infinity : distanceKm(_me!, p);
   }
 
-  /// Itinéraire vers la prochaine étape de la course en cours (dessiné sur la carte)
   Future<void> _refreshActiveRoute() async {
-    if (_active.isEmpty) {
+    final d = _current;
+    if (d == null) {
       if (_activeRoute != null) setState(() => _activeRoute = null);
       _activeRouteKey = null;
       return;
     }
-    final d = _active.first;
-    final to = pointOf(d, d['status'] == 'ACCEPTED' ? 'pickup' : 'dropoff');
+    final to = _targetOf(d);
     final from = _me ?? pointOf(d, 'pickup');
-    if (from == null || to == null) return;
-    final key = '${d['id']}-${d['status']}';
+    if (to == null || from == null) return;
+    final key = '${d['id']}-${d['status']}-${_nextStop(d)?['id']}';
     if (key == _activeRouteKey) return;
     _activeRouteKey = key;
     try {
       final r = await api.route(from, to);
       if (!mounted) return;
       setState(() => _activeRoute = r);
-      _fitMap([from, to, ...r.points]);
+      fitPoints(
+        _map,
+        [from, to, ...r.points],
+        padding: EdgeInsets.fromLTRB(
+          50,
+          110,
+          50,
+          MediaQuery.of(context).size.height * 0.5,
+        ),
+      );
     } catch (_) {}
-  }
-
-  /// Cadre la carte au-dessus du panneau
-  void _fitMap(List<LatLng?> pts) {
-    final h = MediaQuery.of(context).size.height;
-    fitPoints(_map, pts, padding: EdgeInsets.fromLTRB(50, 110, 50, h * 0.5));
   }
 
   // ---------- En ligne / Hors ligne ----------
@@ -172,6 +208,7 @@ class _DriverHomeState extends State<DriverHome> {
       showError(context, 'Activez la localisation pour passer en ligne.');
       return;
     }
+    hapticSuccess();
     setState(() => _online = true);
     (await SharedPreferences.getInstance()).setBool('driver_online', true);
     _sendPosition(first);
@@ -188,7 +225,6 @@ class _DriverHomeState extends State<DriverHome> {
             onError: (_) {},
           );
     }
-    // Toutes les 20 s même à l'arrêt, pour rester « en ligne »
     _heartbeat = Timer.periodic(const Duration(seconds: 20), (_) {
       if (_me != null) _sendPosition(_me!);
     });
@@ -197,10 +233,7 @@ class _DriverHomeState extends State<DriverHome> {
 
   Future<void> _goOffline() async {
     if (_active.isNotEmpty) {
-      showError(
-        context,
-        'Terminez votre course en cours avant de passer hors ligne.',
-      );
+      showError(context, 'Terminez votre course avant de passer hors ligne.');
       return;
     }
     _stopGps();
@@ -236,163 +269,219 @@ class _DriverHomeState extends State<DriverHome> {
     if (!mounted) return;
     if (result == 'accepted') {
       _setTab(1);
-      showInfo(context, 'Course acceptée — direction le point de départ');
+      showInfo(context, 'Course acceptée — direction le départ');
     } else if (result == 'offered') {
-      showInfo(
-        context,
-        'Proposition envoyée — en attente de la réponse du client',
-      );
+      showInfo(context, 'Proposition envoyée — en attente du client');
     }
   }
 
   Future<void> _run(Future<dynamic> Function() action, String success) async {
     try {
       await action();
+      hapticSuccess();
       if (mounted) showInfo(context, success);
     } catch (e) {
       if (mounted) showError(context, e);
     }
     await _load();
+    // Affiche l'étape suivante en haut du panneau
+    if (_sheetScroll?.hasClients == true) _sheetScroll!.jumpTo(0);
   }
 
-  Future<void> _askCode(Map<String, dynamic> d) async {
-    final ctrl = TextEditingController();
-    final cod = (d['codAmount'] ?? 0) as num;
-    final code = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Code de livraison'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (cod > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  'Avez-vous encaissé ${fcfa(cod)} ?',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF9A4A00),
-                  ),
-                ),
-              ),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 28,
-                letterSpacing: 8,
-                fontWeight: FontWeight.bold,
-              ),
-              decoration: const InputDecoration(
-                hintText: '----',
-                counterText: '',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(minimumSize: const Size(100, 44)),
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Valider'),
-          ),
-        ],
-      ),
-    );
-    if (code != null && code.isNotEmpty) {
-      await _run(
-        () => api.deliver(d['id'], code),
-        'Livraison terminée, bravo !',
-      );
+  Future<void> _deliver(Map d, Map stop) async {
+    final cod = (stop['codAmount'] ?? 0) as num;
+    if (cod > 0 &&
+        !await confirm(
+          context,
+          'Encaissement',
+          message:
+              'Avez-vous encaissé ${fcfa(cod)} auprès de ${stop['recipientName']} ?',
+          ok: 'Oui, encaissé',
+        )) {
+      return;
     }
+    if (!mounted) return;
+    final code = await prompt(
+      context,
+      'Code de livraison',
+      message: 'Demandez le code à ${stop['recipientName']}',
+      placeholder: '••••',
+      keyboard: TextInputType.number,
+      large: true,
+    );
+    if (code == null || code.isEmpty) return;
+    await _run(
+      () => api.deliverStop(d['id'], stop['id'], code),
+      'Colis livré à ${stop['recipientName']}',
+    );
   }
+
+  /// Secondes d'attente restantes avant de pouvoir signaler une absence (null = arrivée non détectée)
+  int? _waitLeft(Map stop) {
+    if (stop['arrivedAt'] == null) return null;
+    final waited = DateTime.now()
+        .difference(DateTime.parse(stop['arrivedAt']))
+        .inSeconds;
+    return (_absenceWaitMin * 60 - waited).clamp(0, 99999);
+  }
+
+  /// Échec : sur place, attente (absence), photo obligatoire. L'expéditeur est prévenu.
+  Future<void> _reportProblem(Map d, Map stop) async {
+    final reason = await showActions<String>(
+      context,
+      title: 'Problème avec ${stop['recipientName']}',
+      message: 'Appelez d’abord le destinataire : ${stop['recipientPhone']}',
+      actions: [
+        ('Destinataire absent ou injoignable', 'ABSENT', false),
+        ('Le destinataire refuse le colis', 'REFUSED', true),
+      ],
+    );
+    if (reason == null || !mounted) return;
+    if (reason == 'ABSENT') {
+      final left = _waitLeft(stop);
+      if (left == null) {
+        showError(
+          context,
+          'Arrivée non détectée : rapprochez-vous de l’adresse (moins de 150 m).',
+        );
+        return;
+      }
+      if (left > 0) {
+        showError(
+          context,
+          'Patientez encore ${_fmt(left)} et essayez d’appeler le destinataire.',
+        );
+        return;
+      }
+    }
+    // Photo obligatoire du lieu (appareil photo ; photothèque autorisée en développement)
+    String? url = _devPhoto.isEmpty ? null : _devPhoto;
+    if (url == null) {
+      final source = kDebugMode
+          ? await showActions<ImageSource>(
+              context,
+              title: 'Photo du lieu (obligatoire)',
+              actions: [
+                ('Prendre une photo', ImageSource.camera, false),
+                ('Photothèque (développement)', ImageSource.gallery, false),
+              ],
+            )
+          : ImageSource.camera;
+      if (source == null) return;
+      final file = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1280,
+        imageQuality: 70,
+      );
+      if (file == null) return;
+      try {
+        url = await api.upload(File(file.path));
+      } catch (e) {
+        if (mounted) showError(context, e);
+        return;
+      }
+    }
+    if (!mounted) return;
+    final note = await prompt(
+      context,
+      'Commentaire',
+      message: 'Facultatif — visible par l’expéditeur',
+      placeholder: 'Ex. : portail fermé, 3 appels',
+      ok: 'Envoyer',
+    );
+    if (note == null) return;
+    final photo = url;
+    await _run(
+      () => api.failStop(
+        d['id'],
+        stop['id'],
+        reason: reason,
+        photoUrl: photo,
+        note: note.isEmpty ? null : note,
+      ),
+      'Échec signalé — l’expéditeur est prévenu',
+    );
+  }
+
+  String _fmt(int s) => '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
 
   // ---------- UI ----------
 
   @override
   Widget build(BuildContext context) {
-    final active = _active.isEmpty ? null : _active.first;
-    final target = active == null
-        ? null
-        : pointOf(
-            active,
-            active['status'] == 'ACCEPTED' ? 'pickup' : 'dropoff',
-          );
+    final p = Palette.of(context);
+    final active = _current;
+    final target = active == null ? null : _targetOf(active);
 
     return Scaffold(
-      key: _scaffold,
-      drawer: LetoDrawer(
-        items: [
-          ListTile(
-            leading: const Icon(Icons.history),
-            title: const Text('Historique'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => HistoryScreen(load: api.driverDeliveries),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+      backgroundColor: p.background,
       body: Stack(
         children: [
-          // ----- Carte -----
           LetoMap(
             controller: _map,
             layers: [
               if (_activeRoute != null)
                 routeLayer(
                   _activeRoute!.points,
-                  color: active?['status'] == 'ACCEPTED'
-                      ? const Color(0xFF3D5AFE)
-                      : const Color(0xFF2E7D32),
+                  color: active?['status'] == 'ACCEPTED' ? p.blue : p.green,
                 ),
               MarkerLayer(
                 markers: [
-                  // Courses disponibles : étiquettes de prix au point de départ
                   if (active == null && _online)
                     for (final d in _available)
-                      if (pointOf(d, 'pickup') != null)
-                        Marker(
-                          point: pointOf(d, 'pickup')!,
-                          width: 96,
-                          height: 38,
-                          child: GestureDetector(
-                            onTap: () => _openCourse(d),
-                            child: _PriceTag(d['price']),
+                      Marker(
+                        point: pointOf(d, 'pickup')!,
+                        width: 96,
+                        height: 36,
+                        child: GestureDetector(
+                          onTap: () => _openCourse(d),
+                          child: _PriceTag(
+                            d['price'],
+                            stops: _stopsOf(d).length,
                           ),
                         ),
-                  if (target != null)
-                    pointMarker(
-                      target,
-                      dropoff: active!['status'] != 'ACCEPTED',
-                    ),
+                      ),
+                  if (active != null)
+                    for (final s in _stopsOf(active))
+                      stopMarker(
+                        context,
+                        _pt(s),
+                        s['position'] + 1,
+                        status: s['status'],
+                      ),
+                  if (active != null &&
+                      active['status'] == 'ACCEPTED' &&
+                      target != null)
+                    pickupMarker(target),
                   if (_me != null) myMarker(_me!),
                 ],
               ),
             ],
           ),
-          // ----- Barre du haut -----
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  RoundButton(
-                    Icons.menu,
-                    onTap: () => _scaffold.currentState!.openDrawer(),
+                  MapButton(
+                    CupertinoIcons.person_crop_circle,
+                    onTap: () => showAccountSheet(
+                      context,
+                      items: [
+                        (
+                          CupertinoIcons.clock_fill,
+                          p.blue,
+                          'Historique',
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  HistoryScreen(load: api.driverDeliveries),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const Spacer(),
                   _StatusPill(
@@ -400,8 +489,8 @@ class _DriverHomeState extends State<DriverHome> {
                     onChanged: (v) => v ? _goOnline() : _goOffline(),
                   ),
                   const Spacer(),
-                  RoundButton(
-                    Icons.near_me_outlined,
+                  MapButton(
+                    CupertinoIcons.location_fill,
                     onTap: () =>
                         _me != null ? _map.move(_me!, 15) : _goOnline(),
                   ),
@@ -409,9 +498,7 @@ class _DriverHomeState extends State<DriverHome> {
               ),
             ),
           ),
-          // ----- Panneau -----
           DraggableScrollableSheet(
-            controller: _sheet,
             initialChildSize: 0.5,
             minChildSize: 0.18,
             maxChildSize: 0.92,
@@ -419,39 +506,44 @@ class _DriverHomeState extends State<DriverHome> {
             snapSizes: const [0.5],
             builder: (context, scroll) {
               _sheetScroll = scroll;
-              return Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 18)],
+              return ClipRSuperellipse(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
                 ),
-                child: RefreshIndicator(
-                  onRefresh: _load,
+                child: Container(
+                  color: p.background,
                   child: CustomScrollView(
                     controller: scroll,
                     slivers: [
-                      // Poignée + onglets toujours visibles en haut du panneau
                       SliverPersistentHeader(
                         pinned: true,
                         delegate: _SheetHeader(
-                          _Tabs(
-                            index: _tab,
-                            labels: [
-                              'Courses${_online && _available.isNotEmpty ? ' · ${_available.length}' : ''}',
-                              'En cours${_active.isNotEmpty ? ' · ${_active.length}' : ''}',
-                              'Gains',
-                            ],
-                            onChanged: _setTab,
+                          color: p.background,
+                          child: CupertinoSlidingSegmentedControl<int>(
+                            groupValue: _tab,
+                            onValueChanged: (i) {
+                              hapticTap();
+                              _setTab(i ?? 0);
+                            },
+                            children: {
+                              0: _seg(
+                                'Courses${_online && _available.isNotEmpty ? ' (${_available.length})' : ''}',
+                              ),
+                              1: _seg(
+                                'En cours${_active.isNotEmpty ? ' (${_active.length})' : ''}',
+                              ),
+                              2: _seg('Gains'),
+                            },
                           ),
                         ),
                       ),
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                        padding: const EdgeInsets.only(bottom: 32),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate(switch (_tab) {
-                            0 => _ordersTab(),
-                            1 => _activeTab(),
-                            _ => _gainsTab(),
+                            0 => _ordersTab(p),
+                            1 => _activeTab(p),
+                            _ => _gainsTab(p),
                           }),
                         ),
                       ),
@@ -466,34 +558,53 @@ class _DriverHomeState extends State<DriverHome> {
     );
   }
 
-  // ----- Onglet Courses -----
-  List<Widget> _ordersTab() {
+  Widget _seg(String label) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 7),
+    child: Text(label, style: TextStyles.subheadline),
+  );
+
+  Widget _title(String text, Palette p, {String? subtitle}) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(text, style: TextStyles.title1.copyWith(color: p.label)),
+        if (subtitle != null && subtitle.isNotEmpty)
+          Text(
+            subtitle,
+            style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
+          ),
+      ],
+    ),
+  );
+
+  // ----- Courses -----
+  List<Widget> _ordersTab(Palette p) {
     if (!_online) {
       return [
-        const _Title('VOUS ÊTES HORS LIGNE'),
-        const SizedBox(height: 6),
-        const Text(
-          'Passez en ligne pour recevoir les courses autour de vous.',
-          style: TextStyle(color: Colors.black54, fontSize: 15),
+        _title(
+          'Hors ligne',
+          p,
+          subtitle: 'Passez en ligne pour recevoir les courses autour de vous.',
         ),
-        const SizedBox(height: 18),
-        FilledButton.icon(
-          onPressed: _goOnline,
-          icon: const Icon(Icons.power_settings_new),
-          label: const Text('Passer en ligne'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: FilledButton.icon(
+            onPressed: _goOnline,
+            icon: const Icon(CupertinoIcons.power),
+            label: const Text('Passer en ligne'),
+          ),
         ),
       ];
     }
     return [
-      const _Title('COURSES DISPONIBLES'),
-      const SizedBox(height: 4),
-      Text(
-        _available.isEmpty
-            ? 'Aucune course pour le moment. Elles apparaissent ici en temps réel.'
+      _title(
+        'Courses disponibles',
+        p,
+        subtitle: _available.isEmpty
+            ? 'Aucune course pour le moment. Elles arrivent en temps réel.'
             : 'En temps réel · les plus proches d’abord',
-        style: const TextStyle(color: Colors.black54),
       ),
-      const SizedBox(height: 14),
       for (final d in _available)
         _OrderCard(
           d: d,
@@ -504,140 +615,244 @@ class _DriverHomeState extends State<DriverHome> {
     ];
   }
 
-  // ----- Onglet En cours -----
-  List<Widget> _activeTab() {
-    if (_active.isEmpty) {
+  // ----- En cours -----
+  List<Widget> _activeTab(Palette p) {
+    final d = _current;
+    if (d == null) {
       return [
-        const _Title('AUCUNE COURSE EN COURS'),
-        const SizedBox(height: 6),
-        const Text(
-          'Acceptez une course ou proposez votre prix dans l’onglet « Courses ».',
-          style: TextStyle(color: Colors.black54, fontSize: 15),
+        _title(
+          'Aucune course en cours',
+          p,
+          subtitle:
+              'Acceptez une course ou proposez votre prix dans « Courses ».',
         ),
-        const SizedBox(height: 18),
-        OutlinedButton(
-          onPressed: () => _setTab(0),
-          child: const Text('Voir les courses'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TintedButton(
+            'Voir les courses',
+            icon: CupertinoIcons.list_bullet,
+            onPressed: () => _setTab(0),
+          ),
         ),
       ];
     }
-    final d = _active.first;
-    final toPickup = d['status'] == 'ACCEPTED';
-    final cod = (d['codAmount'] ?? 0) as num;
-    final contactName = toPickup
-        ? (d['pickupContactName'] ?? d['client']?['name'] ?? '')
-        : d['recipientName'];
-    final contactPhone = toPickup ? d['pickupPhone'] : d['recipientPhone'];
-    final photo = toPickup ? d['pickupPhotoUrl'] : d['dropoffPhotoUrl'];
+    final stops = _stopsOf(d);
+    final n = stops.length;
+    final done = stops.where((s) => s['status'] != 'PENDING').length;
+    final routeInfo = _activeRoute == null
+        ? null
+        : '${_activeRoute!.durationMin} min · ${km(_activeRoute!.distanceKm)}';
 
-    return [
-      StatusSteps(d['status']),
-      const SizedBox(height: 16),
-      _Title(toPickup ? 'VERS LE DÉPART' : 'VERS LE DESTINATAIRE'),
-      if (_activeRoute != null)
-        Text(
-          '${_activeRoute!.durationMin} min · ${km(_activeRoute!.distanceKm)}',
-          style: const TextStyle(color: Colors.black54, fontSize: 15),
+    // Étape 1 : récupérer les colis
+    if (d['status'] == 'ACCEPTED') {
+      final sender =
+          (d['pickupContactName'] ?? d['client']?['name'] ?? '') as String;
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: StatusSteps(d['status']),
         ),
-      const SizedBox(height: 12),
-      PointLine(
-        dropoff: !toPickup,
-        title: toPickup
-            ? '${d['pickupAddress']} (${d['pickupCommune']})'
-            : '${d['dropoffAddress']} (${d['dropoffCommune']})',
-        detail: toPickup ? d['pickupDetails'] : d['dropoffDetails'],
-      ),
-      const SizedBox(height: 12),
-      Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF3F4F6),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
+        _title('Vers le départ', p, subtitle: routeInfo),
+        InsetGroup(
           children: [
-            Avatar(contactName, radius: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    contactName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    toPickup ? 'Expéditeur' : 'Destinataire',
-                    style: const TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
-                ],
+            GroupRow(
+              leading: _dot('A', p.green),
+              title: '${d['pickupAddress']} (${d['pickupCommune']})',
+              subtitle: d['pickupDetails'],
+            ),
+            GroupRow(
+              leading: Avatar(sender, radius: 15),
+              title: sender,
+              subtitle: 'Expéditeur',
+              trailing: _phone(d['pickupPhone'], p),
+            ),
+            if (d['pickupPhotoUrl'] != null)
+              GroupRow(
+                leading: AddressPhoto(d['pickupPhotoUrl'], size: 44),
+                title: 'Photo du lieu',
               ),
-            ),
-            const Icon(Icons.phone, color: letoGreen, size: 18),
-            const SizedBox(width: 4),
-            SelectableText(
-              contactPhone,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+            if ((d['courierComment'] ?? '').toString().isNotEmpty)
+              GroupRow(
+                leading: Icon(
+                  CupertinoIcons.chat_bubble_text,
+                  color: p.secondaryLabel,
+                  size: 20,
+                ),
+                title: d['courierComment'],
+              ),
           ],
         ),
-      ),
-      if (photo != null) ...[
-        const SizedBox(height: 10),
-        Align(alignment: Alignment.centerLeft, child: AddressPhoto(photo)),
-      ],
-      if ((d['courierComment'] ?? '').toString().isNotEmpty) ...[
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            const Icon(Icons.chat_bubble_outline, size: 18),
-            const SizedBox(width: 8),
-            Expanded(child: Text(d['courierComment'])),
-          ],
-        ),
-      ],
-      const SizedBox(height: 12),
-      Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children: [
-          Pill(
-            'Course ${fcfa(d['price'])}',
-            bg: const Color(0xFFEDEDED),
-            fg: letoDark,
-          ),
-          const CashPill(),
-          if (cod > 0) CodBadge(cod),
-        ],
-      ),
-      if (!toPickup && cod > 0)
-        const Padding(
-          padding: EdgeInsets.only(top: 6),
-          child: Text(
-            'Encaissez le montant avant de remettre le colis.',
-            style: TextStyle(color: Color(0xFF9A4A00)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: FilledButton(
+            onPressed: () => _run(
+              () => api.pickup(d['id']),
+              n > 1
+                  ? 'Colis récupérés — début de la tournée'
+                  : 'Colis récupéré',
+            ),
+            child: Text(
+              n > 1 ? 'J’ai récupéré les $n colis' : 'J’ai récupéré le colis',
+            ),
           ),
         ),
-      const SizedBox(height: 16),
-      FilledButton(
-        style: FilledButton.styleFrom(
-          backgroundColor: toPickup ? letoDark : letoGreen,
-        ),
-        onPressed: toPickup
-            ? () => _run(
-                () => api.pickup(d['id']),
-                'Colis récupéré — direction le destinataire',
-              )
-            : () => _askCode(d),
-        child: Text(
-          toPickup ? 'J’ai récupéré le colis' : 'Livrer · saisir le code',
-        ),
+      ];
+    }
+
+    // Étape 2 : tournée, arrêt par arrêt
+    final next = _nextStop(d);
+    final list = <Widget>[
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: StatusSteps(d['status']),
+      ),
+      _title(
+        next == null
+            ? 'Tournée terminée'
+            : (n > 1
+                  ? 'Arrêt ${next['position'] + 1} sur $n'
+                  : 'Vers le destinataire'),
+        p,
+        subtitle: [if (n > 1) '$done/$n traités', ?routeInfo].join(' · '),
       ),
     ];
+    if (next != null) {
+      final cod = (next['codAmount'] ?? 0) as num;
+      final left = _waitLeft(next);
+      list.addAll([
+        InsetGroup(
+          children: [
+            GroupRow(
+              leading: _dot('${next['position'] + 1}', letoOrange),
+              title: '${next['address']} (${next['commune']})',
+              subtitle: next['details'],
+            ),
+            GroupRow(
+              leading: Avatar(next['recipientName'] ?? '', radius: 15),
+              title: next['recipientName'],
+              subtitle: next['packageDescription'] ?? 'Destinataire',
+              trailing: _phone(next['recipientPhone'], p),
+            ),
+            if (next['photoUrl'] != null)
+              GroupRow(
+                leading: AddressPhoto(next['photoUrl'], size: 44),
+                title: 'Photo du lieu',
+              ),
+            if (cod > 0)
+              GroupRow(
+                leading: const IconBadge(
+                  CupertinoIcons.creditcard_fill,
+                  color: Color(0xFFC25E00),
+                ),
+                title: 'Encaisser ${fcfa(cod)}',
+                subtitle: 'Avant de remettre le colis',
+              ),
+            // Présence sur place (détectée par le serveur)
+            GroupRow(
+              leading: IconBadge(
+                left == null
+                    ? CupertinoIcons.location
+                    : CupertinoIcons.checkmark_seal_fill,
+                color: left == null ? p.secondaryLabel : p.green,
+              ),
+              title: left == null
+                  ? 'Arrivée non détectée'
+                  : 'Vous êtes sur place',
+              subtitle: left == null
+                  ? 'Elle est enregistrée automatiquement à moins de 150 m'
+                  : left > 0
+                  ? 'Absence signalable dans ${_fmt(left)}'
+                  : 'L’expéditeur est prévenu de votre arrivée',
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: p.green),
+                onPressed: () => _deliver(d, next),
+                child: const Text('Livrer · saisir le code'),
+              ),
+              const SizedBox(height: 10),
+              TintedButton(
+                'Signaler un problème',
+                icon: CupertinoIcons.exclamationmark_triangle,
+                color: p.red,
+                onPressed: () => _reportProblem(d, next),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+      ]);
+    }
+    if (n > 1) {
+      list.add(
+        InsetGroup(
+          header: 'Tournée',
+          children: [
+            for (final s in stops)
+              GroupRow(
+                leading: Container(
+                  width: 26,
+                  height: 26,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: stopColor(context, s['status']),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${s['position'] + 1}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                title: s['recipientName'],
+                subtitle: s['address'],
+                value: s['status'] == 'FAILED'
+                    ? failureLabels[s['failureReason']]
+                    : stopStatusLabels[s['status']],
+              ),
+          ],
+        ),
+      );
+    }
+    return list;
   }
 
-  // ----- Onglet Gains -----
-  List<Widget> _gainsTab() {
+  Widget _dot(String label, Color color) => Container(
+    width: 28,
+    height: 28,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    child: Text(
+      label,
+      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+    ),
+  );
+
+  Widget _phone(String? phone, Palette p) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(CupertinoIcons.phone_fill, size: 15, color: p.green),
+      const SizedBox(width: 4),
+      SelectableText(
+        phone ?? '',
+        style: TextStyles.subheadline.copyWith(
+          color: p.label,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
+  );
+
+  // ----- Gains -----
+  List<Widget> _gainsTab(Palette p) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final weekStart = today.subtract(Duration(days: today.weekday - 1));
@@ -647,85 +862,91 @@ class _DriverHomeState extends State<DriverHome> {
     Iterable<Map<String, dynamic>> since(DateTime t) => delivered.where(
       (d) => DateTime.parse(d['deliveredAt']).toLocal().isAfter(t),
     );
-    num sum(Iterable<Map<String, dynamic>> l, String f) =>
-        l.fold<num>(0, (s, d) => s + (d[f] ?? 0));
+    num sum(Iterable<Map<String, dynamic>> l) =>
+        l.fold<num>(0, (s, d) => s + (d['price'] ?? 0));
     final todayList = since(today);
     final weekList = since(weekStart);
+    final codToday = todayList
+        .expand((d) => _stopsOf(d))
+        .where((s) => s['status'] == 'DELIVERED')
+        .fold<num>(0, (s, x) => s + (x['codAmount'] ?? 0));
 
     return [
-      const _Title('MES GAINS'),
-      const SizedBox(height: 12),
+      _title('Mes gains', p),
       Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: letoDark,
-          borderRadius: BorderRadius.circular(22),
+        decoration: ShapeDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF9F0A), letoOrange],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Aujourd’hui', style: TextStyle(color: Colors.white70)),
             Text(
-              fcfa(sum(todayList, 'price')),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 34,
-                fontWeight: FontWeight.w900,
-              ),
+              'Aujourd’hui',
+              style: TextStyles.subheadline.copyWith(color: Colors.white70),
             ),
             Text(
-              '${todayList.length} course(s) livrée(s)',
-              style: const TextStyle(color: Colors.white70),
+              fcfa(sum(todayList)),
+              style: TextStyles.largeTitle.copyWith(color: Colors.white),
+            ),
+            Text(
+              '${todayList.length} course(s) terminée(s)',
+              style: TextStyles.subheadline.copyWith(color: Colors.white70),
             ),
           ],
         ),
       ),
-      const SizedBox(height: 10),
-      Row(
+      const SizedBox(height: 18),
+      InsetGroup(
         children: [
-          Expanded(
-            child: _StatCard(
-              'Cette semaine',
-              fcfa(sum(weekList, 'price')),
-              '${weekList.length} course(s)',
-            ),
+          GroupRow(
+            leading: IconBadge(CupertinoIcons.calendar, color: p.blue),
+            title: 'Cette semaine',
+            value: fcfa(sum(weekList)),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _StatCard(
-              'Encaissé pour l’entreprise',
-              fcfa(sum(todayList, 'codAmount')),
-              'aujourd’hui (paiement à la livraison)',
-              highlight: true,
+          GroupRow(
+            leading: const IconBadge(
+              CupertinoIcons.creditcard_fill,
+              color: Color(0xFFC25E00),
             ),
+            title: 'Encaissé pour l’entreprise',
+            subtitle: 'Aujourd’hui · paiement à la livraison',
+            value: fcfa(codToday),
           ),
         ],
       ),
-      const SizedBox(height: 20),
-      const Text(
-        'Dernières courses',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-      ),
-      const SizedBox(height: 8),
-      ...delivered.take(10).map((d) => DeliveryCard(d)),
-      if (delivered.isEmpty)
-        const Text(
-          'Aucune course livrée pour l’instant.',
-          style: TextStyle(color: Colors.grey),
+      if (delivered.isNotEmpty) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, 0, 16, 7),
+          child: Text(
+            'DERNIÈRES COURSES',
+            style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
+          ),
         ),
+        ...delivered.take(10).map((d) => DeliveryCard(d)),
+      ],
     ];
   }
 }
 
-/// En-tête épinglé du panneau : poignée + onglets
+/// En-tête épinglé du panneau : poignée + contrôle segmenté
 class _SheetHeader extends SliverPersistentHeaderDelegate {
-  final Widget tabs;
-  _SheetHeader(this.tabs);
+  final Widget child;
+  final Color color;
+  _SheetHeader({required this.child, required this.color});
 
   @override
-  double get minExtent => 92;
+  double get minExtent => 82;
   @override
-  double get maxExtent => 92;
+  double get maxExtent => 82;
 
   @override
   Widget build(
@@ -733,35 +954,22 @@ class _SheetHeader extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) => Container(
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    color: color,
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+    child: Column(
+      children: [
+        const Grabber(),
+        const SizedBox(height: 12),
+        SizedBox(width: double.infinity, child: child),
+      ],
     ),
-    padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-    child: Column(children: [const Handle(), const SizedBox(height: 14), tabs]),
   );
 
   @override
   bool shouldRebuild(_SheetHeader old) => true;
 }
 
-/// Grand titre façon Yango
-class _Title extends StatelessWidget {
-  final String text;
-  const _Title(this.text);
-
-  @override
-  Widget build(BuildContext context) => Text(
-    text,
-    style: const TextStyle(
-      fontSize: 24,
-      fontWeight: FontWeight.w900,
-      letterSpacing: -0.5,
-    ),
-  );
-}
-
-/// Interrupteur En ligne / Hors ligne (pastille flottante)
+/// Interrupteur En ligne / Hors ligne (pastille)
 class _StatusPill extends StatelessWidget {
   final bool online;
   final ValueChanged<bool> onChanged;
@@ -769,94 +977,49 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = online ? letoGreen : const Color(0xFFE53945);
-    return Material(
-      color: Colors.white,
-      elevation: 4,
-      borderRadius: BorderRadius.circular(30),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(30),
-        onTap: () => onChanged(!online),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    final p = Palette.of(context);
+    return GestureDetector(
+      onTap: () => onChanged(!online),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
+        decoration: ShapeDecoration(
+          color: p.card,
+          shape: const StadiumBorder(),
+          shadows: const [
+            BoxShadow(
+              color: Color(0x26000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(
+                color: online ? p.green : p.red,
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: 8),
-              Text(
-                online ? 'En ligne' : 'Hors ligne',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Switch(
-                value: online,
-                activeTrackColor: letoGreen,
-                onChanged: onChanged,
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              online ? 'En ligne' : 'Hors ligne',
+              style: TextStyles.headline.copyWith(color: p.label),
+            ),
+            const SizedBox(width: 4),
+            CupertinoSwitch(
+              value: online,
+              activeTrackColor: p.green,
+              onChanged: onChanged,
+            ),
+          ],
         ),
       ),
     );
   }
-}
-
-/// Onglets en pastilles
-class _Tabs extends StatelessWidget {
-  final int index;
-  final List<String> labels;
-  final ValueChanged<int> onChanged;
-  const _Tabs({
-    required this.index,
-    required this.labels,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(4),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF1F1F1),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Row(
-      children: [
-        for (var i = 0; i < labels.length; i++)
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: i == index ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: i == index
-                      ? const [BoxShadow(color: Colors.black12, blurRadius: 6)]
-                      : null,
-                ),
-                child: Text(
-                  labels[i],
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontWeight: i == index ? FontWeight.w800 : FontWeight.w500,
-                    color: i == index ? letoDark : Colors.black54,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    ),
-  );
 }
 
 /// Carte d'une course disponible
@@ -874,100 +1037,85 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cod = (d['codAmount'] ?? 0) as num;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: const Color(0xFFF7F7F8),
-        borderRadius: BorderRadius.circular(22),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final p = Palette.of(context);
+    final stops = (d['stops'] as List).cast<Map<String, dynamic>>();
+    final cod = stops.fold<num>(0, (s, x) => s + (x['codAmount'] ?? 0));
+    return GestureDetector(
+      onTap: () {
+        hapticTap();
+        onTap();
+      },
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        padding: const EdgeInsets.all(16),
+        decoration: ShapeDecoration(
+          color: p.card,
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Text(
-                      fcfa(d['price']),
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (d['speed'] == 'EXPRESS')
-                      const Pill(
-                        'Express',
-                        bg: Color(0xFFFFE0E0),
-                        fg: Color(0xFFB71C1C),
-                        icon: Icons.bolt,
-                      ),
-                    if (d['speed'] == 'SCHEDULED')
-                      const Pill(
-                        'Dans 2 h',
-                        bg: Color(0xFFE3F2FD),
-                        fg: Color(0xFF0D47A1),
-                        icon: Icons.schedule,
-                      ),
-                    const Spacer(),
-                    Icon(
-                      vehicleIcons[d['vehicleType']],
-                      color: letoDark,
-                      size: 28,
-                    ),
-                  ],
-                ),
                 Text(
-                  [
-                    if (distance != null && distance!.isFinite)
-                      'à ${km(distance!)}',
-                    if (d['distanceKm'] != null)
-                      'trajet ${km(d['distanceKm'])}',
-                  ].join(' · '),
-                  style: const TextStyle(color: Colors.black54),
+                  fcfa(d['price']),
+                  style: TextStyles.title1.copyWith(color: p.label),
                 ),
-                const SizedBox(height: 10),
-                PointLine(
-                  title: '${d['pickupAddress']} (${d['pickupCommune']})',
-                ),
-                PointLine(
-                  dropoff: true,
-                  title: '${d['dropoffAddress']} (${d['dropoffCommune']})',
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Avatar(d['client']?['name'] ?? '?', radius: 14),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${d['client']?['name'] ?? ''} · ${timeAgo(d['createdAt'])}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.black54,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    if (cod > 0) CodBadge(cod),
-                  ],
-                ),
-                if (myOffer != null) ...[
-                  const SizedBox(height: 10),
-                  Pill(
-                    'Votre proposition : ${fcfa(myOffer!['price'])} · en attente',
-                    bg: letoOrange.withValues(alpha: 0.12),
-                    fg: const Color(0xFF9A4A00),
-                    icon: Icons.hourglass_top,
-                  ),
-                ],
+                const SizedBox(width: 8),
+                if (d['speed'] == 'EXPRESS')
+                  Pill('Express', color: p.red, icon: CupertinoIcons.bolt_fill),
+                if (d['speed'] == 'SCHEDULED')
+                  Pill('Dans 2 h', color: p.blue, icon: CupertinoIcons.clock),
+                const Spacer(),
+                Icon(vehicleIcons[d['vehicleType']], color: p.label, size: 26),
               ],
             ),
-          ),
+            Text(
+              [
+                if (distance != null && distance!.isFinite)
+                  'à ${km(distance!)}',
+                if (stops.length > 1) '${stops.length} arrêts',
+                if (d['distanceKm'] != null) 'trajet ${km(d['distanceKm'])}',
+              ].join(' · '),
+              style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
+            ),
+            const SizedBox(height: 10),
+            PointLine(title: '${d['pickupAddress']} (${d['pickupCommune']})'),
+            PointLine(
+              marker: stops.length > 1 ? '${stops.length}' : '1',
+              title: stops.length > 1
+                  ? '${stops.first['commune']} et ${stops.length - 1} autre(s) arrêt(s)'
+                  : '${stops.first['address']} (${stops.first['commune']})',
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Avatar(d['client']?['name'] ?? '?', radius: 12),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${d['client']?['name'] ?? ''} · ${timeAgo(d['createdAt'])}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyles.footnote.copyWith(
+                      color: p.secondaryLabel,
+                    ),
+                  ),
+                ),
+                if (cod > 0) CodBadge(cod),
+              ],
+            ),
+            if (myOffer != null) ...[
+              const SizedBox(height: 10),
+              Pill(
+                'Votre proposition : ${fcfa(myOffer!['price'])} · en attente',
+                color: const Color(0xFFC25E00),
+                icon: CupertinoIcons.hourglass,
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -977,56 +1125,24 @@ class _OrderCard extends StatelessWidget {
 /// Étiquette de prix sur la carte
 class _PriceTag extends StatelessWidget {
   final num price;
-  const _PriceTag(this.price);
+  final int stops;
+  const _PriceTag(this.price, {this.stops = 1});
 
   @override
   Widget build(BuildContext context) => Container(
     alignment: Alignment.center,
-    decoration: BoxDecoration(
-      color: letoDark,
-      borderRadius: BorderRadius.circular(19),
-      border: Border.all(color: Colors.white, width: 2),
-      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
+    decoration: const ShapeDecoration(
+      color: Color(0xFF1C1C1E),
+      shape: StadiumBorder(side: BorderSide(color: Colors.white, width: 2)),
+      shadows: [BoxShadow(color: Color(0x40000000), blurRadius: 8)],
     ),
     child: Text(
-      fcfa(price),
+      stops > 1 ? '${fcfa(price)} · $stops' : fcfa(price),
       style: const TextStyle(
         color: Colors.white,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w700,
         fontSize: 13,
       ),
-    ),
-  );
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final String sub;
-  final bool highlight;
-  const _StatCard(this.label, this.value, this.sub, {this.highlight = false});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: highlight ? const Color(0xFFFFF1E5) : const Color(0xFFF7F7F8),
-      borderRadius: BorderRadius.circular(18),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.black54, fontSize: 13),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-        ),
-        Text(sub, style: const TextStyle(color: Colors.black45, fontSize: 12)),
-      ],
     ),
   );
 }
