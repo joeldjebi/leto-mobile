@@ -14,7 +14,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api.dart';
 import '../geo.dart';
 import '../labels.dart';
+import '../live_activity.dart';
 import '../main.dart';
+import '../notifications.dart';
 import '../realtime.dart';
 import 'driver_course_sheet.dart';
 import 'independent_screens.dart';
@@ -329,6 +331,12 @@ class _DriverHomeState extends State<DriverHome> {
           _available.sort((a, b) => _distanceTo(a).compareTo(_distanceTo(b)));
         }
       });
+      // Course en cours : suivi en direct hors de l'app (Live Activity / notification fixe)
+      DeliveryLive.instance.sync(
+        _current,
+        driver: true,
+        etaMin: _activeRoute?.durationMin,
+      );
       _refreshActiveRoute();
     } catch (e) {
       if (mounted) showError(context, e);
@@ -384,13 +392,25 @@ class _DriverHomeState extends State<DriverHome> {
     (await SharedPreferences.getInstance()).setBool('driver_online', true);
     _sendPosition(first);
     _map.move(first, 14);
+    // L'app reste connectée en arrière-plan pour recevoir les courses (notifications + sons)
+    LetoNotifier.instance.startKeepAlive(driver: true);
     if (devPosition == null) {
       _gps =
           Geolocator.getPositionStream(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 10,
-            ),
+            locationSettings: Platform.isIOS
+                // iPhone : la localisation en arrière-plan garde la connexion ouverte
+                ? AppleSettings(
+                    accuracy: LocationAccuracy.high,
+                    distanceFilter: 10,
+                    allowBackgroundLocationUpdates: true,
+                    showBackgroundLocationIndicator: true,
+                    pauseLocationUpdatesAutomatically: false,
+                    activityType: ActivityType.otherNavigation,
+                  )
+                : const LocationSettings(
+                    accuracy: LocationAccuracy.high,
+                    distanceFilter: 10,
+                  ),
           ).listen(
             (p) => _sendPosition(LatLng(p.latitude, p.longitude)),
             onError: (_) {},
@@ -408,6 +428,7 @@ class _DriverHomeState extends State<DriverHome> {
       return;
     }
     _stopGps();
+    LetoNotifier.instance.stopKeepAlive();
     Realtime.instance.socket.emit('driver:offline');
     setState(() => _online = false);
     (await SharedPreferences.getInstance()).setBool('driver_online', false);

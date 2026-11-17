@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'notifications.dart';
 import 'screens/client_home.dart';
 import 'screens/driver_home.dart';
 import 'screens/independent_screens.dart';
@@ -21,6 +22,7 @@ export 'theme.dart'
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LetoNotifier.instance.init();
   await Api.instance.restore();
   // Dev uniquement : connexion auto avec --dart-define=DEV_PHONE=... --dart-define=DEV_PASSWORD=...
   const devPhone = String.fromEnvironment('DEV_PHONE');
@@ -77,6 +79,9 @@ class LetoApp extends StatelessWidget {
 Widget homeFor() {
   final api = Api.instance;
   if (!api.isLoggedIn) return const LoginScreen();
+  // Notifications locales par le temps réel (autorisation demandée une fois)
+  LetoNotifier.instance.requestPermission();
+  LetoNotifier.instance.attach();
   if (api.isIndependent) return const IndependentGate();
   return api.role == 'DRIVER' ? const DriverHome() : const ClientHome();
 }

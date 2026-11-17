@@ -7,7 +7,15 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>LETO accède à vos photos pour joindre une photo de l’adresse.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>LETO utilise votre position pour placer le point de départ de la livraison.</string>
+	<string>LETO utilise votre position pour placer le point de départ de la livraison et, pour les livreurs en ligne, pour recevoir les courses autour d’eux.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>En ligne, LETO garde votre position pour vous envoyer les courses proches, même écran verrouillé.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

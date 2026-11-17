@@ -9,6 +9,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../api.dart';
 import '../geo.dart';
 import '../labels.dart';
+import '../live_activity.dart';
 import '../main.dart';
 import '../models.dart';
 import 'address_book_screen.dart';
@@ -316,6 +317,10 @@ class _ClientHomeState extends State<ClientHome> {
       if (mounted) {
         setState(() => _active = active.isEmpty ? null : active.first);
       }
+      DeliveryLive.instance.sync(
+        active.isEmpty ? null : active.first,
+        driver: false,
+      );
     } catch (_) {}
   }
 

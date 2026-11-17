@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../api.dart';
 import '../geo.dart';
 import '../labels.dart';
+import '../live_activity.dart';
 import '../main.dart';
 import '../realtime.dart';
 import 'share_codes.dart';
@@ -94,6 +95,11 @@ class _TrackingScreenState extends State<TrackingScreen> {
       ),
     );
     _fitDriver();
+    // Heure d'arrivée à jour dans la Live Activity (mise à jour seulement si elle change)
+    final d = _d;
+    if (d != null) {
+      DeliveryLive.instance.sync(d, driver: false, etaMin: _etaMin(d));
+    }
   }
 
   void _onDeliveryUpdated(dynamic e) {
@@ -168,6 +174,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
       }
       _fitDriver();
       _loadOffers();
+      DeliveryLive.instance.sync(d, driver: false, etaMin: _etaMin(d));
     } catch (e) {
       if (mounted) showError(context, e);
     }

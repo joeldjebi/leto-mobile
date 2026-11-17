@@ -7,6 +7,8 @@ import 'package:http_parser/http_parser.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'live_activity.dart';
+import 'notifications.dart';
 import 'realtime.dart';
 
 /// API de production
@@ -184,6 +186,8 @@ class Api {
   }
 
   Future<void> logout() async {
+    LetoNotifier.instance.detach();
+    DeliveryLive.instance.end();
     Realtime.instance.disconnect();
     _token = null;
     user = null;
@@ -401,6 +405,11 @@ class Api {
       _request('POST', '/deliveries/$id/stops/$stopId/cancel-request', {
         'note': ?note,
       });
+
+  // ---------- Notifications ----------
+  /// Sons des notifications (3 sons LETO intégrés + sons ajoutés par l'admin)
+  Future<Map<String, dynamic>> notificationSounds() async =>
+      (await _request('GET', '/notifications/sounds')) as Map<String, dynamic>;
 
   // ---------- Livreurs indépendants ----------
   /// Inscriptions ouvertes ? service actif ? livreurs en ligne
