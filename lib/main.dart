@@ -55,6 +55,19 @@ class LetoApp extends StatelessWidget {
         _ => ThemeMode.system,
       },
       home: homeFor(),
+      // Grands caractères du téléphone : suivis, mais bornés pour garder des écrans lisibles et sans débordement
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: mq.textScaler.clamp(
+              minScaleFactor: 0.9,
+              maxScaleFactor: 1.2,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
   }
 }

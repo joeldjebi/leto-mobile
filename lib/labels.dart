@@ -57,3 +57,15 @@ String timeAgo(String iso) {
   if (s < 3600) return '${s ~/ 60} min.';
   return '${s ~/ 3600} h';
 }
+
+/// Facteurs du prix d'un devis : majorations (pluie, heure de pointe…) et réduction tournée
+String priceFactors(Map<String, dynamic>? quote) {
+  if (quote == null) return '';
+  final parts = <String>[
+    for (final s in (quote['surcharges'] as List?) ?? const [])
+      '${s['label']} +${s['pct']} %',
+    if (((quote['stopDiscountPct'] as num?) ?? 0) > 0)
+      'Tournée −${quote['stopDiscountPct']} %',
+  ];
+  return parts.join(' · ');
+}

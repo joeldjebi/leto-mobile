@@ -253,6 +253,32 @@ Marker driverMarker(LatLng p) => Marker(
   ),
 );
 
+/// Livreur disponible autour du client (carte d'accueil)
+Marker nearbyDriverMarker(LatLng p) => Marker(
+  point: p,
+  width: 34,
+  height: 34,
+  child: Container(
+    decoration: BoxDecoration(
+      color: ink,
+      shape: BoxShape.circle,
+      border: Border.all(color: Colors.white, width: 2.5),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x40000000),
+          blurRadius: 8,
+          offset: Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Icon(
+      PhosphorIcons.moped(PhosphorIconsStyle.fill),
+      color: Colors.white,
+      size: 17,
+    ),
+  ),
+);
+
 /// Ma position (point violet)
 Marker myMarker(LatLng p) => Marker(
   point: p,
@@ -706,7 +732,7 @@ class InsetGroup extends StatelessWidget {
     this.header,
     this.footer,
     required this.children,
-    this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 22),
+    this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 18),
   });
 
   @override
@@ -812,9 +838,9 @@ class GroupRow extends StatelessWidget {
               onTap!();
             },
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 46),
+        constraints: const BoxConstraints(minHeight: 42),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           child: Row(
             children: [
               if (leading != null) ...[leading!, const SizedBox(width: 12)],
@@ -894,12 +920,12 @@ class GroupField extends StatelessWidget {
         children: [
           if (icon != null)
             Padding(
-              padding: const EdgeInsets.only(top: 13, right: 12),
+              padding: const EdgeInsets.only(top: 11, right: 12),
               child: Icon(icon, size: 20, color: p.secondaryLabel),
             ),
           if (prefix != null)
             Padding(
-              padding: const EdgeInsets.only(top: 13, right: 8),
+              padding: const EdgeInsets.only(top: 11, right: 8),
               child: Text(
                 prefix!,
                 style: TextStyles.body.copyWith(color: p.label),
@@ -919,7 +945,7 @@ class GroupField extends StatelessWidget {
                 hintText: placeholder,
                 filled: false,
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                contentPadding: const EdgeInsets.symmetric(vertical: 11),
                 errorStyle: TextStyles.footnote.copyWith(color: p.red),
               ),
             ),

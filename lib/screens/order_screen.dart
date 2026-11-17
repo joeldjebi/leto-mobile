@@ -359,6 +359,11 @@ class _OrderScreenState extends State<OrderScreen> {
                   'Total · espèces',
                   style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
                 ),
+                if (priceFactors(_quote).isNotEmpty)
+                  Text(
+                    priceFactors(_quote),
+                    style: TextStyles.caption.copyWith(color: p.secondaryLabel),
+                  ),
                 AnimatedSwitcher(
                   duration: Motion.fast,
                   child: _quoting

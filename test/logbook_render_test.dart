@@ -4,10 +4,13 @@ import 'package:leto/theme.dart';
 import 'package:leto/screens/logbook_screen.dart';
 
 void main() {
-  Widget app(Widget child) => MaterialApp(
+  Widget app(Widget child, {double scale = 1}) => MaterialApp(
     theme: buildTheme(Brightness.light),
     home: MediaQuery(
-      data: const MediaQueryData(size: Size(390, 844)),
+      data: MediaQueryData(
+        size: const Size(390, 844),
+        textScaler: TextScaler.linear(scale).clamp(minScaleFactor: 0.9, maxScaleFactor: 1.2),
+      ),
       child: child,
     ),
   );
@@ -46,5 +49,16 @@ void main() {
     await t.pump();
     expect(find.text('Mon carnet'), findsOneWidget);
     expect(find.text('Nouvelle livraison'), findsOneWidget);
+  });
+
+  testWidgets('Grands caractères (téléphone à 200 %, borné à 120 %) : pas de débordement', (t) async {
+    t.view.physicalSize = const Size(360 * 3, 740 * 3);
+    t.view.devicePixelRatio = 3;
+    await t.pumpWidget(app(const LogbookEntryScreen(), scale: 2));
+    await t.pump();
+    expect(t.takeException(), isNull);
+    await t.pumpWidget(app(const Scaffold(body: SingleChildScrollView(child: DriverLogbook())), scale: 2));
+    await t.pump();
+    expect(t.takeException(), isNull);
   });
 }

@@ -256,6 +256,22 @@ class Api {
     '/pricing/eta?lat=${p.latitude}&lng=${p.longitude}',
   ))['minutes'];
 
+  /// Livreurs en ligne autour d'un point (positions anonymes), éventuellement d'une seule entreprise
+  Future<List<LatLng>> nearbyDrivers(LatLng p, {String? companyId}) async {
+    final res = await _request(
+      'GET',
+      '/pricing/drivers?lat=${p.latitude}&lng=${p.longitude}${companyId == null ? '' : '&companyId=$companyId'}',
+    );
+    return (res as List)
+        .map(
+          (d) => LatLng(
+            (d['lat'] as num).toDouble(),
+            (d['lng'] as num).toDouble(),
+          ),
+        )
+        .toList();
+  }
+
   // ---------- Photos ----------
   Future<String> upload(File file) async {
     final req = http.MultipartRequest('POST', Uri.parse('$apiUrl/uploads'))

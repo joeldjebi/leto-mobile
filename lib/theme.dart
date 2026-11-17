@@ -112,82 +112,82 @@ class TextStyles {
   /// Grand titre condensé, en capitales (« ENVOYER UN COLIS »)
   static const display = TextStyle(
     fontFamily: 'BarlowCondensed',
-    fontSize: 38,
+    fontSize: 34,
     fontWeight: FontWeight.w800,
     height: 1.0,
     letterSpacing: -0.2,
   );
   static const displaySmall = TextStyle(
     fontFamily: 'BarlowCondensed',
-    fontSize: 28,
+    fontSize: 25,
     fontWeight: FontWeight.w800,
     height: 1.05,
   );
 
   static const largeTitle = TextStyle(
     fontFamily: _inter,
-    fontSize: 32,
+    fontSize: 29,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.8,
   );
   static const title1 = TextStyle(
     fontFamily: _inter,
-    fontSize: 26,
+    fontSize: 23,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.6,
   );
   static const title2 = TextStyle(
     fontFamily: _inter,
-    fontSize: 21,
+    fontSize: 19,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.4,
   );
   static const title3 = TextStyle(
     fontFamily: _inter,
-    fontSize: 19,
+    fontSize: 17.5,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.3,
   );
   static const headline = TextStyle(
     fontFamily: _inter,
-    fontSize: 16.5,
+    fontSize: 15.5,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.2,
   );
   static const body = TextStyle(
     fontFamily: _inter,
-    fontSize: 16.5,
+    fontSize: 15.5,
     fontWeight: FontWeight.w400,
     letterSpacing: -0.2,
   );
   static const callout = TextStyle(
     fontFamily: _inter,
-    fontSize: 15.5,
+    fontSize: 14.5,
     fontWeight: FontWeight.w400,
     letterSpacing: -0.15,
   );
   static const subheadline = TextStyle(
     fontFamily: _inter,
-    fontSize: 14.5,
+    fontSize: 13.5,
     fontWeight: FontWeight.w400,
     letterSpacing: -0.1,
   );
   static const footnote = TextStyle(
     fontFamily: _inter,
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: FontWeight.w400,
     letterSpacing: -0.05,
   );
   static const caption = TextStyle(
     fontFamily: _inter,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: FontWeight.w500,
   );
 
   /// Prix (chiffres alignés)
   static const price = TextStyle(
     fontFamily: _inter,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.6,
     fontFeatures: [FontFeature.tabularFigures()],
@@ -303,9 +303,9 @@ ThemeData buildTheme(Brightness brightness) {
         foregroundColor: Colors.white,
         disabledBackgroundColor: accent.withValues(alpha: 0.35),
         disabledForegroundColor: Colors.white,
-        minimumSize: const Size.fromHeight(56),
+        minimumSize: const Size.fromHeight(50),
         shape: pill,
-        textStyle: TextStyles.headline.copyWith(fontSize: 17),
+        textStyle: TextStyles.headline.copyWith(fontSize: 16),
         animationDuration: Motion.fast,
       ),
     ),

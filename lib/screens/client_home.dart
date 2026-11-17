@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -52,15 +54,41 @@ class _ClientHomeState extends State<ClientHome> {
 
   Map<String, dynamic>? _active;
 
+  /// Livreurs en ligne autour du centre de la carte (rafraîchis toutes les 15 s)
+  List<LatLng> _drivers = [];
+  Timer? _driversTimer;
+
   @override
   void initState() {
     super.initState();
     _loadActive();
-    loadFavoriteCompany().then(
-      (c) => mounted ? setState(() => _company = c) : null,
-    );
+    loadFavoriteCompany().then((c) {
+      if (!mounted) return;
+      setState(() => _company = c);
+      _loadDrivers();
+    });
     _lookupCenter();
     _locateMe();
+    _loadDrivers();
+    _driversTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _loadDrivers(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _driversTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadDrivers() async {
+    try {
+      final l = await api.nearbyDrivers(_center, companyId: _company?.id);
+      if (mounted) setState(() => _drivers = l);
+    } catch (_) {
+      // carte sans livreurs : sans gravité
+    }
   }
 
   // ---------- Carte ----------
@@ -71,6 +99,7 @@ class _ClientHomeState extends State<ClientHome> {
     _map.move(pos, 16);
     _center = pos;
     _lookupCenter();
+    _loadDrivers();
   }
 
   void _onMove(MapCamera camera, bool gesture) {
@@ -82,6 +111,7 @@ class _ClientHomeState extends State<ClientHome> {
     if (_mode == _Mode.summary) return;
     setState(() => _moving = false);
     _lookupCenter();
+    _loadDrivers();
   }
 
   Future<void> _lookupCenter() async {
@@ -512,6 +542,7 @@ class _ClientHomeState extends State<ClientHome> {
                             routeLayer(points),
                           MarkerLayer(
                             markers: [
+                              for (final d in _drivers) nearbyDriverMarker(d),
                               if (_mode != _Mode.pickup && _pickup != null)
                                 pickupMarker(_pickup!.point),
                               for (var i = 0; i < _stops.length; i++)
@@ -757,6 +788,7 @@ class _ClientHomeState extends State<ClientHome> {
       final res = await pickCompany(context, _company);
       if (res == null || !mounted) return;
       setState(() => _company = res.$2);
+      _loadDrivers();
       _refreshQuote();
     },
     child: Container(
@@ -888,6 +920,15 @@ class _ClientHomeState extends State<ClientHome> {
       ),
       const SizedBox(height: 6),
       _companyChip(p),
+      if (priceFactors(_quote).isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            priceFactors(_quote),
+            textAlign: TextAlign.center,
+            style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
+          ),
+        ),
       const SizedBox(height: 10),
       SizedBox(
         height: 134,
