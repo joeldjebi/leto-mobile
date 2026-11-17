@@ -244,6 +244,25 @@ class _CourseSheetState extends State<_CourseSheet> {
                               color: p.secondaryLabel,
                             ),
                           ),
+                          if (_toPickup != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Récupération : ${km(_toPickup!.distanceKm)} · ~${_toPickup!.durationMin} min',
+                                style: TextStyles.subheadline.copyWith(
+                                  color: p.blue,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          if (_trip != null)
+                            Text(
+                              'Livraison : ${km(_trip!.distanceKm)} · ~${_trip!.durationMin} min',
+                              style: TextStyles.subheadline.copyWith(
+                                color: p.green,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           Text(
                             fcfa(d['price']),
                             style: TextStyles.largeTitle.copyWith(

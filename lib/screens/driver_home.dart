@@ -1461,6 +1461,69 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
+/// Distance par la route ≈ vol d'oiseau × 1,35 (ville)
+const _roadFactor = 1.35;
+
+/// Temps estimé en ville (20 km/h en moyenne, + 2 min pour démarrer)
+int _etaMin(double crowKm) =>
+    ((crowKm * _roadFactor / 20) * 60).ceil().clamp(1, 999) + 2;
+
+/// Une étape de la course : récupération ou livraison (distance et temps)
+class _Leg extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  const _Leg({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: ShapeDecoration(
+        color: color.withValues(alpha: 0.10),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyles.caption.copyWith(color: p.secondaryLabel),
+                ),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyles.subheadline.copyWith(
+                    color: p.label,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Carte d'une course disponible
 class _OrderCard extends StatelessWidget {
   final Map<String, dynamic> d;
@@ -1511,14 +1574,35 @@ class _OrderCard extends StatelessWidget {
                 Icon(vehicleIcons[d['vehicleType']], color: p.label, size: 26),
               ],
             ),
-            Text(
-              [
-                if (distance != null && distance!.isFinite)
-                  'à ${km(distance!)}',
-                if (stops.length > 1) '${stops.length} arrêts',
-                if (d['distanceKm'] != null) 'trajet ${km(d['distanceKm'])}',
-              ].join(' · '),
-              style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
+            const SizedBox(height: 8),
+            // Jusqu'à la récupération des colis, puis la livraison
+            Row(
+              children: [
+                Expanded(
+                  child: _Leg(
+                    icon: CupertinoIcons.cube_box_fill,
+                    label: 'Récupération',
+                    value: distance != null && distance!.isFinite
+                        ? '${km(distance! * _roadFactor)} · ~${_etaMin(distance!)} min'
+                        : 'Position inconnue',
+                    color: accent,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _Leg(
+                    icon: CupertinoIcons.flag_fill,
+                    label: stops.length > 1
+                        ? 'Livraison · ${stops.length} arrêts'
+                        : 'Livraison',
+                    value: [
+                      if (d['distanceKm'] != null) km(d['distanceKm']),
+                      if (d['durationMin'] != null) '~${d['durationMin']} min',
+                    ].join(' · '),
+                    color: p.green,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             PointLine(title: '${d['pickupAddress']} (${d['pickupCommune']})'),
