@@ -23,6 +23,17 @@ void main() {
     expect(find.text('Nouvelle livraison'), findsOneWidget);
     expect(find.text('Prendre le colis en photo'), findsOneWidget);
     expect(find.text('Enregistrer dans le carnet'), findsOneWidget);
+    // Icône répertoire sur la ligne du numéro
+    expect(find.byTooltip('Répertoire'), findsOneWidget);
+    // Plusieurs destinataires
+    await t.tap(find.text('Ajouter un destinataire'));
+    await t.pump();
+    expect(find.text('DESTINATAIRE 2'), findsOneWidget);
+    expect(find.text('Enregistrer 2 livraisons'), findsOneWidget);
+    expect(find.byTooltip('Répertoire'), findsNWidgets(2));
+    await t.tap(find.text('Retirer ce destinataire').first);
+    await t.pump();
+    expect(find.text('Enregistrer dans le carnet'), findsOneWidget);
     // Validation : sans photo → message, pas d'envoi
     await t.tap(find.text('Enregistrer dans le carnet'));
     await t.pump(const Duration(milliseconds: 300));

@@ -900,6 +900,9 @@ class GroupField extends StatelessWidget {
   final String? prefix;
   final int maxLines;
   final ValueChanged<String>? onChanged;
+
+  /// Bouton à droite du champ, sur la même ligne (ex. répertoire, position)
+  final Widget? trailing;
   const GroupField({
     super.key,
     required this.controller,
@@ -911,13 +914,14 @@ class GroupField extends StatelessWidget {
     this.prefix,
     this.maxLines = 1,
     this.onChanged,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.only(left: 16, right: trailing == null ? 16 : 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -953,6 +957,7 @@ class GroupField extends StatelessWidget {
               ),
             ),
           ),
+          ?trailing,
         ],
       ),
     );

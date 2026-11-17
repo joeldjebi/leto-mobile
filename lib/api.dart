@@ -392,6 +392,14 @@ class Api {
   Future<Map<String, dynamic>> addLogbookEntry(
     Map<String, dynamic> body,
   ) async => (await _request('POST', '/logbook', body)) as Map<String, dynamic>;
+
+  /// Plusieurs destinataires d'un coup (même photo, même note)
+  Future<List<dynamic>> addLogbookEntries(Map<String, dynamic> body) async =>
+      (await _request('POST', '/logbook/many', body)) as List<dynamic>;
+
+  /// Ordre de passage choisi par le livreur (liste vide = le plus proche d'abord)
+  Future<void> setLogbookOrder(List<String> ids) async =>
+      await _request('POST', '/logbook/order', {'ids': ids});
   Future<Map<String, dynamic>> updateLogbookEntry(
     String id,
     Map<String, dynamic> body,

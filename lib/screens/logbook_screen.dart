@@ -12,6 +12,7 @@ import '../geo.dart';
 import '../labels.dart';
 import '../main.dart';
 import 'order_screen.dart' show normalizePhone;
+import 'place_search.dart';
 import 'widgets.dart';
 
 /// Dev / tests : photo déjà envoyée utilisée à la place de l'appareil photo
@@ -72,6 +73,10 @@ class DriverLogbook extends StatefulWidget {
 class _DriverLogbookState extends State<DriverLogbook> {
   final api = Api.instance;
   List<Map<String, dynamic>>? _entries;
+  LatLng? _here;
+
+  /// Réorganisation en cours : ordre de travail (ids)
+  List<String>? _draft;
 
   @override
   void initState() {
@@ -80,6 +85,9 @@ class _DriverLogbookState extends State<DriverLogbook> {
   }
 
   Future<void> _load() async {
+    myPosition().then((p) {
+      if (mounted && p != null) setState(() => _here = p);
+    });
     try {
       final l = await api.logbook(
         from: DateTime.now().subtract(const Duration(days: 30)),
@@ -101,14 +109,23 @@ class _DriverLogbookState extends State<DriverLogbook> {
   }
 
   Future<void> _new() async {
-    final e = await Navigator.of(context).push<Map<String, dynamic>>(
+    final r = await Navigator.of(context).push<Object>(
       CupertinoPageRoute(builder: (_) => const LogbookEntryScreen()),
     );
-    if (e != null && mounted) {
+    if (r == null || !mounted) return;
+    final list = r is List
+        ? r.cast<Map<String, dynamic>>()
+        : [r as Map<String, dynamic>];
+    for (final e in list.reversed) {
       _replace(e);
-      hapticSuccess();
-      showInfo(context, 'Livraison enregistrée dans votre carnet');
     }
+    hapticSuccess();
+    showInfo(
+      context,
+      list.length > 1
+          ? '${list.length} livraisons enregistrées dans votre carnet'
+          : 'Livraison enregistrée dans votre carnet',
+    );
   }
 
   Future<void> _actions(Map<String, dynamic> e) async {
@@ -181,6 +198,83 @@ class _DriverLogbookState extends State<DriverLogbook> {
     }
   }
 
+  static LatLng? _pt(Map<String, dynamic> e) =>
+      e['lat'] == null || e['lng'] == null
+      ? null
+      : LatLng((e['lat'] as num).toDouble(), (e['lng'] as num).toDouble());
+
+  /// Ordre choisi par le livreur ?
+  bool _manual(List<Map<String, dynamic>> todo) =>
+      todo.any((e) => e['sortOrder'] != null);
+
+  /// Livraisons à faire : dans l'ordre du livreur s'il en a choisi un,
+  /// sinon la plus proche d'abord (de proche en proche depuis sa position).
+  List<Map<String, dynamic>> _ordered(List<Map<String, dynamic>> todo) {
+    int byDate(Map a, Map b) =>
+        (a['createdAt'] as String).compareTo(b['createdAt'] as String);
+    if (_manual(todo)) {
+      return [...todo]..sort((a, b) {
+        final x = (a['sortOrder'] as int?) ?? 1 << 30;
+        final y = (b['sortOrder'] as int?) ?? 1 << 30;
+        return x != y ? x.compareTo(y) : byDate(a, b);
+      });
+    }
+    final left = todo.where((e) => _pt(e) != null).toList()..sort(byDate);
+    final out = <Map<String, dynamic>>[];
+    var cur = _here;
+    while (left.isNotEmpty) {
+      var best = 0;
+      if (cur != null) {
+        for (var i = 1; i < left.length; i++) {
+          if (distanceKm(cur, _pt(left[i])!) <
+              distanceKm(cur, _pt(left[best])!))
+            best = i;
+        }
+      }
+      final e = left.removeAt(best);
+      out.add(e);
+      cur = _pt(e);
+    }
+    return out
+      ..addAll(todo.where((e) => _pt(e) == null).toList()..sort(byDate));
+  }
+
+  Future<void> _saveOrder(List<String> ids) async {
+    try {
+      await api.setLogbookOrder(ids);
+      if (!mounted) return;
+      setState(() {
+        _draft = null;
+        _entries = [
+          for (final e in _entries ?? <Map<String, dynamic>>[])
+            {
+              ...e,
+              'sortOrder': ids.contains(e['id']) ? ids.indexOf(e['id']) : null,
+            },
+        ];
+      });
+      hapticSuccess();
+      showInfo(
+        context,
+        ids.isEmpty
+            ? 'Tri : la plus proche d’abord'
+            : 'Ordre de passage enregistré',
+      );
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  void _move(int i, int delta) {
+    final d = [...?_draft];
+    final j = i + delta;
+    if (j < 0 || j >= d.length) return;
+    hapticTap();
+    final x = d.removeAt(i);
+    d.insert(j, x);
+    setState(() => _draft = d);
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
@@ -194,7 +288,14 @@ class _DriverLogbookState extends State<DriverLogbook> {
       0,
       (s, e) => s + (e['price'] as num),
     );
-    final todo = (list ?? []).where((e) => e['status'] == 'TODO').toList();
+    final todoRaw = (list ?? []).where((e) => e['status'] == 'TODO').toList();
+    final manual = _manual(todoRaw);
+    var todo = _ordered(todoRaw);
+    final draft = _draft;
+    if (draft != null) {
+      final byId = {for (final e in todo) e['id']: e};
+      todo = [for (final id in draft) ?byId[id]];
+    }
     final done = (list ?? []).where((e) => e['status'] != 'TODO').toList();
 
     // Livraisons traitées, groupées par jour
@@ -268,11 +369,19 @@ class _DriverLogbookState extends State<DriverLogbook> {
             ),
           )
         else ...[
-          if (todo.isNotEmpty)
+          if (todo.isNotEmpty) ...[
+            _orderBar(p, todo, manual),
             InsetGroup(
-              header: 'À livrer (${todo.length})',
-              children: [for (final e in todo) _tile(p, e)],
+              header:
+                  'À livrer (${todo.length}) · ${manual || draft != null ? 'votre ordre' : 'la plus proche d’abord'}',
+              children: [
+                for (final (i, e) in todo.indexed)
+                  draft != null
+                      ? _reorderTile(p, e, i, todo.length)
+                      : _tile(p, e, rank: i + 1),
+              ],
             ),
+          ],
           for (final MapEntry(key: day, value: items) in days.entries)
             InsetGroup(
               header:
@@ -314,9 +423,94 @@ class _DriverLogbookState extends State<DriverLogbook> {
         ),
       );
 
-  Widget _tile(Palette p, Map<String, dynamic> e) {
+  Widget _orderBar(Palette p, List<Map<String, dynamic>> todo, bool manual) {
+    final editing = _draft != null;
+    Widget btn(String t, VoidCallback onTap, {bool bold = false}) => TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+      ),
+      child: Text(
+        t,
+        style: TextStyles.subheadline.copyWith(
+          color: accent,
+          fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
+    );
+    if (todo.length < 2 && !manual) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 2),
+      child: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: 4,
+        children: editing
+            ? [
+                btn('Annuler', () => setState(() => _draft = null)),
+                btn('Terminé', () => _saveOrder(_draft!), bold: true),
+              ]
+            : [
+                if (manual) btn('La plus proche d’abord', () => _saveOrder([])),
+                if (todo.length > 1)
+                  btn('Réorganiser', () {
+                    hapticTap();
+                    setState(
+                      () => _draft = [for (final e in todo) e['id'] as String],
+                    );
+                  }),
+              ],
+      ),
+    );
+  }
+
+  String? _distance(Map<String, dynamic> e) {
+    final pt = _pt(e);
+    if (_here == null || pt == null) return null;
+    final km = distanceKm(_here!, pt);
+    return km < 1
+        ? '${(km * 1000).round()} m'
+        : '${km.toStringAsFixed(1).replaceAll('.', ',')} km';
+  }
+
+  Widget _reorderTile(Palette p, Map<String, dynamic> e, int i, int n) =>
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        child: Row(
+          children: [
+            Text(
+              '${i + 1}',
+              style: TextStyles.headline.copyWith(color: accent),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                e['address'],
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyles.body.copyWith(color: p.label),
+              ),
+            ),
+            IconButton(
+              onPressed: i == 0 ? null : () => _move(i, -1),
+              tooltip: 'Monter',
+              icon: const Icon(CupertinoIcons.arrow_up, size: 20),
+              color: accent,
+            ),
+            IconButton(
+              onPressed: i == n - 1 ? null : () => _move(i, 1),
+              tooltip: 'Descendre',
+              icon: const Icon(CupertinoIcons.arrow_down, size: 20),
+              color: accent,
+            ),
+          ],
+        ),
+      );
+
+  Widget _tile(Palette p, Map<String, dynamic> e, {int? rank}) {
     final (label, color) = logbookStatus(e['status'], p);
     final at = DateTime.parse(e['createdAt']).toLocal();
+    final dist = rank == null ? null : _distance(e);
     return InkWell(
       onTap: () {
         hapticTap();
@@ -339,7 +533,13 @@ class _DriverLogbookState extends State<DriverLogbook> {
                     style: TextStyles.headline.copyWith(color: p.label),
                   ),
                   Text(
-                    '${e['recipientName'] ?? 'Sans nom'} · ${e['recipientPhone']} · ${_hm(at)}',
+                    [
+                      if (rank != null) 'n°$rank',
+                      ?dist,
+                      e['recipientName'] ?? 'Sans nom',
+                      e['recipientPhone'],
+                      if (rank == null) _hm(at),
+                    ].join(' · '),
                     style: TextStyles.footnote.copyWith(
                       color: p.secondaryLabel,
                     ),
@@ -366,8 +566,44 @@ class _DriverLogbookState extends State<DriverLogbook> {
   }
 }
 
-/// Saisie (ou modification) d'une livraison du carnet.
-/// La photo du colis se prend avec l'appareil photo uniquement (pas de photothèque).
+/// Un destinataire en cours de saisie
+class _Recipient {
+  final address = TextEditingController();
+  final phone = TextEditingController();
+  final name = TextEditingController();
+  final price = TextEditingController();
+
+  /// Position de l'adresse et libellé correspondant (si l'adresse vient du GPS ou de la recherche)
+  LatLng? point;
+  String? pointLabel;
+  bool locating = false;
+
+  _Recipient();
+  _Recipient.of(Map<String, dynamic> e) {
+    address.text = e['address'] ?? '';
+    phone.text = e['recipientPhone'] ?? '';
+    name.text = e['recipientName'] ?? '';
+    price.text = e['price']?.toString() ?? '';
+    if (e['lat'] != null && e['lng'] != null) {
+      point = LatLng(
+        (e['lat'] as num).toDouble(),
+        (e['lng'] as num).toDouble(),
+      );
+      pointLabel = address.text;
+    }
+  }
+
+  void dispose() {
+    address.dispose();
+    phone.dispose();
+    name.dispose();
+    price.dispose();
+  }
+}
+
+/// Saisie (ou modification) de livraisons du carnet : une photo du colis,
+/// un ou plusieurs destinataires (adresse, numéro, prix).
+/// La photo se prend avec l'appareil photo uniquement (pas de photothèque).
 class LogbookEntryScreen extends StatefulWidget {
   final Map<String, dynamic>? entry;
   const LogbookEntryScreen({super.key, this.entry});
@@ -378,31 +614,32 @@ class LogbookEntryScreen extends StatefulWidget {
 class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
   final api = Api.instance;
   final _form = GlobalKey<FormState>();
-  late final _address = TextEditingController(text: widget.entry?['address']);
-  late final _phone = TextEditingController(
-    text: widget.entry?['recipientPhone'],
-  );
-  late final _name = TextEditingController(
-    text: widget.entry?['recipientName'],
-  );
-  late final _price = TextEditingController(
-    text: widget.entry?['price']?.toString(),
-  );
+  late final List<_Recipient> _recipients = [
+    widget.entry == null ? _Recipient() : _Recipient.of(widget.entry!),
+  ];
   late final _note = TextEditingController(text: widget.entry?['note']);
   late String? _photo = widget.entry?['photoUrl'];
   File? _localPhoto;
   bool _uploading = false;
   bool _saving = false;
-  bool _locating = false;
-  LatLng? _pos;
+  LatLng? _here;
 
   bool get _editing => widget.entry != null;
 
   @override
   void initState() {
     super.initState();
-    // Position au moment de la saisie (aide l'entreprise à situer la livraison)
-    if (!_editing) myPosition().then((p) => _pos = p).catchError((_) => null);
+    // Par défaut : l'adresse du premier destinataire = position actuelle du livreur
+    if (!_editing) _locate(_recipients.first, quiet: true);
+  }
+
+  @override
+  void dispose() {
+    for (final r in _recipients) {
+      r.dispose();
+    }
+    _note.dispose();
+    super.dispose();
   }
 
   Future<void> _takePhoto() async {
@@ -433,28 +670,58 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
     }
   }
 
-  Future<void> _useMyPosition() async {
-    setState(() => _locating = true);
+  /// Remplit l'adresse avec la position actuelle
+  Future<void> _locate(_Recipient r, {bool quiet = false}) async {
+    setState(() => r.locating = true);
     try {
       final p = await myPosition();
-      if (p == null)
+      if (p == null) {
+        if (quiet) return;
         throw ApiException('Position indisponible : activez la localisation');
-      _pos = p;
-      final place = await api.reverse(p);
-      if (mounted) {
-        _address.text = [
-          place.label,
-          place.sublabel,
-        ].where((s) => s.isNotEmpty).join(', ');
       }
+      _here = p;
+      final place = await api.reverse(p);
+      if (!mounted) return;
+      // Sans écraser ce que le livreur a déjà tapé (remplissage automatique)
+      if (quiet && r.address.text.trim().isNotEmpty) return;
+      final label = [
+        place.label,
+        place.sublabel,
+      ].where((s) => s.isNotEmpty).join(', ');
+      r.address.text = label;
+      r.point = p;
+      r.pointLabel = label;
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (mounted && !quiet) showError(context, e);
     } finally {
-      if (mounted) setState(() => _locating = false);
+      if (mounted) setState(() => r.locating = false);
     }
   }
 
-  Future<void> _pickContact() async {
+  /// Recherche d'un lieu : adresse + position (sert au tri par le plus proche)
+  Future<void> _search(_Recipient r) async {
+    final res = await Navigator.of(context).push<Object>(
+      CupertinoPageRoute(
+        builder: (_) => PlaceSearchScreen(
+          title: 'Adresse de livraison',
+          near: _here,
+          allowMap: false,
+        ),
+      ),
+    );
+    if (res is! Place || !mounted) return;
+    final label = [
+      res.label,
+      res.sublabel,
+    ].where((s) => s.isNotEmpty).join(', ');
+    setState(() {
+      r.address.text = label;
+      r.point = res.point;
+      r.pointLabel = label;
+    });
+  }
+
+  Future<void> _pickContact(_Recipient r) async {
     try {
       final c = await FlutterNativeContactPicker().selectPhoneNumber();
       if (c == null || !mounted) return;
@@ -463,14 +730,53 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
           (c.phoneNumbers?.isNotEmpty == true ? c.phoneNumbers!.first : '');
       final phone = normalizePhone(raw);
       setState(() {
-        if (phone.isNotEmpty) _phone.text = phone;
-        if ((c.fullName ?? '').trim().isNotEmpty && _name.text.trim().isEmpty) {
-          _name.text = c.fullName!.trim();
+        if (phone.isNotEmpty) r.phone.text = phone;
+        if ((c.fullName ?? '').trim().isNotEmpty &&
+            r.name.text.trim().isEmpty) {
+          r.name.text = c.fullName!.trim();
         }
       });
     } catch (_) {
       if (mounted) showError(context, 'Répertoire indisponible');
     }
+  }
+
+  void _add() {
+    hapticTap();
+    setState(() => _recipients.add(_Recipient()));
+  }
+
+  void _remove(_Recipient r) {
+    hapticTap();
+    setState(() => _recipients.remove(r));
+    r.dispose();
+  }
+
+  /// Position de l'adresse : celle du GPS / de la recherche si le texte n'a pas changé,
+  /// sinon une recherche rapide sur le texte tapé (au mieux, pour le tri par le plus proche)
+  Future<LatLng?> _pointOf(_Recipient r) async {
+    final text = r.address.text.trim();
+    if (r.point != null && r.pointLabel?.trim() == text) return r.point;
+    try {
+      final found = await api.search(text, near: _here ?? abidjan);
+      if (found.isNotEmpty &&
+          distanceKm(found.first.point, _here ?? abidjan) < 60) {
+        return found.first.point;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<Map<String, dynamic>> _body(_Recipient r) async {
+    final pt = await _pointOf(r);
+    return {
+      'address': r.address.text.trim(),
+      'recipientPhone': normalizePhone(r.phone.text),
+      'recipientName': r.name.text.trim(),
+      'price': int.parse(r.price.text.replaceAll(RegExp(r'\D'), '')),
+      if (pt != null) 'lat': pt.latitude,
+      if (pt != null) 'lng': pt.longitude,
+    };
   }
 
   Future<void> _save() async {
@@ -484,21 +790,21 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
     if (!_form.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final body = <String, dynamic>{
-        'address': _address.text.trim(),
-        'recipientPhone': normalizePhone(_phone.text),
-        'recipientName': _name.text.trim(),
-        'price': int.parse(_price.text.replaceAll(RegExp(r'\D'), '')),
-        'note': _note.text.trim(),
-      };
-      final r = _editing
-          ? await api.updateLogbookEntry(widget.entry!['id'], body)
-          : await api.addLogbookEntry({
-              ...body,
-              'photoUrl': _photo,
-              if (_pos != null) 'lat': _pos!.latitude,
-              if (_pos != null) 'lng': _pos!.longitude,
-            });
+      final note = _note.text.trim();
+      final Object r;
+      if (_editing) {
+        r = await api.updateLogbookEntry(widget.entry!['id'], {
+          ...await _body(_recipients.first),
+          'note': note,
+        });
+      } else {
+        final entries = [for (final x in _recipients) await _body(x)];
+        r = await api.addLogbookEntries({
+          'photoUrl': _photo,
+          'note': note,
+          'entries': entries,
+        });
+      }
       if (mounted) Navigator.pop(context, r);
     } catch (e) {
       if (mounted) showError(context, e);
@@ -510,6 +816,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
+    final n = _recipients.length;
     return LargeTitlePage(
       title: _editing ? 'Modifier la livraison' : 'Nouvelle livraison',
       inline: true,
@@ -518,7 +825,11 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
           onPressed: _saving || _uploading ? null : _save,
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
           child: Text(
-            _saving ? 'Enregistrement…' : 'Enregistrer dans le carnet',
+            _saving
+                ? 'Enregistrement…'
+                : n > 1
+                ? 'Enregistrer $n livraisons'
+                : 'Enregistrer dans le carnet',
           ),
         ),
       ),
@@ -528,88 +839,34 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ----- Photo du colis -----
+              // ----- Photo du colis (bloc compact) -----
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 22),
-                child: _photoBox(p),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                child: _photoRow(p),
               ),
-              InsetGroup(
-                header: 'Adresse de livraison',
-                children: [
-                  GroupField(
-                    controller: _address,
-                    placeholder: 'Quartier, rue, repère…',
-                    icon: CupertinoIcons.location_solid,
-                    maxLines: 3,
-                    validator: (v) =>
-                        (v ?? '').trim().isEmpty ? 'Adresse obligatoire' : null,
-                  ),
-                  if (!_editing)
+              for (final (i, r) in _recipients.indexed)
+                _recipientGroup(p, r, i, n),
+              if (!_editing)
+                InsetGroup(
+                  children: [
                     GroupRow(
                       leading: Icon(
-                        CupertinoIcons.location,
+                        CupertinoIcons.add_circled_solid,
                         color: accent,
-                        size: 20,
+                        size: 22,
                       ),
-                      title: _locating
-                          ? 'Localisation…'
-                          : 'Je suis à l’adresse : utiliser ma position',
+                      title: 'Ajouter un destinataire',
                       titleColor: accent,
-                      onTap: _locating ? null : _useMyPosition,
+                      onTap: _recipients.length >= 20 ? null : _add,
                     ),
-                ],
-              ),
-              InsetGroup(
-                header: 'Destinataire',
-                children: [
-                  GroupField(
-                    controller: _phone,
-                    placeholder: 'Numéro (10 chiffres)',
-                    icon: CupertinoIcons.phone_fill,
-                    keyboardType: TextInputType.phone,
-                    validator: (v) =>
-                        RegExp(r'^0\d{9}$').hasMatch(normalizePhone(v ?? ''))
-                        ? null
-                        : 'Numéro à 10 chiffres, ex : 0701020304',
-                  ),
-                  GroupRow(
-                    leading: Icon(
-                      CupertinoIcons.person_crop_circle,
-                      color: accent,
-                      size: 20,
-                    ),
-                    title: 'Choisir dans le répertoire',
-                    titleColor: accent,
-                    onTap: _pickContact,
-                  ),
-                  GroupField(
-                    controller: _name,
-                    placeholder: 'Nom (facultatif)',
-                    icon: CupertinoIcons.person_fill,
-                  ),
-                ],
-              ),
-              InsetGroup(
-                header: 'Prix de la livraison',
-                children: [
-                  GroupField(
-                    controller: _price,
-                    placeholder: 'Montant en F CFA',
-                    icon: CupertinoIcons.money_dollar_circle_fill,
-                    keyboardType: TextInputType.number,
-                    validator: (v) {
-                      final n = int.tryParse(
-                        (v ?? '').replaceAll(RegExp(r'\D'), ''),
-                      );
-                      return n == null ? 'Prix obligatoire' : null;
-                    },
-                  ),
-                ],
-              ),
+                  ],
+                ),
               InsetGroup(
                 header: 'Note',
                 footer: _editing
                     ? 'Chaque modification est gardée dans l’historique, visible par votre entreprise.'
+                    : n > 1
+                    ? 'Une livraison par destinataire, avec la même photo et la même note. Votre entreprise les voit.'
                     : 'Votre entreprise voit cette livraison et son historique.',
                 children: [
                   GroupField(
@@ -628,104 +885,187 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
     );
   }
 
-  Widget _photoBox(Palette p) {
+  Widget _iconButton(IconData icon, String tip, VoidCallback? onTap) =>
+      IconButton(
+        onPressed: onTap,
+        tooltip: tip,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(icon, size: 22, color: accent),
+      );
+
+  Widget _recipientGroup(Palette p, _Recipient r, int i, int n) => InsetGroup(
+    header: n > 1 ? 'Destinataire ${i + 1}' : 'Destinataire',
+    children: [
+      GroupField(
+        controller: r.address,
+        placeholder: r.locating
+            ? 'Localisation…'
+            : 'Adresse : quartier, rue, repère…',
+        icon: CupertinoIcons.location_solid,
+        maxLines: 2,
+        validator: (v) =>
+            (v ?? '').trim().isEmpty ? 'Adresse obligatoire' : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _iconButton(
+              CupertinoIcons.search,
+              'Rechercher l’adresse',
+              () => _search(r),
+            ),
+            r.locating
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CupertinoActivityIndicator(),
+                  )
+                : _iconButton(
+                    CupertinoIcons.location_fill,
+                    'Ma position',
+                    () => _locate(r),
+                  ),
+          ],
+        ),
+      ),
+      GroupField(
+        controller: r.phone,
+        placeholder: 'Numéro (10 chiffres)',
+        icon: CupertinoIcons.phone_fill,
+        keyboardType: TextInputType.phone,
+        validator: (v) => RegExp(r'^0\d{9}$').hasMatch(normalizePhone(v ?? ''))
+            ? null
+            : 'Numéro à 10 chiffres, ex : 0701020304',
+        trailing: _iconButton(
+          CupertinoIcons.person_crop_circle,
+          'Répertoire',
+          () => _pickContact(r),
+        ),
+      ),
+      GroupField(
+        controller: r.name,
+        placeholder: 'Nom (facultatif)',
+        icon: CupertinoIcons.person_fill,
+      ),
+      GroupField(
+        controller: r.price,
+        placeholder: 'Prix en F CFA',
+        icon: CupertinoIcons.money_dollar_circle_fill,
+        keyboardType: TextInputType.number,
+        validator: (v) =>
+            int.tryParse((v ?? '').replaceAll(RegExp(r'\D'), '')) == null
+            ? 'Prix obligatoire'
+            : null,
+      ),
+      if (n > 1)
+        GroupRow(
+          leading: Icon(
+            CupertinoIcons.minus_circle_fill,
+            color: p.red,
+            size: 20,
+          ),
+          title: 'Retirer ce destinataire',
+          titleColor: p.red,
+          onTap: () => _remove(r),
+        ),
+    ],
+  );
+
+  /// Photo du colis : ligne compacte (miniature + texte)
+  Widget _photoRow(Palette p) {
     final has = _localPhoto != null || _photo != null;
+    const size = 56.0;
     final image = _localPhoto != null
-        ? Image.file(_localPhoto!, fit: BoxFit.cover)
+        ? Image.file(_localPhoto!, fit: BoxFit.cover, width: size, height: size)
         : _photo != null
         ? Image.network(
             photoUrl(_photo!),
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => Container(color: p.fill),
+            width: size,
+            height: size,
+            errorBuilder: (_, _, _) =>
+                Container(width: size, height: size, color: p.fill),
           )
         : null;
     return Pressable(
       onTap: _editing || _uploading ? null : _takePhoto,
-      child: ClipRSuperellipse(
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          height: 210,
-          color: has ? p.fill : p.card,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ?image,
-              if (!has)
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: ShapeDecoration(
+          color: p.card,
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: size,
+              height: size,
+              child: ClipRSuperellipse(
+                borderRadius: BorderRadius.circular(12),
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: ShapeDecoration(
-                        gradient: letoGradient,
-                        shape: RoundedSuperellipseBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.camera_fill,
-                        color: Colors.white,
-                        size: 30,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Prendre le colis en photo',
-                      style: TextStyles.headline.copyWith(color: p.label),
-                    ),
-                    Text(
-                      'Obligatoire · appareil photo uniquement',
-                      style: TextStyles.footnote.copyWith(
-                        color: p.secondaryLabel,
-                      ),
-                    ),
-                  ],
-                ),
-              if (_uploading)
-                Container(
-                  color: Colors.black38,
-                  child: const Center(
-                    child: CupertinoActivityIndicator(color: Colors.white),
-                  ),
-                ),
-              if (has && !_editing && !_uploading)
-                Positioned(
-                  right: 10,
-                  bottom: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
-                    ),
-                    decoration: ShapeDecoration(
-                      color: Colors.black54,
-                      shape: RoundedSuperellipseBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          CupertinoIcons.camera_rotate,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          'Reprendre',
-                          style: TextStyle(
+                    image ??
+                        Container(
+                          decoration: const BoxDecoration(
+                            gradient: letoGradient,
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.camera_fill,
                             color: Colors.white,
-                            fontWeight: FontWeight.w600,
+                            size: 26,
                           ),
                         ),
-                      ],
+                    if (_uploading)
+                      Container(
+                        color: Colors.black38,
+                        child: const Center(
+                          child: CupertinoActivityIndicator(
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    has ? 'Photo du colis' : 'Prendre le colis en photo',
+                    style: TextStyles.headline.copyWith(color: p.label),
+                  ),
+                  Text(
+                    _uploading
+                        ? 'Envoi…'
+                        : has
+                        ? 'Photo prise ✓'
+                        : 'Obligatoire · appareil photo uniquement',
+                    style: TextStyles.footnote.copyWith(
+                      color: has ? p.green : p.secondaryLabel,
                     ),
                   ),
+                ],
+              ),
+            ),
+            if (has && !_editing && !_uploading)
+              Text(
+                'Reprendre',
+                style: TextStyles.subheadline.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w600,
                 ),
-            ],
-          ),
+              )
+            else if (!has)
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 18,
+                color: p.tertiaryLabel,
+              ),
+          ],
         ),
       ),
     );
