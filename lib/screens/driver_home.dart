@@ -17,6 +17,7 @@ import '../labels.dart';
 import '../main.dart';
 import '../realtime.dart';
 import 'driver_course_sheet.dart';
+import 'logbook_screen.dart';
 import 'widgets.dart';
 
 /// Dev / tests : photo déjà envoyée utilisée à la place de l'appareil photo (--dart-define=DEV_PHOTO=/uploads/x.jpg)
@@ -111,6 +112,7 @@ class _DriverHomeState extends State<DriverHome> {
     s.on('delivery:cancelled', _onDeliveryCancelled);
     s.on('remittance:updated', _onRemittance);
     s.on('delivery:assigned', _onAssigned);
+    s.on('delivery:reordered', _onReordered);
     SharedPreferences.getInstance().then((p) {
       if (p.getBool('driver_online') == true) _goOnline();
     });
@@ -131,10 +133,19 @@ class _DriverHomeState extends State<DriverHome> {
     s.off('delivery:cancelled', _onDeliveryCancelled);
     s.off('remittance:updated', _onRemittance);
     s.off('delivery:assigned', _onAssigned);
+    s.off('delivery:reordered', _onReordered);
     super.dispose();
   }
 
   void _onChanged(dynamic _) => _load();
+
+  /// L'entreprise a changé l'ordre de passage des arrêts
+  Future<void> _onReordered(dynamic _) async {
+    await _load();
+    if (!mounted) return;
+    hapticTap();
+    showInfo(context, 'Votre entreprise a changé l’ordre de livraison');
+  }
 
   Future<void> _onOfferAccepted(dynamic _) async {
     await _load();
@@ -710,6 +721,7 @@ class _DriverHomeState extends State<DriverHome> {
                                 'En cours${_active.isNotEmpty ? ' (${_active.length})' : ''}',
                               ),
                               2: _seg('Gains'),
+                              3: _seg('Carnet'),
                             },
                           ),
                         ),
@@ -720,6 +732,7 @@ class _DriverHomeState extends State<DriverHome> {
                           delegate: SliverChildListDelegate(switch (_tab) {
                             0 => _ordersTab(p),
                             1 => _activeTab(p),
+                            3 => [const DriverLogbook()],
                             _ => _gainsTab(p),
                           }),
                         ),

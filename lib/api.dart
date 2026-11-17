@@ -358,6 +358,31 @@ class Api {
         'note': ?note,
       });
 
+  // ---------- Carnet du livreur ----------
+  /// Livraisons saisies par le livreur (depuis [from], 90 jours par défaut)
+  Future<List<dynamic>> logbook({DateTime? from}) async => await _request(
+    'GET',
+    '/logbook/me${from == null ? '' : '?from=${Uri.encodeComponent(from.toUtc().toIso8601String())}'}',
+  );
+  Future<Map<String, dynamic>> addLogbookEntry(
+    Map<String, dynamic> body,
+  ) async => (await _request('POST', '/logbook', body)) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> updateLogbookEntry(
+    String id,
+    Map<String, dynamic> body,
+  ) async =>
+      (await _request('PATCH', '/logbook/$id', body)) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> setLogbookStatus(
+    String id,
+    String status, {
+    String? note,
+  }) async =>
+      (await _request('POST', '/logbook/$id/status', {
+            'status': status,
+            'note': ?note,
+          }))
+          as Map<String, dynamic>;
+
   /// Gains, part du livreur, reste à verser et historique des versements
   Future<Map<String, dynamic>> myCash() async =>
       (await _request('GET', '/remittances/me')) as Map<String, dynamic>;
