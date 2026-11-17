@@ -299,7 +299,7 @@ class _ClientHomeState extends State<ClientHome> {
       _quote = null;
     });
     // Partage des codes aux destinataires (WhatsApp…), puis suivi
-    await showShareCodes(context, created);
+    if (api.deliveryCodeEnabled) await showShareCodes(context, created);
     if (!mounted) return;
     await Navigator.push(
       context,

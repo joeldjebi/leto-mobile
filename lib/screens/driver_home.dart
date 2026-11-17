@@ -493,6 +493,22 @@ class _DriverHomeState extends State<DriverHome> {
       return;
     }
     if (!mounted) return;
+    // Confirmation par code désactivée par l'admin : le livreur valide seul
+    if (!api.deliveryCodeEnabled) {
+      if (!await confirm(
+        context,
+        'Colis remis à ${stop['recipientName']} ?',
+        ok: 'Oui, livré',
+      )) {
+        return;
+      }
+      await _run(
+        () => api.deliverStop(d['id'], stop['id'], ''),
+        'Colis livré à ${stop['recipientName']}',
+      );
+      return;
+    }
+    if (!mounted) return;
     final code = await prompt(
       context,
       'Code de livraison',
@@ -1089,7 +1105,11 @@ class _DriverHomeState extends State<DriverHome> {
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: p.green),
                 onPressed: () => _deliver(d, next),
-                child: const Text('Livrer · saisir le code'),
+                child: Text(
+                  api.deliveryCodeEnabled
+                      ? 'Livrer · saisir le code'
+                      : 'Marquer comme livré',
+                ),
               ),
               const SizedBox(height: 10),
               TintedButton(

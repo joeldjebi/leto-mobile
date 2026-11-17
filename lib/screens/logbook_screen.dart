@@ -322,17 +322,44 @@ class _DriverLogbookState extends State<DriverLogbook> {
             style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
           ),
         ),
-        // ----- Résumé du jour -----
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              _stat(p, '${today.length}', 'Aujourd’hui'),
-              const SizedBox(width: 10),
-              _stat(p, '${deliveredToday.length}', 'Livrées'),
-              const SizedBox(width: 10),
-              _stat(p, fcfa(amount), 'Montant', wide: true),
-            ],
+        // ----- Résumé du jour : un bloc, trois colonnes égales -----
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: ShapeDecoration(
+            color: p.card,
+            shape: RoundedSuperellipseBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                _stat(
+                  p,
+                  CupertinoIcons.calendar_today,
+                  p.blue,
+                  '${today.length}',
+                  'Aujourd’hui',
+                ),
+                VerticalDivider(width: 1, thickness: 0.5, color: p.separator),
+                _stat(
+                  p,
+                  CupertinoIcons.checkmark_seal_fill,
+                  p.green,
+                  '${deliveredToday.length}',
+                  'Livrées',
+                ),
+                VerticalDivider(width: 1, thickness: 0.5, color: p.separator),
+                _stat(
+                  p,
+                  CupertinoIcons.money_dollar_circle_fill,
+                  accent,
+                  fcfa(amount),
+                  'Montant',
+                ),
+              ],
+            ),
           ),
         ),
         Padding(
@@ -393,35 +420,41 @@ class _DriverLogbookState extends State<DriverLogbook> {
     );
   }
 
-  Widget _stat(Palette p, String value, String label, {bool wide = false}) =>
-      Expanded(
-        flex: wide ? 2 : 1,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: ShapeDecoration(
-            color: p.card,
-            shape: RoundedSuperellipseBorder(
-              borderRadius: BorderRadius.circular(14),
+  Widget _stat(
+    Palette p,
+    IconData icon,
+    Color color,
+    String value,
+    String label,
+  ) => Expanded(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyles.title2.copyWith(color: p.label),
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  value,
-                  style: TextStyles.title2.copyWith(color: p.label),
-                ),
-              ),
-              Text(
-                label,
-                style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
-              ),
-            ],
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 
   Widget _orderBar(Palette p, List<Map<String, dynamic>> todo, bool manual) {
     final editing = _draft != null;

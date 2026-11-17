@@ -652,7 +652,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
             style: TextStyles.headline.copyWith(color: p.label),
           ),
           const Spacer(),
-          if (!_finished && _stops.any((s) => s['status'] == 'PENDING'))
+          if (api.deliveryCodeEnabled &&
+              !_finished &&
+              _stops.any((s) => s['status'] == 'PENDING'))
             CupertinoButton(
               padding: EdgeInsets.zero,
               minimumSize: Size.zero,
@@ -987,7 +989,7 @@ class _StopTile extends StatelessWidget {
                   ],
                 ),
               ),
-              if (status == 'PENDING') ...[
+              if (status == 'PENDING' && Api.instance.deliveryCodeEnabled) ...[
                 Text(
                   stop['confirmationCode'] ?? '',
                   style: TextStyles.headline.copyWith(

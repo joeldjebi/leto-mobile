@@ -130,12 +130,20 @@ class LetoNotifier {
     }
 
     void onSounds(dynamic _) => syncSounds();
+    // Fond de carte changé par l'admin : toutes les cartes de l'app se mettent à jour
+    void onMap(dynamic _) => loadMapStyle(force: true);
+    void onSettings(dynamic _) => Api.instance.loadDeliverySettings();
     s.on('notify', onNotify);
     s.on('sounds:changed', onSounds);
+    s.on('map:changed', onMap);
+    s.on('settings:changed', onSettings);
     _detach = () {
       s.off('notify', onNotify);
       s.off('sounds:changed', onSounds);
+      s.off('map:changed', onMap);
+      s.off('settings:changed', onSettings);
     };
+    Api.instance.loadDeliverySettings();
     syncSounds();
   }
 

@@ -386,8 +386,22 @@ class Api {
       _request('POST', '/deliveries/$id/accept');
   Future<dynamic> pickup(String id) =>
       _request('POST', '/deliveries/$id/pickup');
+
+  /// [code] vide : livraison sans code (si l'admin a désactivé la confirmation par code)
   Future<dynamic> deliverStop(String id, String stopId, String code) =>
-      _request('POST', '/deliveries/$id/stops/$stopId/deliver', {'code': code});
+      _request('POST', '/deliveries/$id/stops/$stopId/deliver', {
+        if (code.isNotEmpty) 'code': code,
+      });
+
+  /// Confirmation de livraison par le code du destinataire (réglage de l'admin)
+  bool deliveryCodeEnabled = true;
+  Future<void> loadDeliverySettings() async {
+    try {
+      final g = await grid();
+      deliveryCodeEnabled = g['deliveryCodeEnabled'] != false;
+    } catch (_) {}
+  }
+
   Future<dynamic> failStop(
     String id,
     String stopId, {
