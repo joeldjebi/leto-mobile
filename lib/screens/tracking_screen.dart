@@ -435,8 +435,16 @@ class _TrackingScreenState extends State<TrackingScreen> {
                         tween: _LatLngTween(end: _driverPos),
                         duration: const Duration(milliseconds: 1200),
                         curve: Curves.easeInOut,
-                        builder: (_, pos, _) =>
-                            MarkerLayer(markers: [driverMarker(pos)]),
+                        builder: (_, pos, _) => MarkerLayer(
+                          markers: [
+                            driverMarker(
+                              pos,
+                              vehicle:
+                                  d['driver']?['vehicleType'] ??
+                                  d['vehicleType'],
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 ),

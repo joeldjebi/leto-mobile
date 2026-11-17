@@ -228,7 +228,15 @@ class _Dot extends StatelessWidget {
 }
 
 /// Livreur (moto)
-Marker driverMarker(LatLng p) => Marker(
+/// Icône de l'engin du livreur (MOTO, CAR, CARGO)
+IconData vehicleIcon(String? vehicle) => switch (vehicle) {
+  'CAR' => PhosphorIcons.carProfile(PhosphorIconsStyle.fill),
+  'CARGO' => PhosphorIcons.truck(PhosphorIconsStyle.fill),
+  _ => PhosphorIcons.motorcycle(PhosphorIconsStyle.fill),
+};
+
+/// Livreur de la course suivie : l'icône de son engin dans une pastille
+Marker driverMarker(LatLng p, {String? vehicle}) => Marker(
   point: p,
   width: 46,
   height: 46,
@@ -245,11 +253,7 @@ Marker driverMarker(LatLng p) => Marker(
         ),
       ],
     ),
-    child: Icon(
-      PhosphorIcons.moped(PhosphorIconsStyle.fill),
-      color: Colors.white,
-      size: 22,
-    ),
+    child: Icon(vehicleIcon(vehicle), color: Colors.white, size: 24),
   ),
 );
 
@@ -270,15 +274,7 @@ Marker nearbyDriverMarker(LatLng p, String vehicle) => Marker(
         ),
       ],
     ),
-    child: Icon(
-      switch (vehicle) {
-        'CAR' => PhosphorIcons.carProfile(PhosphorIconsStyle.fill),
-        'CARGO' => PhosphorIcons.truck(PhosphorIconsStyle.fill),
-        _ => PhosphorIcons.motorcycle(PhosphorIconsStyle.fill),
-      },
-      color: ink,
-      size: 26,
-    ),
+    child: Icon(vehicleIcon(vehicle), color: ink, size: 26),
   ),
 );
 
