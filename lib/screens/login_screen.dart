@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../main.dart';
+import 'independent_screens.dart';
 import 'widgets.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -18,6 +19,22 @@ class _LoginScreenState extends State<LoginScreen> {
   final _name = TextEditingController();
   final _phone = TextEditingController();
   final _password = TextEditingController();
+
+  /// Inscriptions des livreurs indépendants ouvertes par LETO ?
+  bool _independentsOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Api.instance
+        .independentsInfo()
+        .then((i) {
+          if (mounted) {
+            setState(() => _independentsOpen = i['registrationOpen'] == true);
+          }
+        })
+        .catchError((_) {});
+  }
 
   Future<void> _submit() async {
     setState(() => _loading = true);
@@ -142,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
               header: _registerMode ? 'Créer un compte' : 'Connexion',
               footer: _registerMode
                   ? 'Vous pourrez envoyer des colis à un ou plusieurs destinataires.'
-                  : 'Livreurs : votre compte est créé par votre entreprise.',
+                  : 'Livreurs d’entreprise : votre compte est créé par votre entreprise.',
               children: [
                 if (_registerMode)
                   GroupField(
@@ -185,6 +202,29 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyles.body.copyWith(color: accent),
               ),
             ),
+            if (_independentsOpen && !_registerMode)
+              CupertinoButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute(
+                    builder: (_) => const IndependentSignupScreen(),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.two_wheeler, size: 20, color: p.secondaryLabel),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Devenir livreur indépendant',
+                      style: TextStyles.subheadline.copyWith(
+                        color: p.secondaryLabel,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'screens/client_home.dart';
 import 'screens/driver_home.dart';
+import 'screens/independent_screens.dart';
 import 'screens/login_screen.dart';
 import 'theme.dart';
 
@@ -76,6 +77,7 @@ class LetoApp extends StatelessWidget {
 Widget homeFor() {
   final api = Api.instance;
   if (!api.isLoggedIn) return const LoginScreen();
+  if (api.isIndependent) return const IndependentGate();
   return api.role == 'DRIVER' ? const DriverHome() : const ClientHome();
 }
 

@@ -10,6 +10,16 @@ import 'widgets.dart';
 /// Entreprise choisie par le client ({id, name}) ; null = toutes les entreprises
 typedef ChosenCompany = ({String id, String name});
 
+/// Choix « Livreurs indépendants » (id spécial, jamais une entreprise)
+const ChosenCompany independentChoice = (
+  id: kIndependentId,
+  name: 'Livreurs indépendants',
+);
+
+extension ChosenCompanyX on ChosenCompany? {
+  bool get isIndependent => this?.id == kIndependentId;
+}
+
 const _favKey = 'favorite_company';
 
 /// Entreprise favorite mémorisée (présélectionnée à chaque commande)
@@ -51,6 +61,7 @@ class _CompanyPicker extends StatefulWidget {
 
 class _CompanyPickerState extends State<_CompanyPicker> {
   List<Map<String, dynamic>>? _list;
+  Map<String, dynamic>? _independents;
   String? _favorite;
   String? _expanded;
 
@@ -60,6 +71,10 @@ class _CompanyPickerState extends State<_CompanyPicker> {
     loadFavoriteCompany().then(
       (f) => mounted ? setState(() => _favorite = f?.id) : null,
     );
+    Api.instance
+        .independentsInfo()
+        .then((i) => mounted ? setState(() => _independents = i) : null)
+        .catchError((_) => null);
     Api.instance.companiesDirectory().then(
       (l) => mounted
           ? setState(() => _list = l.cast<Map<String, dynamic>>())
@@ -115,6 +130,10 @@ class _CompanyPickerState extends State<_CompanyPicker> {
             subtitle: 'Le livreur disponible le plus proche · grille LETO',
             onTap: () => Navigator.pop(context, ('all', null)),
           ),
+          if (_independents?['enabled'] == true) ...[
+            const SizedBox(height: 10),
+            _independentTile(p),
+          ],
           const SizedBox(height: 18),
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 8),
@@ -140,6 +159,78 @@ class _CompanyPickerState extends State<_CompanyPicker> {
             ])
               _company(c, p),
         ],
+      ),
+    );
+  }
+
+  /// Livreurs indépendants : toujours signalés comme tels, avec confirmation
+  Widget _independentTile(Palette p) {
+    final selected = widget.current.isIndependent;
+    final online = _independents?['online'] ?? 0;
+    return Pressable(
+      onTap: () async {
+        final ok = await confirm(
+          context,
+          'Livreurs indépendants',
+          message: IndependentNotice.text,
+          ok: 'Choisir un indépendant',
+        );
+        if (ok && mounted) Navigator.pop(context, ('one', independentChoice));
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: ShapeDecoration(
+          color: independentColor.withValues(alpha: 0.12),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: selected ? accent : independentColor,
+              width: 1.6,
+            ),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: ShapeDecoration(
+                color: independentColor,
+                shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Icon(
+                Icons.two_wheeler,
+                color: Color(0xFF1F1300),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const IndependentBadge(),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Livreurs indépendants',
+                    style: TextStyles.headline.copyWith(color: p.label),
+                  ),
+                  Text(
+                    'Sans entreprise · vérifiés par LETO · grille LETO · pas de paiement à la livraison${online > 0 ? ' · $online en ligne' : ''}',
+                    style: TextStyles.footnote.copyWith(
+                      color: p.secondaryLabel,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Icon(CupertinoIcons.checkmark_circle_fill, color: accent),
+          ],
+        ),
       ),
     );
   }

@@ -89,7 +89,10 @@ class _OrderScreenState extends State<OrderScreen> {
     orElse: () => _offers.first,
   );
   Map<String, dynamic> get _speeds => _quote['speeds'] as Map<String, dynamic>;
-  bool get _codEnabled => _quote['codEnabled'] == true;
+
+  /// Livreurs indépendants : pas de paiement à la livraison
+  bool get _independent => widget.company.isIndependent;
+  bool get _codEnabled => _quote['codEnabled'] == true && !_independent;
   int get _codFee => _quote['codFee'] as int;
   int get _codStops =>
       _codEnabled ? _stops.where((s) => _formOf(s).codOn).length : 0;
@@ -243,13 +246,27 @@ class _OrderScreenState extends State<OrderScreen> {
       showError(context, missing);
       return;
     }
+    // Le client accepte en connaissance de cause un livreur indépendant
+    if (_independent &&
+        !await confirm(
+          context,
+          'Commander un livreur indépendant ?',
+          message: IndependentNotice.text,
+          ok: 'Oui, commander',
+        )) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _sending = true);
     String? optStr(String? s) => (s ?? '').trim().isEmpty ? null : s!.trim();
     try {
       final d = await api.createDelivery({
         'vehicleType': _vehicle,
         'speed': _speed,
-        'companyId': ?widget.company?.id,
+        if (_independent)
+          'forIndependents': true
+        else
+          'companyId': ?widget.company?.id,
         'pickupLat': _pickup.point.latitude,
         'pickupLng': _pickup.point.longitude,
         'pickupAddress': _pickup.label,
@@ -392,13 +409,16 @@ class _OrderScreenState extends State<OrderScreen> {
         ),
       ),
       children: [
+        if (_independent) const IndependentNotice(),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: Text(
             [
               '${km(_quote['distanceKm'])} · ~${_quote['durationMin']} min',
               if (n > 1) 'ordre de passage optimisé',
-              'livré par ${widget.company?.name ?? 'toutes les entreprises'}',
+              _independent
+                  ? 'livreur indépendant'
+                  : 'livré par ${widget.company?.name ?? 'toutes les entreprises'}',
             ].join(' · '),
             style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
           ),

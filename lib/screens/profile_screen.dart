@@ -106,7 +106,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Center(
           child: Pressable(
-            onTap: _uploading ? null : _takeSelfie,
+            // Livreur indépendant : la photo de profil est le selfie de son dossier
+            onTap: _uploading || api.isIndependent ? null : _takeSelfie,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
@@ -119,31 +120,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const Positioned.fill(
                     child: Center(child: CupertinoActivityIndicator()),
                   ),
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: accent,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: p.background, width: 3),
-                    ),
-                    child: const Icon(
-                      CupertinoIcons.camera_fill,
-                      color: Colors.white,
-                      size: 16,
+                if (!api.isIndependent)
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: p.background, width: 3),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.camera_fill,
+                        color: Colors.white,
+                        size: 16,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          _avatar == null ? 'Ajouter un selfie' : 'Reprendre un selfie',
+          api.isIndependent
+              ? 'Photo de profil : le selfie de votre dossier'
+              : _avatar == null
+              ? 'Ajouter un selfie'
+              : 'Reprendre un selfie',
           textAlign: TextAlign.center,
           style: TextStyles.subheadline.copyWith(color: accent),
         ),

@@ -129,6 +129,9 @@ class RouteInfo {
   );
 }
 
+/// Choix du client « Livreurs indépendants » (à la place d'une entreprise)
+const kIndependentId = 'independent';
+
 class Api {
   Api._();
   static final instance = Api._();
@@ -139,6 +142,10 @@ class Api {
   String? get token => _token;
   bool get isLoggedIn => _token != null && user != null;
   String get role => user?['role'] ?? '';
+
+  /// Livreur indépendant (pas rattaché à une entreprise)
+  bool get isIndependent =>
+      role == 'DRIVER' && user?['company']?['independent'] == true;
 
   /// Restaure la session au démarrage de l'app
   Future<void> restore() async {
@@ -240,7 +247,8 @@ class Api {
     List<({LatLng point, bool cod})> stops, {
     String? companyId,
   }) async => await _request('POST', '/pricing/quote', {
-    'companyId': ?companyId,
+    // Indépendants : règles LETO par défaut (pas de grille d'entreprise)
+    if (companyId != kIndependentId) 'companyId': ?companyId,
     'pickupLat': pickup.latitude,
     'pickupLng': pickup.longitude,
     'stops': [
@@ -266,7 +274,11 @@ class Api {
   }) async {
     final res = await _request(
       'GET',
-      '/pricing/drivers?lat=${p.latitude}&lng=${p.longitude}${companyId == null ? '' : '&companyId=$companyId'}',
+      '/pricing/drivers?lat=${p.latitude}&lng=${p.longitude}${companyId == null
+          ? ''
+          : companyId == kIndependentId
+          ? '&independent=1'
+          : '&companyId=$companyId'}',
     );
     return (res as List)
         .map(
@@ -282,16 +294,23 @@ class Api {
   }
 
   // ---------- Photos ----------
-  Future<String> upload(File file) async {
-    final req = http.MultipartRequest('POST', Uri.parse('$apiUrl/uploads'))
-      ..headers['Authorization'] = 'Bearer $_token'
-      ..files.add(
-        await http.MultipartFile.fromPath(
-          'file',
-          file.path,
-          contentType: _imageType(file.path),
-        ),
-      );
+  /// Photo d'un document d'identité (stockée à part, jamais publique)
+  Future<String> uploadIdentity(File file) => upload(file, identity: true);
+
+  Future<String> upload(File file, {bool identity = false}) async {
+    final req =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse('$apiUrl/uploads${identity ? '/identity' : ''}'),
+          )
+          ..headers['Authorization'] = 'Bearer $_token'
+          ..files.add(
+            await http.MultipartFile.fromPath(
+              'file',
+              file.path,
+              contentType: _imageType(file.path),
+            ),
+          );
     final res = await http.Response.fromStream(await req.send());
     final data = jsonDecode(utf8.decode(res.bodyBytes));
     if (res.statusCode >= 400) {
@@ -382,6 +401,40 @@ class Api {
       _request('POST', '/deliveries/$id/stops/$stopId/cancel-request', {
         'note': ?note,
       });
+
+  // ---------- Livreurs indépendants ----------
+  /// Inscriptions ouvertes ? service actif ? livreurs en ligne
+  Future<Map<String, dynamic>> independentsInfo() async =>
+      (await _request('GET', '/independents/public')) as Map<String, dynamic>;
+
+  Future<void> registerIndependent(
+    String name,
+    String phone,
+    String password,
+  ) async {
+    await _saveSession(
+      _request('POST', '/independents/register', {
+        'name': name,
+        'phone': phone,
+        'password': password,
+      }),
+    );
+    user = await _request('GET', '/auth/me');
+  }
+
+  Future<Map<String, dynamic>> myDossier() async =>
+      (await _request('GET', '/independents/me')) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> saveDossier(Map<String, dynamic> body) async =>
+      (await _request('PUT', '/independents/me', body)) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> submitDossier() async =>
+      (await _request('POST', '/independents/me/submit'))
+          as Map<String, dynamic>;
+
+  /// Solde prépayé du livreur indépendant (commission prélevée à chaque course)
+  Future<Map<String, dynamic>> myBalance() async =>
+      (await _request('GET', '/billing/me')) as Map<String, dynamic>;
+  Future<dynamic> requestTopup(Map<String, dynamic> body) =>
+      _request('POST', '/billing/me/payments', {'kind': 'TOPUP', ...body});
 
   // ---------- Carnet du livreur ----------
   /// Livraisons saisies par le livreur (depuis [from], 90 jours par défaut)

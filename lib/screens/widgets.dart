@@ -868,9 +868,14 @@ class GroupRow extends StatelessWidget {
                 ),
               ),
               if (value != null)
-                Text(
-                  value!,
-                  style: TextStyles.body.copyWith(color: p.secondaryLabel),
+                Flexible(
+                  child: Text(
+                    value!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: TextStyles.body.copyWith(color: p.secondaryLabel),
+                  ),
                 ),
               ?trailing,
               if (chevron) ...[
@@ -1590,6 +1595,85 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Couleur des livreurs indépendants (toujours signalés au client)
+const independentColor = Color(0xFFF59E0B);
+
+/// Badge « Livreur indépendant » : bien visible partout où le client voit le livreur
+class IndependentBadge extends StatelessWidget {
+  final bool large;
+  const IndependentBadge({super.key, this.large = false});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: EdgeInsets.symmetric(
+      horizontal: large ? 10 : 8,
+      vertical: large ? 5 : 3,
+    ),
+    decoration: ShapeDecoration(
+      color: independentColor,
+      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          CupertinoIcons.person_badge_minus_fill,
+          size: large ? 15 : 12,
+          color: const Color(0xFF1F1300),
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            'LIVREUR INDÉPENDANT',
+            overflow: TextOverflow.ellipsis,
+            style: (large ? TextStyles.footnote : TextStyles.caption).copyWith(
+              color: const Color(0xFF1F1300),
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Encadré d'avertissement : ce que veut dire « livreur indépendant »
+class IndependentNotice extends StatelessWidget {
+  final EdgeInsets margin;
+  const IndependentNotice({
+    super.key,
+    this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 18),
+  });
+
+  static const text =
+      'Ce livreur n’appartient à aucune entreprise partenaire. Son identité et son engin sont vérifiés par LETO. Pas de paiement à la livraison.';
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Container(
+      margin: margin,
+      padding: const EdgeInsets.all(14),
+      decoration: ShapeDecoration(
+        color: independentColor.withValues(alpha: 0.14),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: independentColor, width: 1.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const IndependentBadge(large: true),
+          const SizedBox(height: 8),
+          Text(text, style: TextStyles.subheadline.copyWith(color: p.label)),
+        ],
+      ),
     );
   }
 }

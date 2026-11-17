@@ -805,33 +805,47 @@ class _ClientHomeState extends State<ClientHome> {
           Icon(
             _company == null
                 ? CupertinoIcons.bolt_fill
+                : _company.isIndependent
+                ? Icons.two_wheeler
                 : CupertinoIcons.building_2_fill,
             size: 18,
-            color: accent,
+            color: _company.isIndependent ? independentColor : accent,
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Livré par ',
-                    style: TextStyles.subheadline.copyWith(
-                      color: p.secondaryLabel,
+            child: _company.isIndependent
+                ? Row(
+                    children: [
+                      Text(
+                        'Livré par  ',
+                        style: TextStyles.subheadline.copyWith(
+                          color: p.secondaryLabel,
+                        ),
+                      ),
+                      const Flexible(child: IndependentBadge()),
+                    ],
+                  )
+                : Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Livré par ',
+                          style: TextStyles.subheadline.copyWith(
+                            color: p.secondaryLabel,
+                          ),
+                        ),
+                        TextSpan(
+                          text: _company?.name ?? 'toutes les entreprises',
+                          style: TextStyles.subheadline.copyWith(
+                            color: p.label,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  TextSpan(
-                    text: _company?.name ?? 'toutes les entreprises',
-                    style: TextStyles.subheadline.copyWith(
-                      color: p.label,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
           ),
           Text(
             'Changer',

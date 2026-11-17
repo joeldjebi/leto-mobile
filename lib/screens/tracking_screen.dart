@@ -242,6 +242,15 @@ class _TrackingScreenState extends State<TrackingScreen> {
   }
 
   Future<void> _acceptOffer(Map o) async {
+    if (o['independent'] == true &&
+        !await confirm(
+          context,
+          'Accepter un livreur indépendant ?',
+          message: IndependentNotice.text,
+          ok: 'Accepter',
+        )) {
+      return;
+    }
     try {
       await api.acceptOffer(o['id']);
       hapticSuccess();
@@ -814,7 +823,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
   Widget _driverCard(Map<String, dynamic> d, Palette p) {
     final driver = d['driver'];
-    return Container(
+    final independent = d['company']?['independent'] == true;
+    final card = Container(
       padding: const EdgeInsets.all(12),
       decoration: ShapeDecoration(
         color: p.card,
@@ -824,12 +834,17 @@ class _TrackingScreenState extends State<TrackingScreen> {
       ),
       child: Row(
         children: [
-          Avatar(driver['name'], radius: 22),
+          Avatar(driver['name'], radius: 22, photo: driver['avatarUrl']),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (independent)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 3),
+                    child: IndependentBadge(),
+                  ),
                 Text(
                   driver['name'],
                   style: TextStyles.headline.copyWith(color: p.label),
@@ -840,7 +855,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                       d['status'] == 'ACCEPTED'
                           ? 'au départ dans ~${_etaMin(d)} min'
                           : 'chez le destinataire dans ~${_etaMin(d)} min',
-                    d['company']?['name'] ?? '',
+                    independent ? '' : d['company']?['name'] ?? '',
                     if (_active(d) && _driverPos != null && _etaMin(d) == null)
                       'position en direct',
                   ].where((x) => x.isNotEmpty).join(' · '),
@@ -861,6 +876,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
         ],
       ),
     );
+    return card;
   }
 }
 
@@ -1101,12 +1117,21 @@ class _OfferTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Avatar(offer['driver']['name'], radius: 20),
+              Avatar(
+                offer['driver']['name'],
+                radius: 20,
+                photo: offer['driver']['avatarUrl'],
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (offer['independent'] == true)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 3),
+                        child: IndependentBadge(),
+                      ),
                     Text(
                       offer['driver']['name'],
                       style: TextStyles.headline.copyWith(color: p.label),

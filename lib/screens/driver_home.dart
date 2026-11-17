@@ -17,6 +17,7 @@ import '../labels.dart';
 import '../main.dart';
 import '../realtime.dart';
 import 'driver_course_sheet.dart';
+import 'independent_screens.dart';
 import 'logbook_screen.dart';
 import 'widgets.dart';
 
@@ -644,6 +645,35 @@ class _DriverHomeState extends State<DriverHome> {
                         onTap: () => showAccountSheet(
                           context,
                           items: [
+                            if (api.isIndependent) ...[
+                              (
+                                CupertinoIcons.creditcard_fill,
+                                p.green,
+                                'Mon solde',
+                                () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) =>
+                                        const IndependentBalanceScreen(),
+                                  ),
+                                ),
+                              ),
+                              (
+                                CupertinoIcons.doc_person_fill,
+                                accent,
+                                'Mon dossier',
+                                () async {
+                                  final d = await api.myDossier();
+                                  if (!context.mounted) return;
+                                  Navigator.push(
+                                    context,
+                                    CupertinoPageRoute(
+                                      builder: (_) => DossierScreen(initial: d),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                             (
                               CupertinoIcons.clock_fill,
                               p.blue,
@@ -679,7 +709,19 @@ class _DriverHomeState extends State<DriverHome> {
                         : Padding(
                             key: ValueKey(_blocked),
                             padding: const EdgeInsets.only(top: 10),
-                            child: _BlockedBanner(_blocked!),
+                            child: GestureDetector(
+                              // Indépendant : le bandeau mène au solde (recharge)
+                              onTap: api.isIndependent
+                                  ? () => Navigator.push(
+                                      context,
+                                      CupertinoPageRoute(
+                                        builder: (_) =>
+                                            const IndependentBalanceScreen(),
+                                      ),
+                                    )
+                                  : null,
+                              child: _BlockedBanner(_blocked!),
+                            ),
                           ),
                   ),
                 ],
