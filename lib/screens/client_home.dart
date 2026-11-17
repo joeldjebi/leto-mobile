@@ -55,7 +55,7 @@ class _ClientHomeState extends State<ClientHome> {
   Map<String, dynamic>? _active;
 
   /// Livreurs en ligne autour du centre de la carte (rafraîchis toutes les 15 s)
-  List<LatLng> _drivers = [];
+  List<NearbyDriver> _drivers = [];
   Timer? _driversTimer;
 
   @override
@@ -542,7 +542,8 @@ class _ClientHomeState extends State<ClientHome> {
                             routeLayer(points),
                           MarkerLayer(
                             markers: [
-                              for (final d in _drivers) nearbyDriverMarker(d),
+                              for (final d in _drivers)
+                                nearbyDriverMarker(d.point, d.vehicle),
                               if (_mode != _Mode.pickup && _pickup != null)
                                 pickupMarker(_pickup!.point),
                               for (var i = 0; i < _stops.length; i++)

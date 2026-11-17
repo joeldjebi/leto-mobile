@@ -253,28 +253,31 @@ Marker driverMarker(LatLng p) => Marker(
   ),
 );
 
-/// Livreur disponible autour du client (carte d'accueil)
-Marker nearbyDriverMarker(LatLng p) => Marker(
+/// Livreur disponible autour du client (carte d'accueil) : icône de son engin
+Marker nearbyDriverMarker(LatLng p, String vehicle) => Marker(
   point: p,
-  width: 34,
-  height: 34,
+  width: 40,
+  height: 40,
   child: Container(
-    decoration: BoxDecoration(
-      color: ink,
-      shape: BoxShape.circle,
-      border: Border.all(color: Colors.white, width: 2.5),
-      boxShadow: const [
+    decoration: ShapeDecoration(
+      color: Colors.white,
+      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(13)),
+      shadows: const [
         BoxShadow(
-          color: Color(0x40000000),
-          blurRadius: 8,
+          color: Color(0x33000000),
+          blurRadius: 10,
           offset: Offset(0, 3),
         ),
       ],
     ),
     child: Icon(
-      PhosphorIcons.moped(PhosphorIconsStyle.fill),
-      color: Colors.white,
-      size: 17,
+      switch (vehicle) {
+        'CAR' => PhosphorIcons.carProfile(PhosphorIconsStyle.fill),
+        'CARGO' => PhosphorIcons.truck(PhosphorIconsStyle.fill),
+        _ => PhosphorIcons.motorcycle(PhosphorIconsStyle.fill),
+      },
+      color: ink,
+      size: 26,
     ),
   ),
 );

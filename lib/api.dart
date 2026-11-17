@@ -97,6 +97,9 @@ Future<void> loadMapStyle({bool force = false}) async {
   }
 }
 
+/// Livreur affiché sur la carte du client : position et engin (MOTO, CAR, CARGO)
+typedef NearbyDriver = ({LatLng point, String vehicle});
+
 class Place {
   final String label;
   final String sublabel;
@@ -257,16 +260,22 @@ class Api {
   ))['minutes'];
 
   /// Livreurs en ligne autour d'un point (positions anonymes), éventuellement d'une seule entreprise
-  Future<List<LatLng>> nearbyDrivers(LatLng p, {String? companyId}) async {
+  Future<List<NearbyDriver>> nearbyDrivers(
+    LatLng p, {
+    String? companyId,
+  }) async {
     final res = await _request(
       'GET',
       '/pricing/drivers?lat=${p.latitude}&lng=${p.longitude}${companyId == null ? '' : '&companyId=$companyId'}',
     );
     return (res as List)
         .map(
-          (d) => LatLng(
-            (d['lat'] as num).toDouble(),
-            (d['lng'] as num).toDouble(),
+          (d) => (
+            point: LatLng(
+              (d['lat'] as num).toDouble(),
+              (d['lng'] as num).toDouble(),
+            ),
+            vehicle: (d['vehicle'] ?? 'MOTO') as String,
           ),
         )
         .toList();
