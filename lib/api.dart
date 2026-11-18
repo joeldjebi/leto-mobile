@@ -40,7 +40,7 @@ String? trackingUrl(Map d) {
   final token = d['trackingToken'];
   if (token == null) return null;
   final base = apiUrl == prodApiUrl
-      ? 'https://leto.performx.online'
+      ? 'https://sa.leto.performx.online'
       : apiUrl.replaceFirst(':3000', ':5173');
   return '$base/#/suivi/$token';
 }
