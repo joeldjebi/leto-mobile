@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -180,7 +181,8 @@ class _CourseSheetState extends State<_CourseSheet> {
           ClipRSuperellipse(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             child: SizedBox(
-              height: 230,
+              // Carte plus grande : 42 % de l'écran (au moins 300 points)
+              height: math.max(300, MediaQuery.sizeOf(context).height * 0.42),
               child: Stack(
                 children: [
                   LetoMap(

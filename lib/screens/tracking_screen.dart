@@ -457,7 +457,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
           ),
           ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.6,
+              // La carte garde au moins la moitié de l'écran ; le panneau défile au-delà
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
             ),
             child: SingleChildScrollView(
               child: GlassPanel(
@@ -530,6 +531,16 @@ class _TrackingScreenState extends State<TrackingScreen> {
         const SizedBox(height: 6),
       ],
       if (status != 'CANCELLED') StatusSteps(status),
+      // Commande expirée (aucun livreur dans le délai fixé par LETO)
+      if (status == 'CANCELLED' && d['cancelledBy'] == 'Expiration')
+        _notice(
+          p,
+          icon: CupertinoIcons.clock_fill,
+          color: p.yellow,
+          title: 'Commande expirée',
+          text:
+              '${d['cancelReason'] ?? 'Aucun livreur n’a accepté à temps'}. Repassez la commande depuis l’accueil.',
+        ),
       const SizedBox(height: 14),
       if (status == 'PENDING' &&
           d['targetCompanyId'] != null &&
