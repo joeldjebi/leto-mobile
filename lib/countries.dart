@@ -331,7 +331,7 @@ String _group(String digits, List<int> groups) {
 /// Affichage : « 🇨🇮 +225 07 01 02 03 04 ».
 /// [compact] : numéro du pays où LETO livre au format local (« 07 01 02 03 04 »).
 /// Valeur inconnue : renvoyée telle quelle.
-String formatPhone(String? value, {bool flag = true, bool compact = false}) {
+String formatPhone(String? value, {bool flag = false, bool compact = false}) {
   final raw = (value ?? '').trim();
   if (raw.isEmpty) return '';
   final e164 = raw.startsWith('+') ? raw : parseAnyPhone(raw);

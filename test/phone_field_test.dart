@@ -109,7 +109,7 @@ void main() {
 
   group('formatPhone', () {
     test('drapeau, indicatif et groupement de l’exemple', () {
-      expect(formatPhone('+2250701020304'), '🇨🇮 +225 07 01 02 03 04');
+      expect(formatPhone('+2250701020304'), '+225 07 01 02 03 04');
       expect(formatPhone('+2250701020304', flag: false), '+225 07 01 02 03 04');
       // Exemple « 024 123 4567 » : le préfixe national est retiré du 1er groupe
       expect(formatPhone('+233241234567', flag: false), '+233 24 123 4567');
@@ -120,12 +120,12 @@ void main() {
       expect(formatPhone('+2250701020304', compact: true), '07 01 02 03 04');
       expect(
         formatPhone('+233241234567', compact: true),
-        '🇬🇭 +233 24 123 4567',
+        '+233 24 123 4567',
       );
     });
 
     test('ancien format, valeurs inconnues', () {
-      expect(formatPhone('0701020304'), '🇨🇮 +225 07 01 02 03 04');
+      expect(formatPhone('0701020304'), '+225 07 01 02 03 04');
       expect(formatPhone('+999123456'), '+999123456');
       expect(formatPhone('abc'), 'abc');
       expect(formatPhone(null), '');
@@ -210,7 +210,7 @@ void main() {
       Countries.instance.setForTest([ci]);
       final ctrl = PhoneController();
       await t.pumpWidget(app(PhoneField(controller: ctrl)));
-      expect(find.text('🇨🇮 +225'), findsOneWidget);
+      expect(find.text('+225'), findsOneWidget);
       expect(find.text('07 01 02 03 04'), findsOneWidget); // exemple
       expect(find.byIcon(CupertinoIcons.chevron_down), findsNothing);
       await t.tap(find.byKey(const ValueKey('phone-country')));
@@ -237,7 +237,7 @@ void main() {
       await t.tap(find.text('Ghana'));
       await t.pumpAndSettle();
       expect(find.text('Indicatif du pays'), findsNothing);
-      expect(find.text('🇬🇭 +233'), findsOneWidget);
+      expect(find.text('+233'), findsOneWidget);
       expect(find.text('024 123 4567'), findsOneWidget); // exemple du Ghana
       await t.enterText(find.byType(TextFormField), '024 123 4567');
       expect(emitted.last, '+233241234567');

@@ -9,6 +9,43 @@ import 'widgets.dart' show Grabber, hapticTap;
 
 /// Saisie d'un numéro : chiffres nationaux dans [text], pays choisi dans [country].
 /// [e164] donne la valeur à envoyer à l'API (« +2250701020304 »), null si invalide.
+/// Drapeau d'un pays en image (flagcdn.com, mise en cache par l'app) ; à défaut, ses initiales ISO.
+/// Les emojis drapeaux ne s'affichent pas sur tous les appareils, d'où l'image.
+class CountryFlag extends StatelessWidget {
+  final String iso;
+  final double height;
+  const CountryFlag({super.key, required this.iso, this.height = 16});
+
+  @override
+  Widget build(BuildContext context) {
+    final w = height * 4 / 3;
+    final code = iso.toLowerCase();
+    Widget fallback() => Container(
+          width: w,
+          height: height,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: Palette.of(context).fill, borderRadius: BorderRadius.circular(3)),
+          child: Text(iso.toUpperCase(), style: TextStyle(fontSize: height * 0.55, fontWeight: FontWeight.w700, color: Palette.of(context).secondaryLabel)),
+        );
+    if (!RegExp(r'^[a-z]{2}$').hasMatch(code)) return fallback();
+    return Semantics(
+      label: 'Drapeau ${iso.toUpperCase()}',
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(3),
+        child: Image.network(
+          'https://flagcdn.com/h40/$code.png',
+          width: w,
+          height: height,
+          fit: BoxFit.cover,
+          excludeFromSemantics: true,
+          errorBuilder: (_, _, _) => fallback(),
+          frameBuilder: (_, child, frame, sync) => frame == null && !sync ? fallback() : child,
+        ),
+      ),
+    );
+  }
+}
+
 class PhoneController extends TextEditingController {
   PhoneController([String? initial]) {
     setPhone(initial);
@@ -114,21 +151,22 @@ class PhoneField extends StatelessWidget {
         final countries = Countries.instance.list;
         final c = controller.country;
         final choosable = countries.length > 1 || !countries.contains(c);
-        final labelText = [
-          if (c.flag.isNotEmpty) c.flag,
-          '+${c.dialCode}',
-        ].join(' ');
+        final labelText = '+${c.dialCode}';
         final bodyStyle = TextStyles.body.copyWith(color: p.label);
-        // Hauteur de ligne fixe : le drapeau (emoji) ne décale pas l'indicatif
-        final label = Text(
-          labelText,
-          style: bodyStyle,
-          maxLines: 1,
-          softWrap: false,
-          strutStyle: StrutStyle.fromTextStyle(
-            TextStyles.body,
-            forceStrutHeight: true,
-          ),
+        // Drapeau en image (les emojis drapeaux ne s'affichent pas partout) puis l'indicatif
+        final label = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CountryFlag(iso: c.iso, height: 15),
+            const SizedBox(width: 6),
+            Text(
+              labelText,
+              style: bodyStyle,
+              maxLines: 1,
+              softWrap: false,
+              strutStyle: StrutStyle.fromTextStyle(TextStyles.body, forceStrutHeight: true),
+            ),
+          ],
         );
         final hint = placeholder ?? c.phoneExample;
         return LayoutBuilder(
@@ -149,7 +187,7 @@ class PhoneField extends StatelessWidget {
                 return width;
               }
 
-              final chip = w(labelText) + 8 + (choosable ? 16 : 0);
+              final chip = w(labelText) + 27 + 8 + (choosable ? 16 : 0);
               final digits = '0' * (c.phoneLength + c.trunkPrefix.length);
               final field =
                   [w(hint), w(digits)].reduce((a, b) => a > b ? a : b) + 4;
@@ -429,15 +467,7 @@ class _CountrySheetState extends State<_CountrySheet> {
                                       children: [
                                         SizedBox(
                                           width: 30,
-                                          child: Text(
-                                            c.flag,
-                                            maxLines: 1,
-                                            softWrap: false,
-                                            overflow: TextOverflow.clip,
-                                            style: const TextStyle(
-                                              fontSize: 20,
-                                            ),
-                                          ),
+                                          child: CountryFlag(iso: c.iso, height: 20),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(

@@ -108,6 +108,7 @@ class Palette extends ThemeExtension<Palette> {
 /// Typographie : Inter pour le texte, Barlow Condensed pour les grands titres
 class TextStyles {
   static const _inter = 'Inter';
+  static const _emoji = ['Apple Color Emoji', 'Noto Color Emoji'];
 
   /// Grand titre condensé, en capitales (« ENVOYER UN COLIS »)
   static const display = TextStyle(
@@ -126,60 +127,70 @@ class TextStyles {
 
   static const largeTitle = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 29,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.8,
   );
   static const title1 = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 23,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.6,
   );
   static const title2 = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 19,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.4,
   );
   static const title3 = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 17.5,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.3,
   );
   static const headline = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 15.5,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.2,
   );
   static const body = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 15.5,
     fontWeight: FontWeight.w400,
     letterSpacing: -0.2,
   );
   static const callout = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 14.5,
     fontWeight: FontWeight.w400,
     letterSpacing: -0.15,
   );
   static const subheadline = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 13.5,
     fontWeight: FontWeight.w400,
     letterSpacing: -0.1,
   );
   static const footnote = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 12.5,
     fontWeight: FontWeight.w400,
     letterSpacing: -0.05,
   );
   static const caption = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 11.5,
     fontWeight: FontWeight.w500,
   );
@@ -187,6 +198,7 @@ class TextStyles {
   /// Prix (chiffres alignés)
   static const price = TextStyle(
     fontFamily: _inter,
+    fontFamilyFallback: _emoji,
     fontSize: 20,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.6,
@@ -248,6 +260,8 @@ ThemeData buildTheme(Brightness brightness) {
     useMaterial3: true,
     brightness: brightness,
     fontFamily: 'Inter',
+    // Drapeaux et emojis : police couleur du système (sinon iOS dessine les lettres régionales en carrés)
+    fontFamilyFallback: const ['Apple Color Emoji', 'Noto Color Emoji'],
     colorScheme: ColorScheme.fromSeed(
       seedColor: accent,
       brightness: brightness,
