@@ -1517,16 +1517,21 @@ class GlassBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-        child: Container(
-          decoration: BoxDecoration(
-            color: p.glass,
-            border: Border(top: BorderSide(color: p.separator, width: 0.5)),
+    // Toujours visible pendant la saisie : la barre remonte au-dessus du clavier
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          child: Container(
+            decoration: BoxDecoration(
+              color: p.glass,
+              border: Border(top: BorderSide(color: p.separator, width: 0.5)),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            child: SafeArea(top: false, child: child),
           ),
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-          child: SafeArea(top: false, child: child),
         ),
       ),
     );

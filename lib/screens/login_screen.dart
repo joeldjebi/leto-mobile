@@ -64,8 +64,19 @@ class _LoginScreenState extends State<LoginScreen> {
     final p = Palette.of(context);
     return Scaffold(
       backgroundColor: p.background,
+      // Le bouton principal reste visible au-dessus du clavier pendant la saisie
+      bottomNavigationBar: GlassBottomBar(
+        child: FilledButton(
+          onPressed: _loading ? null : _submit,
+          child: _loading
+              ? const CupertinoActivityIndicator(color: Colors.white)
+              : Text(_registerMode ? 'Créer mon compte' : 'Continuer'),
+        ),
+      ),
       body: SafeArea(
+        bottom: false,
         child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.only(top: 56, bottom: 24),
           children: [
             Center(
@@ -183,16 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ],
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: FilledButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const CupertinoActivityIndicator(color: Colors.white)
-                    : Text(_registerMode ? 'Créer mon compte' : 'Continuer'),
-              ),
-            ),
-            const SizedBox(height: 8),
+
             CupertinoButton(
               onPressed: () => setState(() => _registerMode = !_registerMode),
               child: Text(
