@@ -6,6 +6,7 @@ import 'screens/client_home.dart';
 import 'screens/driver_home.dart';
 import 'screens/independent_screens.dart';
 import 'screens/login_screen.dart';
+import 'screens/onboarding.dart';
 import 'theme.dart';
 
 export 'theme.dart'
@@ -57,7 +58,8 @@ class LetoApp extends StatelessWidget {
         'light' => ThemeMode.light,
         _ => ThemeMode.system,
       },
-      home: homeFor(),
+      // Dev / tests : SKIP_SPLASH=true ouvre directement l'accueil
+      home: const bool.fromEnvironment('SKIP_SPLASH') ? homeFor() : const SplashScreen(),
       // Grands caractères du téléphone : suivis, mais bornés pour garder des écrans lisibles et sans débordement
       builder: (context, child) {
         final mq = MediaQuery.of(context);

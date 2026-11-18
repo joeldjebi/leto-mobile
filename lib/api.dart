@@ -340,8 +340,12 @@ class Api {
       await _request('GET', '/deliveries/mine/$id');
   Future<dynamic> createDelivery(Map<String, dynamic> body) =>
       _request('POST', '/deliveries', body);
-  Future<dynamic> cancel(String id) =>
-      _request('POST', '/deliveries/$id/cancel');
+  Future<dynamic> cancel(String id, {String? reason}) =>
+      _request('POST', '/deliveries/$id/cancel', {'reason': ?reason});
+
+  /// Motifs d'annulation définis par l'admin : {client: [...], driver: [...]}
+  Future<Map<String, dynamic>> cancelReasons() async =>
+      Map<String, dynamic>.from(await _request('GET', '/cancel-reasons'));
 
   /// Entreprises de livraison (choix du client) : livreurs en ligne, réussite, prix indicatifs
   Future<List<dynamic>> companiesDirectory() async =>

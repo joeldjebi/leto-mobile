@@ -21,6 +21,7 @@ import '../realtime.dart';
 import 'driver_course_sheet.dart';
 import 'independent_screens.dart';
 import 'logbook_screen.dart';
+import 'cancel_reasons.dart';
 import 'widgets.dart';
 
 /// Dev / tests : photo déjà envoyée utilisée à la place de l'appareil photo (--dart-define=DEV_PHOTO=/uploads/x.jpg)
@@ -264,20 +265,20 @@ class _DriverHomeState extends State<DriverHome> {
 
   /// Le destinataire annule (il a appelé) : l'expéditeur doit confirmer
   Future<void> _requestCancel(Map d, Map stop) async {
-    final note = await prompt(
+    final note = await pickCancelReason(
       context,
-      'Le destinataire annule',
+      side: 'driver',
+      title: 'Annuler la livraison de ${stop['recipientName']}',
       message:
           'L’expéditeur doit confirmer l’annulation. Sans réponse, elle est acceptée automatiquement. En attendant, continuez vers les autres arrêts.',
-      placeholder: 'Ex. : il a appelé, il ne veut plus du colis',
-      ok: 'Envoyer',
+      otherPlaceholder: 'Ex. : il a appelé, il ne veut plus du colis',
     );
     if (note == null) return;
     await _run(
       () => api.requestStopCancel(
         d['id'],
         stop['id'],
-        note: note.isEmpty ? null : note,
+        note: note,
       ),
       'Demande envoyée à l’expéditeur',
     );

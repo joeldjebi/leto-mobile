@@ -12,6 +12,7 @@ import '../labels.dart';
 import '../live_activity.dart';
 import '../main.dart';
 import '../realtime.dart';
+import 'cancel_reasons.dart';
 import 'share_codes.dart';
 import 'widgets.dart';
 
@@ -300,21 +301,20 @@ class _TrackingScreenState extends State<TrackingScreen> {
     }
     if (!mounted) return;
     final enRoute = _d?['status'] == 'ACCEPTED';
-    if (!await confirm(
+    final reason = await pickCancelReason(
       context,
-      'Annuler la livraison ?',
+      side: 'client',
+      title: 'Annuler la livraison ?',
       message: fee > 0
           ? 'Le livreur est déjà en route : des frais de déplacement de ${fcfa(fee)} seront dus à son entreprise.'
           : enRoute
           ? 'Le livreur sera prévenu immédiatement.'
           : null,
-      ok: fee > 0 ? 'Annuler et payer ${fcfa(fee)}' : 'Oui, annuler',
-      destructive: true,
-    )) {
-      return;
-    }
+    );
+    if (reason == null) return;
     try {
-      await api.cancel(widget.id);
+      await api.cancel(widget.id, reason: reason);
+      hapticSuccess();
       await _load();
     } catch (e) {
       if (mounted) showError(context, e);
@@ -324,21 +324,20 @@ class _TrackingScreenState extends State<TrackingScreen> {
   /// Retirer un arrêt (un client de la boutique annule)
   Future<void> _cancelStop(Map<String, dynamic> stop) async {
     final pickedUp = _d?['status'] == 'PICKED_UP';
-    final reason = await prompt(
+    final reason = await pickCancelReason(
       context,
-      'Annuler la livraison de ${stop['recipientName']} ?',
+      side: 'client',
+      title: 'Annuler la livraison de ${stop['recipientName']} ?',
       message: pickedUp
           ? 'Le colis est déjà chez le livreur : le prix reste le même et le colis vous sera rapporté.'
           : 'Le prix et l’itinéraire seront recalculés, le livreur est prévenu.',
-      placeholder: 'Motif (facultatif)',
-      ok: 'Annuler l’arrêt',
     );
     if (reason == null) return;
     try {
       await api.cancelStop(
         widget.id,
         stop['id'],
-        reason: reason.isEmpty ? null : reason,
+        reason: reason,
       );
       hapticSuccess();
       await _load();

@@ -1317,6 +1317,7 @@ Future<T?> showActions<T>(
   String? title,
   String? message,
   required List<(String, T, bool)> actions,
+  String cancelLabel = 'Annuler',
 }) {
   return showCupertinoModalPopup<T>(
     context: context,
@@ -1333,7 +1334,7 @@ Future<T?> showActions<T>(
       ],
       cancelButton: CupertinoActionSheetAction(
         onPressed: () => Navigator.pop(ctx),
-        child: const Text('Annuler'),
+        child: Text(cancelLabel),
       ),
     ),
   );
