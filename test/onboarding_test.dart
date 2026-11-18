@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:leto/brand.dart';
 import 'package:leto/screens/login_screen.dart';
 import 'package:leto/screens/onboarding.dart';
 import 'package:leto/theme.dart';
@@ -33,7 +34,9 @@ void main() {
       t.view.physicalSize = const Size(390 * 3, 844 * 3);
       t.view.devicePixelRatio = 3;
       await t.pumpWidget(app(const SplashScreen()));
-      expect(find.text('LETO'), findsOneWidget);
+      // Splash : le symbole seul, sans texte
+    expect(find.byType(LetoMark), findsOneWidget);
+    expect(find.text('LETO'), findsNothing);
       await t.pump(const Duration(milliseconds: 1600));
       await settle(t);
       expect(find.text('Commandez en 30 secondes'), findsOneWidget);

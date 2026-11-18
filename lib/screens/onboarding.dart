@@ -24,7 +24,7 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1500),
+    duration: const Duration(milliseconds: 900),
   );
 
   @override
@@ -61,108 +61,33 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final reduce = MediaQuery.of(context).disableAnimations;
+    // Identique au splash natif : même violet uni, même symbole blanc à la même taille et à la
+    // même place (aucune tuile, aucun texte). Seul un léger « battement » du symbole s'ajoute.
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: accent,
-        body: AnimatedBuilder(
-          animation: _c,
-          builder: (context, _) {
-            final t = reduce ? 1.0 : _c.value;
-            // Pictogramme : léger rebond ; le nom puis le slogan apparaissent
-            final pop = Curves.easeOutBack.transform((t / 0.45).clamp(0, 1));
-            final word = Curves.easeOutCubic.transform(
-              ((t - 0.3) / 0.4).clamp(0, 1),
-            );
-            final tag = Curves.easeOutCubic.transform(
-              ((t - 0.5) / 0.4).clamp(0, 1),
-            );
-            return Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0, -0.15),
-                  radius: 1.1,
-                  colors: [accentLight, accent, accentDeep],
-                  stops: [0, 0.55, 1],
-                ),
-              ),
-              child: Center(
-                // Au départ la tuile est exactement là où le splash natif l'affiche (centrée),
-                // puis le bloc remonte pendant que « LETO » apparaît
-                child: Transform.translate(
-                  offset: Offset(0, 62 * (1 - word)),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Transform.scale(
-                        scale: 1 + 0.05 * math.sin(pop * math.pi), // même taille que le splash natif, petit rebond
-                        child: const _LogoTile(size: 124),
-                      ),
-                      const SizedBox(height: 26),
-                      Opacity(
-                        opacity: word,
-                        child: Transform.translate(
-                          offset: Offset(0, 14 * (1 - word)),
-                          child: const Text(
-                            'LETO',
-                            style: TextStyle(
-                              fontFamily: 'BarlowCondensed',
-                              fontWeight: FontWeight.w800,
-                              fontSize: 52,
-                              height: 1,
-                              letterSpacing: 6,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Opacity(
-                        opacity: tag,
-                        child: Text(
-                          'Livraison à Abidjan',
-                          style: TextStyles.callout.copyWith(
-                            color: Colors.white.withValues(alpha: 0.82),
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
+        body: Center(
+          child: AnimatedBuilder(
+            animation: _c,
+            builder: (context, child) {
+              final t = reduce ? 0.0 : _c.value;
+              return Transform.scale(
+                scale: 1 + 0.06 * math.sin(t * math.pi),
+                child: child,
+              );
+            },
+            child: const LetoMark.onAccent(size: splashMarkSize),
+          ),
         ),
       ),
     );
   }
 }
 
-/// Carré blanc arrondi avec le symbole LETO (identique au splash natif)
-class _LogoTile extends StatelessWidget {
-  final double size;
-  const _LogoTile({required this.size});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(size * 0.264),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1E0050).withValues(alpha: 0.28),
-            blurRadius: size * 0.24,
-            offset: Offset(0, size * 0.1),
-          ),
-        ],
-      ),
-      child: Center(child: LetoMark(size: size * 0.6)),
-    );
-  }
-}
+/// Taille du symbole du splash (dp) : celle du splash natif (assets/brand/splash_logo.png,
+/// symbole de 440 px sur 1152 px affichés à 288 dp)
+const splashMarkSize = 110.0;
 
 class _Page {
   final String title;
