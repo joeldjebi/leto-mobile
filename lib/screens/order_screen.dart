@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../api.dart';
+import '../countries.dart';
 import '../labels.dart';
 import '../main.dart';
 import '../models.dart';
@@ -44,22 +45,13 @@ class OrderScreen extends StatefulWidget {
 /// Champs d'un destinataire
 class _StopForm {
   final name = TextEditingController();
-  final phone = TextEditingController();
+  final PhoneController phone;
   final cod = TextEditingController();
   bool codOn = false;
 
-  _StopForm(StopDraft draft) {
+  _StopForm(StopDraft draft) : phone = PhoneController(draft.phone) {
     name.text = draft.name;
-    phone.text = draft.phone;
   }
-}
-
-/// Numéro ivoirien à 10 chiffres à partir d'un numéro du répertoire (+225 07 01…, 00225…)
-String normalizePhone(String raw) {
-  var d = raw.replaceAll(RegExp(r'\D'), '');
-  if (d.startsWith('00225')) d = d.substring(5);
-  if (d.startsWith('225') && d.length == 13) d = d.substring(3);
-  return d;
 }
 
 class _OrderScreenState extends State<OrderScreen> {
@@ -74,7 +66,7 @@ class _OrderScreenState extends State<OrderScreen> {
   bool _quoting = false;
 
   /// Numéro que le livreur appellera au départ (celui du profil par défaut)
-  late final _pickupPhone = TextEditingController(text: api.user?['phone']);
+  late final _pickupPhone = PhoneController(api.user?['phone']);
 
   List<StopDraft> get _stops => widget.stops;
 
@@ -175,7 +167,7 @@ class _OrderScreenState extends State<OrderScreen> {
       d.place = res.place;
       final f = _formOf(d);
       if (f.name.text.trim().isEmpty) f.name.text = res.name;
-      if (f.phone.text.trim().isEmpty) f.phone.text = res.phone;
+      if (f.phone.isBlank) f.phone.setPhone(res.phone);
       d.details = res.details;
     } else {
       return;
@@ -220,17 +212,21 @@ class _OrderScreenState extends State<OrderScreen> {
       final raw =
           c.selectedPhoneNumber ??
           (c.phoneNumbers?.isNotEmpty == true ? c.phoneNumbers!.first : '');
-      final phone = normalizePhone(raw);
+      final phone = parseAnyPhone(raw);
       setState(() {
-        if (phone.isNotEmpty) f.phone.text = phone;
+        if (phone != null) {
+          f.phone.setPhone(phone);
+        } else if (raw.trim().isNotEmpty) {
+          f.phone.text = raw.replaceAll(RegExp(r'[^\d+]'), '');
+        }
         if ((c.fullName ?? '').trim().isNotEmpty) {
           f.name.text = c.fullName!.trim();
         }
       });
-      if (phone.isNotEmpty && !RegExp(r'^0\d{9}$').hasMatch(phone)) {
+      if (phone == null && raw.trim().isNotEmpty) {
         showError(
           context,
-          'Ce numéro ne semble pas ivoirien (10 chiffres) : vérifiez-le',
+          'Ce numéro ne correspond à aucun pays disponible : vérifiez-le',
         );
       }
     } catch (e) {
@@ -271,7 +267,7 @@ class _OrderScreenState extends State<OrderScreen> {
         'pickupLng': _pickup.point.longitude,
         'pickupAddress': _pickup.label,
         'pickupContactName': ?optStr(api.user?['name']),
-        'pickupPhone': _pickupPhone.text.trim(),
+        'pickupPhone': _pickupPhone.e164,
         'stops': [
           for (final s in _stops)
             {
@@ -279,7 +275,7 @@ class _OrderScreenState extends State<OrderScreen> {
               'lng': s.place.point.longitude,
               'address': s.place.label,
               'recipientName': _formOf(s).name.text.trim(),
-              'recipientPhone': _formOf(s).phone.text.trim(),
+              'recipientPhone': _formOf(s).phone.e164,
               'details': ?optStr(s.details),
               'codAmount': _codEnabled && _formOf(s).codOn
                   ? int.parse(_formOf(s).cod.text.replaceAll(' ', ''))
@@ -298,17 +294,14 @@ class _OrderScreenState extends State<OrderScreen> {
 
   /// Premier champ manquant ou invalide, avec un message précis
   String? _missing() {
-    final phoneOk = RegExp(r'^0\d{9}$');
-    if (!phoneOk.hasMatch(_pickupPhone.text.trim())) {
-      return 'Départ : votre numéro est invalide (10 chiffres)';
-    }
+    final pickupError = _pickupPhone.validate();
+    if (pickupError != null) return 'Départ : $pickupError';
     for (var i = 0; i < _stops.length; i++) {
       final f = _formOf(_stops[i]);
       final who = _stops.length > 1 ? 'Destinataire ${i + 1}' : 'Destinataire';
       if (f.name.text.trim().isEmpty) return '$who : indiquez le nom';
-      if (!phoneOk.hasMatch(f.phone.text.trim())) {
-        return '$who : téléphone invalide (10 chiffres)';
-      }
+      final phoneError = f.phone.validate();
+      if (phoneError != null) return '$who : $phoneError';
       if (_codEnabled &&
           f.codOn &&
           (int.tryParse(f.cod.text.replaceAll(' ', '')) ?? 0) <= 0) {
@@ -389,7 +382,7 @@ class _OrderScreenState extends State<OrderScreen> {
                           child: CupertinoActivityIndicator(),
                         )
                       : Text(
-                          fcfa(_priceFor(_speed)),
+                          formatMoney(_priceFor(_speed)),
                           key: ValueKey('$_vehicle$_speed${_priceFor(_speed)}'),
                           style: TextStyles.title2.copyWith(color: p.label),
                         ),
@@ -461,12 +454,7 @@ class _OrderScreenState extends State<OrderScreen> {
               chevron: true,
               onTap: _changePickup,
             ),
-            GroupField(
-              controller: _pickupPhone,
-              placeholder: 'Votre numéro',
-              prefix: '+225',
-              keyboardType: TextInputType.phone,
-            ),
+            PhoneField(controller: _pickupPhone),
           ],
         ),
         // ----- Destinataires -----
@@ -531,7 +519,7 @@ class _OrderScreenState extends State<OrderScreen> {
           ),
         ),
         Text(
-          fcfa(_priceFor(_speed, o)),
+          formatMoney(_priceFor(_speed, o)),
           style: TextStyles.caption.copyWith(color: p.secondaryLabel),
         ),
       ],
@@ -556,7 +544,7 @@ class _OrderScreenState extends State<OrderScreen> {
         ),
         const SizedBox(height: 2),
         Text(
-          fcfa(_priceFor(s)),
+          formatMoney(_priceFor(s)),
           style: TextStyles.headline.copyWith(
             color: on ? accent : p.secondaryLabel,
             fontFeatures: const [FontFeature.tabularFigures()],
@@ -608,44 +596,15 @@ class _OrderScreenState extends State<OrderScreen> {
           placeholder: 'Nom du destinataire',
           icon: CupertinoIcons.person,
         ),
-        Row(
-          children: [
-            Expanded(
-              child: GroupField(
-                controller: f.phone,
-                placeholder: 'Téléphone',
-                prefix: '+225',
-                keyboardType: TextInputType.phone,
-              ),
-            ),
-            CupertinoButton(
-              padding: const EdgeInsets.only(right: 14, left: 6),
-              onPressed: () => _pickContact(f),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    PhosphorIcons.addressBook(PhosphorIconsStyle.fill),
-                    color: accent,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Répertoire',
-                    style: TextStyles.subheadline.copyWith(
-                      color: accent,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        PhoneField(
+          controller: f.phone,
+          trailing: ContactButton(onPressed: () => _pickContact(f)),
         ),
         if (_codEnabled) ...[
           GroupSwitch(
             title: 'Paiement à la livraison',
-            subtitle: 'Le livreur encaisse la marchandise · +${fcfa(_codFee)}',
+            subtitle:
+                'Le livreur encaisse la marchandise · +${formatMoney(_codFee)}',
             value: f.codOn,
             onChanged: (v) => setState(() => f.codOn = v),
           ),

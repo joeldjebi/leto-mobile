@@ -9,6 +9,8 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'profile_screen.dart';
 
+export 'phone_field.dart';
+
 import '../api.dart';
 import '../geo.dart';
 import '../labels.dart';
@@ -1047,10 +1049,13 @@ class CashPill extends StatelessWidget {
 /// « Encaisser 15 000 F » (paiement à la livraison)
 class CodBadge extends StatelessWidget {
   final num amount;
-  const CodBadge(this.amount, {super.key});
+
+  /// Devise de la course (code ISO), sinon celle du pays où LETO livre
+  final String? currency;
+  const CodBadge(this.amount, {super.key, this.currency});
   @override
   Widget build(BuildContext context) => Pill(
-    'Encaisser ${fcfa(amount)}',
+    'Encaisser ${formatMoney(amount, currency)}',
     color: accentDeep,
     icon: CupertinoIcons.creditcard,
   );
@@ -1225,7 +1230,7 @@ class DeliveryCard extends StatelessWidget {
                   ),
                 const Spacer(),
                 Text(
-                  fcfa(d['price']),
+                  formatMoney(d['price'], d['currency']),
                   style: TextStyles.headline.copyWith(color: p.label),
                 ),
               ],
@@ -1239,7 +1244,10 @@ class DeliveryCard extends StatelessWidget {
                 title: s['address'],
                 detail: '${s['commune']} · ${s['recipientName']}',
               ),
-            if (cod > 0) ...[const SizedBox(height: 6), CodBadge(cod)],
+            if (cod > 0) ...[
+              const SizedBox(height: 6),
+              CodBadge(cod, currency: d['currency']),
+            ],
           ],
         ),
       ),
@@ -1710,7 +1718,7 @@ Future<void> showAccountSheet(
               style: TextStyles.title2.copyWith(color: p.label),
             ),
             Text(
-              '+225 ${user['phone'] ?? ''}',
+              formatPhone(user['phone']),
               style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
             ),
             const SizedBox(height: 22),

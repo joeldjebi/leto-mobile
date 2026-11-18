@@ -205,7 +205,7 @@ class _DriverHomeState extends State<DriverHome> {
       showError(
         context,
         fee > 0
-            ? 'Course annulée par l’expéditeur · frais de déplacement ${fcfa(fee)} (récupérés par votre entreprise)'
+            ? 'Course annulée par l’expéditeur · frais de déplacement ${formatMoney(fee, e['currency'])} (récupérés par votre entreprise)'
             : 'Course annulée par l’expéditeur',
       );
     }
@@ -275,11 +275,7 @@ class _DriverHomeState extends State<DriverHome> {
     );
     if (note == null) return;
     await _run(
-      () => api.requestStopCancel(
-        d['id'],
-        stop['id'],
-        note: note,
-      ),
+      () => api.requestStopCancel(d['id'], stop['id'], note: note),
       'Demande envoyée à l’expéditeur',
     );
   }
@@ -488,7 +484,7 @@ class _DriverHomeState extends State<DriverHome> {
           context,
           'Encaissement',
           message:
-              'Avez-vous encaissé ${fcfa(cod)} auprès de ${stop['recipientName']} ?',
+              'Avez-vous encaissé ${formatMoney(cod, d['currency'])} auprès de ${stop['recipientName']} ?',
           ok: 'Oui, encaissé',
         )) {
       return;
@@ -539,7 +535,8 @@ class _DriverHomeState extends State<DriverHome> {
     final reason = await showActions<String>(
       context,
       title: 'Problème avec ${stop['recipientName']}',
-      message: 'Appelez d’abord le destinataire : ${stop['recipientPhone']}',
+      message:
+          'Appelez d’abord le destinataire : ${formatPhone(stop['recipientPhone'])}',
       actions: [
         ('Destinataire absent ou injoignable', 'ABSENT', false),
         ('Le destinataire refuse le colis', 'REFUSED', true),
@@ -649,6 +646,7 @@ class _DriverHomeState extends State<DriverHome> {
                           onTap: () => _openCourse(d),
                           child: _PriceTag(
                             d['price'],
+                            currency: d['currency'],
                             stops: _stopsOf(d).length,
                           ),
                         ),
@@ -1070,7 +1068,7 @@ class _DriverHomeState extends State<DriverHome> {
                   CupertinoIcons.creditcard_fill,
                   color: accentDeep,
                 ),
-                title: 'Encaisser ${fcfa(cod)}',
+                title: 'Encaisser ${formatMoney(cod, d['currency'])}',
                 subtitle: 'Avant de remettre le colis',
               ),
             if (next['cancelRequestedAt'] != null)
@@ -1225,7 +1223,7 @@ class _DriverHomeState extends State<DriverHome> {
       Icon(CupertinoIcons.phone_fill, size: 15, color: p.green),
       const SizedBox(width: 4),
       SelectableText(
-        phone ?? '',
+        formatPhone(phone, compact: true),
         style: TextStyles.subheadline.copyWith(
           color: p.label,
           fontWeight: FontWeight.w600,
@@ -1252,7 +1250,7 @@ class _DriverHomeState extends State<DriverHome> {
       InsetGroup(
         header: 'À verser à mon entreprise',
         footer: pct > 0
-            ? 'Vous gardez $pct % du prix de vos courses (${fcfa(b['share'] ?? 0)} au total). Le reste, avec les paiements encaissés à la livraison, revient à votre entreprise.'
+            ? 'Vous gardez $pct % du prix de vos courses (${formatMoney(b['share'] ?? 0)} au total). Le reste, avec les paiements encaissés à la livraison, revient à votre entreprise.'
             : 'Le prix des courses et les paiements encaissés à la livraison reviennent à votre entreprise.',
         children: [
           GroupRow(
@@ -1262,9 +1260,9 @@ class _DriverHomeState extends State<DriverHome> {
             ),
             title: 'Reste à verser',
             subtitle: pending > 0
-                ? '${fcfa(pending)} en attente de confirmation'
+                ? '${formatMoney(pending)} en attente de confirmation'
                 : null,
-            value: fcfa(toRemit),
+            value: formatMoney(toRemit),
           ),
           GroupRow(
             leading: IconBadge(
@@ -1272,7 +1270,7 @@ class _DriverHomeState extends State<DriverHome> {
               color: p.green,
             ),
             title: 'Déjà versé',
-            value: fcfa(b['confirmed'] ?? 0),
+            value: formatMoney(b['confirmed'] ?? 0),
           ),
           GroupRow(
             leading: IconBadge(
@@ -1281,8 +1279,8 @@ class _DriverHomeState extends State<DriverHome> {
             ),
             title: 'Gagné ce mois',
             subtitle:
-                '${b['deliveries'] ?? 0} course(s) au total · ${fcfa(b['earned'] ?? 0)}',
-            value: fcfa(b['month'] ?? 0),
+                '${b['deliveries'] ?? 0} course(s) au total · ${formatMoney(b['earned'] ?? 0)}',
+            value: formatMoney(b['month'] ?? 0),
           ),
         ],
       ),
@@ -1312,7 +1310,7 @@ class _DriverHomeState extends State<DriverHome> {
                       ? p.red
                       : p.yellow,
                 ),
-                title: fcfa(h['amount']),
+                title: formatMoney(h['amount']),
                 subtitle: [
                   methods[h['method']] ?? '',
                   statuses[h['status']] ?? '',
@@ -1374,7 +1372,7 @@ class _DriverHomeState extends State<DriverHome> {
               style: TextStyles.subheadline.copyWith(color: Colors.white70),
             ),
             Text(
-              fcfa(sum(todayList)),
+              formatMoney(sum(todayList)),
               style: TextStyles.largeTitle.copyWith(color: Colors.white),
             ),
             Text(
@@ -1391,7 +1389,7 @@ class _DriverHomeState extends State<DriverHome> {
           GroupRow(
             leading: IconBadge(CupertinoIcons.calendar, color: p.blue),
             title: 'Cette semaine',
-            value: fcfa(sum(weekList)),
+            value: formatMoney(sum(weekList)),
           ),
           GroupRow(
             leading: const IconBadge(
@@ -1400,7 +1398,7 @@ class _DriverHomeState extends State<DriverHome> {
             ),
             title: 'Encaissé pour l’entreprise',
             subtitle: 'Aujourd’hui · paiement à la livraison',
-            value: fcfa(codToday),
+            value: formatMoney(codToday),
           ),
         ],
       ),
@@ -1604,7 +1602,7 @@ class _OrderCard extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  fcfa(d['price']),
+                  formatMoney(d['price'], d['currency']),
                   style: TextStyles.title1.copyWith(color: p.label),
                 ),
                 const SizedBox(width: 8),
@@ -1669,7 +1667,7 @@ class _OrderCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (cod > 0) CodBadge(cod),
+                if (cod > 0) CodBadge(cod, currency: d['currency']),
               ],
             ),
             if (d['assignedDriverId'] != null &&
@@ -1684,7 +1682,7 @@ class _OrderCard extends StatelessWidget {
             if (myOffer != null) ...[
               const SizedBox(height: 10),
               Pill(
-                'Votre proposition : ${fcfa(myOffer!['price'])} · en attente',
+                'Votre proposition : ${formatMoney(myOffer!['price'], d['currency'])} · en attente',
                 color: accentDeep,
                 icon: CupertinoIcons.hourglass,
               ),
@@ -1700,7 +1698,8 @@ class _OrderCard extends StatelessWidget {
 class _PriceTag extends StatelessWidget {
   final num price;
   final int stops;
-  const _PriceTag(this.price, {this.stops = 1});
+  final String? currency;
+  const _PriceTag(this.price, {this.stops = 1, this.currency});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1711,7 +1710,9 @@ class _PriceTag extends StatelessWidget {
       shadows: [BoxShadow(color: Color(0x40000000), blurRadius: 8)],
     ),
     child: Text(
-      stops > 1 ? '${fcfa(price)} · $stops' : fcfa(price),
+      stops > 1
+          ? '${formatMoney(price, currency)} · $stops'
+          : formatMoney(price, currency),
       style: const TextStyle(
         color: Colors.white,
         fontWeight: FontWeight.w700,
@@ -1810,9 +1811,12 @@ class _RemittanceSheetState extends State<_RemittanceSheet> {
   void _submit() {
     final n = int.tryParse(_amount.text.replaceAll(' ', ''));
     if (n == null || n < 100)
-      return showError(context, 'Montant : 100 F minimum');
+      return showError(context, 'Montant : ${formatMoney(100)} minimum');
     if (n > widget.max) {
-      return showError(context, 'Il vous reste ${fcfa(widget.max)} à verser');
+      return showError(
+        context,
+        'Il vous reste ${formatMoney(widget.max)} à verser',
+      );
     }
     String? opt(TextEditingController c) =>
         c.text.trim().isEmpty ? null : c.text.trim();
@@ -1849,7 +1853,7 @@ class _RemittanceSheetState extends State<_RemittanceSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
               child: Text(
-                'Reste à verser : ${fcfa(widget.max)}. Votre entreprise confirme à réception.',
+                'Reste à verser : ${formatMoney(widget.max)}. Votre entreprise confirme à réception.',
                 style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
               ),
             ),
@@ -1874,7 +1878,7 @@ class _RemittanceSheetState extends State<_RemittanceSheet> {
               children: [
                 GroupField(
                   controller: _amount,
-                  placeholder: 'Montant (FCFA)',
+                  placeholder: 'Montant (${currencyLabel()})',
                   icon: CupertinoIcons.money_dollar,
                   keyboardType: TextInputType.number,
                 ),

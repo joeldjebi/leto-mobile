@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../api.dart';
+import '../countries.dart';
 import '../main.dart';
 import 'widgets.dart';
 
@@ -19,7 +20,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final api = Api.instance;
   late final Map<String, dynamic> _user = api.user ?? {};
   late final _name = TextEditingController(text: _user['name']);
-  late final _phone = TextEditingController(text: _user['phone']);
+  late final _phone = PhoneController(_user['phone']);
   late String? _accountType = _user['accountType'];
   final _current = TextEditingController();
   final _newPassword = TextEditingController();
@@ -50,16 +51,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   bool get _isClient => _user['role'] == 'CLIENT';
-  bool get _phoneChanged => _phone.text.trim() != _user['phone'];
+  bool get _phoneChanged =>
+      !samePhone(_phone.e164 ?? _phone.text, _user['phone']);
   bool get _needsPassword => _phoneChanged || _newPassword.text.isNotEmpty;
 
   Future<void> _save() async {
     final name = _name.text.trim();
-    final phone = _phone.text.trim();
     if (name.isEmpty) return showError(context, 'Indiquez votre nom');
-    if (!RegExp(r'^0\d{9}$').hasMatch(phone)) {
-      return showError(context, 'Téléphone invalide (10 chiffres)');
-    }
+    final phoneError = _phone.validate();
+    if (phoneError != null) return showError(context, phoneError);
+    final phone = _phone.e164!;
     if (_newPassword.text.isNotEmpty && _newPassword.text.length < 6) {
       return showError(context, 'Nouveau mot de passe : 6 caractères minimum');
     }
@@ -195,13 +196,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: shop ? CupertinoIcons.bag : CupertinoIcons.person,
               onChanged: (_) => setState(() {}),
             ),
-            GroupField(
-              controller: _phone,
-              placeholder: 'Téléphone',
-              prefix: '+225',
-              keyboardType: TextInputType.phone,
-              onChanged: (_) => setState(() {}),
-            ),
+            PhoneField(controller: _phone, onChanged: (_) => setState(() {})),
           ],
         ),
         InsetGroup(

@@ -8,10 +8,9 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api.dart';
+import '../countries.dart';
 import '../geo.dart';
-import '../labels.dart';
 import '../main.dart';
-import 'order_screen.dart' show normalizePhone;
 import 'place_search.dart';
 import 'widgets.dart';
 
@@ -134,7 +133,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
       context,
       title: e['address'],
       message:
-          '${e['recipientName'] ?? 'Destinataire'} · ${e['recipientPhone']} · ${fcfa(e['price'])}',
+          '${e['recipientName'] ?? 'Destinataire'} · ${formatPhone(e['recipientPhone'])} · ${formatMoney(e['price'], e['currency'])}',
       actions: [
         if (todo) ('Livrée', 'DELIVERED', false),
         if (todo) ('Non livrée (absent, refus…)', 'FAILED', false),
@@ -148,7 +147,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
     if (a == null || !mounted) return;
     switch (a) {
       case 'call':
-        await launchUrl(Uri(scheme: 'tel', path: e['recipientPhone']));
+        await launchUrl(telUri(e['recipientPhone']));
       case 'photo':
         await showDialog(
           context: context,
@@ -355,7 +354,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
                   p,
                   CupertinoIcons.money_dollar_circle_fill,
                   accent,
-                  fcfa(amount),
+                  formatMoney(amount),
                   'Montant',
                 ),
               ],
@@ -570,7 +569,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
                       if (rank != null) 'n°$rank',
                       ?dist,
                       e['recipientName'] ?? 'Sans nom',
-                      e['recipientPhone'],
+                      formatPhone(e['recipientPhone'], compact: true),
                       if (rank == null) _hm(at),
                     ].join(' · '),
                     style: TextStyles.footnote.copyWith(
@@ -585,7 +584,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  fcfa(e['price']),
+                  formatMoney(e['price'], e['currency']),
                   style: TextStyles.headline.copyWith(color: p.label),
                 ),
                 const SizedBox(height: 4),
@@ -602,7 +601,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
 /// Un destinataire en cours de saisie
 class _Recipient {
   final address = TextEditingController();
-  final phone = TextEditingController();
+  final phone = PhoneController();
   final name = TextEditingController();
   final price = TextEditingController();
 
@@ -614,7 +613,7 @@ class _Recipient {
   _Recipient();
   _Recipient.of(Map<String, dynamic> e) {
     address.text = e['address'] ?? '';
-    phone.text = e['recipientPhone'] ?? '';
+    phone.setPhone(e['recipientPhone']);
     name.text = e['recipientName'] ?? '';
     price.text = e['price']?.toString() ?? '';
     if (e['lat'] != null && e['lng'] != null) {
@@ -761,14 +760,24 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
       final raw =
           c.selectedPhoneNumber ??
           (c.phoneNumbers?.isNotEmpty == true ? c.phoneNumbers!.first : '');
-      final phone = normalizePhone(raw);
+      final phone = parseAnyPhone(raw);
       setState(() {
-        if (phone.isNotEmpty) r.phone.text = phone;
+        if (phone != null) {
+          r.phone.setPhone(phone);
+        } else if (raw.trim().isNotEmpty) {
+          r.phone.text = raw.replaceAll(RegExp(r'[^\d+]'), '');
+        }
         if ((c.fullName ?? '').trim().isNotEmpty &&
             r.name.text.trim().isEmpty) {
           r.name.text = c.fullName!.trim();
         }
       });
+      if (phone == null && raw.trim().isNotEmpty) {
+        showError(
+          context,
+          'Ce numéro ne correspond à aucun pays disponible : vérifiez-le',
+        );
+      }
     } catch (_) {
       if (mounted) showError(context, 'Répertoire indisponible');
     }
@@ -804,7 +813,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
     final pt = await _pointOf(r);
     return {
       'address': r.address.text.trim(),
-      'recipientPhone': normalizePhone(r.phone.text),
+      'recipientPhone': r.phone.e164,
       'recipientName': r.name.text.trim(),
       'price': int.parse(r.price.text.replaceAll(RegExp(r'\D'), '')),
       if (pt != null) 'lat': pt.latitude,
@@ -959,14 +968,9 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
           ],
         ),
       ),
-      GroupField(
+      PhoneField(
         controller: r.phone,
-        placeholder: 'Numéro (10 chiffres)',
-        icon: CupertinoIcons.phone_fill,
-        keyboardType: TextInputType.phone,
-        validator: (v) => RegExp(r'^0\d{9}$').hasMatch(normalizePhone(v ?? ''))
-            ? null
-            : 'Numéro à 10 chiffres, ex : 0701020304',
+        validate: true,
         trailing: _iconButton(
           CupertinoIcons.person_crop_circle,
           'Répertoire',
@@ -980,7 +984,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
       ),
       GroupField(
         controller: r.price,
-        placeholder: 'Prix en F CFA',
+        placeholder: 'Prix en ${currencyLabel()}',
         icon: CupertinoIcons.money_dollar_circle_fill,
         keyboardType: TextInputType.number,
         validator: (v) =>

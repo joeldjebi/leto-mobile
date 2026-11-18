@@ -44,13 +44,16 @@ void main() {
     t.view.physicalSize = const Size(390 * 3, 844 * 3);
     t.view.devicePixelRatio = 3;
     await t.pumpWidget(app(const LogbookEntryScreen(entry: {
-      'id': 'x', 'address': 'Yopougon Maroc', 'recipientPhone': '0102030405',
+      'id': 'x', 'address': 'Yopougon Maroc', 'recipientPhone': '+2250102030405', 'currency': 'XOF',
       'recipientName': 'Awa', 'price': 1500, 'note': null, 'photoUrl': '/uploads/a.jpg',
     })));
     await t.pump();
     expect(find.text('Modifier la livraison'), findsOneWidget);
     expect(find.text('Yopougon Maroc'), findsOneWidget);
     expect(find.text('1500'), findsOneWidget);
+    // Numéro E.164 : indicatif à part, chiffres nationaux dans le champ
+    expect(find.text('0102030405'), findsOneWidget);
+    expect(find.textContaining('+225'), findsWidgets);
   });
 
   testWidgets('Onglet carnet', (t) async {

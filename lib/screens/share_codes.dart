@@ -4,7 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api.dart';
-import '../labels.dart';
+import '../countries.dart';
 import '../main.dart';
 import 'widgets.dart';
 
@@ -18,21 +18,24 @@ String shareMessage(Map<String, dynamic> d, Map<String, dynamic> stop) {
     '',
     'Code de livraison : ${stop['confirmationCode']}',
     'Donnez ce code au livreur à la remise du colis.',
-    if (cod > 0) 'Montant à payer à la livraison : ${fcfa(cod)} (espèces)',
+    if (cod > 0)
+      'Montant à payer à la livraison : ${formatMoney(cod, d['currency'])} (espèces)',
     '',
     'Adresse : ${stop['address']}',
     if (trackingUrl(d) != null) 'Suivre la livraison : ${trackingUrl(d)}',
   ].join('\n');
 }
 
-/// WhatsApp directement au numéro du destinataire (+225), sinon partage du système
+/// WhatsApp directement au numéro du destinataire (E.164 sans « + »), sinon partage du système
 Future<void> shareToWhatsApp(
   BuildContext context,
   Map<String, dynamic> d,
   Map<String, dynamic> stop,
 ) async {
+  final e164 = parseAnyPhone(stop['recipientPhone']);
+  if (e164 == null) return shareCode(context, d, stop);
   final uri = Uri.parse(
-    'https://wa.me/225${stop['recipientPhone']}?text=${Uri.encodeComponent(shareMessage(d, stop))}',
+    'https://wa.me/${e164.substring(1)}?text=${Uri.encodeComponent(shareMessage(d, stop))}',
   );
   final ok = await launchUrl(
     uri,

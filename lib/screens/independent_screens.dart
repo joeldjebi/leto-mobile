@@ -9,7 +9,6 @@ import '../labels.dart';
 import '../main.dart';
 import '../realtime.dart';
 import 'driver_home.dart';
-import 'order_screen.dart' show normalizePhone;
 import 'widgets.dart';
 
 /// Dev / tests : photo déjà envoyée utilisée à la place de l'appareil photo
@@ -77,7 +76,7 @@ class IndependentSignupScreen extends StatefulWidget {
 class _IndependentSignupScreenState extends State<IndependentSignupScreen> {
   final _form = GlobalKey<FormState>();
   final _name = TextEditingController();
-  final _phone = TextEditingController();
+  final _phone = PhoneController();
   final _password = TextEditingController();
   bool _loading = false;
 
@@ -87,7 +86,7 @@ class _IndependentSignupScreenState extends State<IndependentSignupScreen> {
     try {
       await Api.instance.registerIndependent(
         _name.text.trim(),
-        normalizePhone(_phone.text),
+        _phone.e164!,
         _password.text,
       );
       hapticSuccess();
@@ -160,16 +159,7 @@ class _IndependentSignupScreenState extends State<IndependentSignupScreen> {
                     ? 'Nom complet obligatoire'
                     : null,
               ),
-              GroupField(
-                controller: _phone,
-                placeholder: '07 01 02 03 04',
-                prefix: '+225',
-                keyboardType: TextInputType.phone,
-                validator: (v) =>
-                    RegExp(r'^0\d{9}$').hasMatch(normalizePhone(v ?? ''))
-                    ? null
-                    : 'Numéro à 10 chiffres',
-              ),
+              PhoneField(controller: _phone, validate: true),
               GroupField(
                 controller: _password,
                 placeholder: 'Mot de passe (6 caractères minimum)',
@@ -277,9 +267,7 @@ class _DossierScreenState extends State<DossierScreen> {
   late final _address = TextEditingController(text: _d['address']);
   late final _idNumber = TextEditingController(text: _d['idNumber']);
   late final _emergencyName = TextEditingController(text: _d['emergencyName']);
-  late final _emergencyPhone = TextEditingController(
-    text: _d['emergencyPhone'],
-  );
+  late final _emergencyPhone = PhoneController(_d['emergencyPhone']);
   late final _brand = TextEditingController(text: _d['vehicleBrand']);
   late final _plate = TextEditingController(text: _d['vehiclePlate']);
   late final _license = TextEditingController(text: _d['licenseNumber']);
@@ -337,8 +325,7 @@ class _DossierScreenState extends State<DossierScreen> {
     'idType': _idType,
     'idNumber': _idNumber.text.trim(),
     'emergencyName': _emergencyName.text.trim(),
-    if (_emergencyPhone.text.trim().isNotEmpty)
-      'emergencyPhone': normalizePhone(_emergencyPhone.text),
+    if (_emergencyPhone.e164 != null) 'emergencyPhone': _emergencyPhone.e164,
     'vehicleType': _vehicle,
     'vehicleBrand': _brand.text.trim(),
     'vehiclePlate': _plate.text.trim(),
@@ -669,16 +656,10 @@ class _DossierScreenState extends State<DossierScreen> {
                 header: 'Contact d’urgence (facultatif)',
                 children: [
                   _field(_emergencyName, 'Nom', CupertinoIcons.person_2_fill),
-                  _field(
-                    _emergencyPhone,
-                    'Numéro',
-                    CupertinoIcons.phone_fill,
-                    keyboard: TextInputType.phone,
-                    validator: (v) =>
-                        (v ?? '').trim().isEmpty ||
-                            RegExp(r'^0\d{9}$').hasMatch(normalizePhone(v!))
-                        ? null
-                        : 'Numéro à 10 chiffres',
+                  PhoneField(
+                    controller: _emergencyPhone,
+                    validate: true,
+                    required: false,
                   ),
                 ],
               ),
@@ -1024,12 +1005,12 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    fcfa(b['available'] ?? 0),
+                    formatMoney(b['available'] ?? 0),
                     style: TextStyles.largeTitle.copyWith(color: Colors.white),
                   ),
                 ),
                 Text(
-                  'Solde ${fcfa(b['credit'] ?? 0)} · réservé ${fcfa(b['reserved'] ?? 0)} · commission ${b['rule']?['label'] ?? ''} par course',
+                  'Solde ${formatMoney(b['credit'] ?? 0)} · réservé ${formatMoney(b['reserved'] ?? 0)} · commission ${b['rule']?['label'] ?? ''} par course',
                   style: TextStyles.footnote.copyWith(color: Colors.white70),
                 ),
               ],
@@ -1046,7 +1027,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
                       color: p.blue,
                       size: 20,
                     ),
-                    title: '${x['operator']} · ${fcfa(x['amount'])}',
+                    title: '${x['operator']} · ${formatMoney(x['amount'])}',
                     subtitle: 'En cours de vérification par LETO',
                   ),
               ],
@@ -1072,7 +1053,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
                           _when(t['createdAt']),
                         ].join(' · '),
                         value:
-                            '${(t['amount'] as num) > 0 ? '+' : ''}${fcfa(t['amount'])}',
+                            '${(t['amount'] as num) > 0 ? '+' : ''}${formatMoney(t['amount'])}',
                       ),
                   ],
           ),
@@ -1099,7 +1080,7 @@ class _TopupScreenState extends State<_TopupScreen> {
   final api = Api.instance;
   final _form = GlobalKey<FormState>();
   final _amount = TextEditingController(text: '5000');
-  late final _sender = TextEditingController(text: api.user?['phone']);
+  late final _sender = PhoneController(api.user?['phone']);
   final _reference = TextEditingController();
   late String _operator =
       ((widget.config['accounts'] as List?)
@@ -1151,7 +1132,7 @@ class _TopupScreenState extends State<_TopupScreen> {
       await api.requestTopup({
         'amount': int.parse(_amount.text.replaceAll(RegExp(r'\D'), '')),
         'operator': _operator,
-        'senderPhone': normalizePhone(_sender.text),
+        'senderPhone': _sender.e164,
         if (_reference.text.trim().isNotEmpty)
           'reference': _reference.text.trim(),
         'proofUrl': _proof,
@@ -1224,25 +1205,20 @@ class _TopupScreenState extends State<_TopupScreen> {
               ),
               GroupField(
                 controller: _amount,
-                placeholder: 'Montant (F CFA)',
+                placeholder: 'Montant (${currencyLabel()})',
                 icon: CupertinoIcons.money_dollar,
                 keyboardType: TextInputType.number,
                 validator: (v) =>
                     (int.tryParse((v ?? '').replaceAll(RegExp(r'\D'), '')) ??
                             0) <
                         500
-                    ? '500 F minimum'
+                    ? '${formatMoney(500)} minimum'
                     : null,
               ),
-              GroupField(
+              PhoneField(
                 controller: _sender,
                 placeholder: 'Numéro qui a envoyé',
-                icon: CupertinoIcons.phone_fill,
-                keyboardType: TextInputType.phone,
-                validator: (v) =>
-                    RegExp(r'^0\d{9}$').hasMatch(normalizePhone(v ?? ''))
-                    ? null
-                    : 'Numéro à 10 chiffres',
+                validate: true,
               ),
               GroupField(
                 controller: _reference,

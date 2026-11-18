@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'countries.dart';
 import 'notifications.dart';
 import 'screens/client_home.dart';
 import 'screens/driver_home.dart';
@@ -24,6 +25,8 @@ export 'theme.dart'
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LetoNotifier.instance.init();
+  // Pays actifs (indicatifs, devises) : cache local puis API, sans bloquer le démarrage
+  Countries.instance.init();
   await Api.instance.restore();
   // Dev uniquement : connexion auto avec --dart-define=DEV_PHONE=... --dart-define=DEV_PASSWORD=...
   const devPhone = String.fromEnvironment('DEV_PHONE');
@@ -59,7 +62,9 @@ class LetoApp extends StatelessWidget {
         _ => ThemeMode.system,
       },
       // Dev / tests : SKIP_SPLASH=true ouvre directement l'accueil
-      home: const bool.fromEnvironment('SKIP_SPLASH') ? homeFor() : const SplashScreen(),
+      home: const bool.fromEnvironment('SKIP_SPLASH')
+          ? homeFor()
+          : const SplashScreen(),
       // Grands caractères du téléphone : suivis, mais bornés pour garder des écrans lisibles et sans débordement
       builder: (context, child) {
         final mq = MediaQuery.of(context);

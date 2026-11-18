@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import 'api.dart';
+import 'countries.dart';
 import 'live_activity.dart';
 import 'realtime.dart';
 
@@ -133,15 +134,19 @@ class LetoNotifier {
     // Fond de carte changé par l'admin : toutes les cartes de l'app se mettent à jour
     void onMap(dynamic _) => loadMapStyle(force: true);
     void onSettings(dynamic _) => Api.instance.loadDeliverySettings();
+    // Pays modifiés par l'admin : indicatifs et devises rechargés
+    void onCountries(dynamic _) => Countries.instance.load();
     s.on('notify', onNotify);
     s.on('sounds:changed', onSounds);
     s.on('map:changed', onMap);
     s.on('settings:changed', onSettings);
+    s.on('countries:changed', onCountries);
     _detach = () {
       s.off('notify', onNotify);
       s.off('sounds:changed', onSounds);
       s.off('map:changed', onMap);
       s.off('settings:changed', onSettings);
+      s.off('countries:changed', onCountries);
     };
     Api.instance.loadDeliverySettings();
     syncSounds();

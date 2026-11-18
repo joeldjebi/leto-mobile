@@ -1005,7 +1005,7 @@ class _ClientHomeState extends State<ClientHome> {
                 child: Text(
                   selected == null
                       ? 'Calcul du prix…'
-                      : 'Continuer · ${fcfa(selected['prices']['STANDARD'])}',
+                      : 'Continuer · ${formatMoney(selected['prices']['STANDARD'])}',
                   key: ValueKey(
                     '${selected?['vehicle']}${selected?['prices']?['STANDARD']}',
                   ),
@@ -1132,7 +1132,7 @@ class _OfferCard extends StatelessWidget {
                     ),
                   ),
                   TextSpan(
-                    text: fcfa(offer['prices']['SCHEDULED']),
+                    text: formatMoney(offer['prices']['SCHEDULED']),
                     style: TextStyles.price.copyWith(
                       color: ink2,
                       fontSize: 16.5,

@@ -351,7 +351,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
                           ),
                           if (moto != null)
                             Text(
-                              '${vehicleLabels[moto['vehicle']] ?? moto['label']} dès ${fcfa(moto['min'])} · ~${fcfa(moto['sample5km'])} pour 5 km',
+                              '${vehicleLabels[moto['vehicle']] ?? moto['label']} dès ${formatMoney(moto['min'])} · ~${formatMoney(moto['sample5km'])} pour 5 km',
                               style: TextStyles.footnote.copyWith(
                                 color: p.secondaryLabel,
                               ),
@@ -410,7 +410,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
                               ),
                             ),
                             Text(
-                              '${fcfa(v['base'])} + ${fcfa(v['perKm'])}/km · min ${fcfa(v['min'])}',
+                              '${formatMoney(v['base'])} + ${formatMoney(v['perKm'])}/km · min ${formatMoney(v['min'])}',
                               style: TextStyles.footnote.copyWith(
                                 color: p.secondaryLabel,
                               ),
@@ -422,7 +422,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Arrêt supplémentaire : ${fcfa(c['extraStopFee'])}',
+                          'Arrêt supplémentaire : ${formatMoney(c['extraStopFee'])}',
                           style: TextStyles.footnote.copyWith(
                             color: p.secondaryLabel,
                           ),

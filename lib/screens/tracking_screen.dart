@@ -265,7 +265,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
       if (mounted) {
         showInfo(
           context,
-          '${o['driver']['name']} arrive pour ${fcfa(o['price'])}',
+          '${o['driver']['name']} arrive pour ${formatMoney(o['price'], _d?['currency'])}',
         );
       }
       await _load();
@@ -306,7 +306,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
       side: 'client',
       title: 'Annuler la livraison ?',
       message: fee > 0
-          ? 'Le livreur est déjà en route : des frais de déplacement de ${fcfa(fee)} seront dus à son entreprise.'
+          ? 'Le livreur est déjà en route : des frais de déplacement de ${formatMoney(fee, _d?['currency'])} seront dus à son entreprise.'
           : enRoute
           ? 'Le livreur sera prévenu immédiatement.'
           : null,
@@ -334,11 +334,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     );
     if (reason == null) return;
     try {
-      await api.cancelStop(
-        widget.id,
-        stop['id'],
-        reason: reason,
-      );
+      await api.cancelStop(widget.id, stop['id'], reason: reason);
       hapticSuccess();
       await _load();
     } catch (e) {
@@ -526,6 +522,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
           _OfferTile(
             offer: o,
             original: d['price'],
+            currency: d['currency'],
             secondsLeft: _secondsLeft(o),
             onAccept: () => _acceptOffer(o),
             onDecline: () => _declineOffer(o),
@@ -642,7 +639,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
           p,
           icon: CupertinoIcons.money_dollar_circle_fill,
           color: p.red,
-          title: 'Frais de déplacement : ${fcfa(d['cancellationFee'])}',
+          title:
+              'Frais de déplacement : ${formatMoney(d['cancellationFee'], d['currency'])}',
           text: d['cancellationFeeSettledAt'] != null
               ? 'Réglés auprès de l’entreprise de livraison.'
               : 'Le livreur était en route. À régler auprès de l’entreprise de livraison.',
@@ -718,7 +716,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
             style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
           ),
           Text(
-            fcfa(d['price']),
+            formatMoney(d['price'], d['currency']),
             style: TextStyles.title3.copyWith(color: p.label),
           ),
         ],
@@ -883,7 +881,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
           Icon(CupertinoIcons.phone_fill, size: 16, color: p.green),
           const SizedBox(width: 4),
           SelectableText(
-            driver['phone'],
+            formatPhone(driver['phone'], compact: true),
             style: TextStyles.subheadline.copyWith(
               color: p.label,
               fontWeight: FontWeight.w600,
@@ -1031,10 +1029,10 @@ class _StopTile extends StatelessWidget {
               padding: const EdgeInsets.only(left: 40, top: 6),
               child: Pill(
                 stop['codRemittedAt'] != null
-                    ? '${fcfa(cod)} reversé'
+                    ? '${formatMoney(cod, d['currency'])} reversé'
                     : status == 'DELIVERED'
-                    ? '${fcfa(cod)} encaissé'
-                    : 'Encaisser ${fcfa(cod)}',
+                    ? '${formatMoney(cod, d['currency'])} encaissé'
+                    : 'Encaisser ${formatMoney(cod, d['currency'])}',
                 color: stop['codRemittedAt'] != null ? p.green : accentDeep,
                 icon: CupertinoIcons.creditcard,
               ),
@@ -1102,12 +1100,14 @@ class _StopTile extends StatelessWidget {
 class _OfferTile extends StatelessWidget {
   final Map<String, dynamic> offer;
   final num original;
+  final String? currency;
   final int secondsLeft;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
   const _OfferTile({
     required this.offer,
     required this.original,
+    this.currency,
     required this.secondsLeft,
     required this.onAccept,
     required this.onDecline,
@@ -1169,14 +1169,14 @@ class _OfferTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    fcfa(offer['price']),
+                    formatMoney(offer['price'], currency),
                     style: TextStyles.title3.copyWith(
                       color: p.label,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   Text(
-                    '+${fcfa(offer['price'] - original)}',
+                    '+${formatMoney(offer['price'] - original, currency)}',
                     style: TextStyles.caption.copyWith(
                       color: accent,
                       fontWeight: FontWeight.w700,

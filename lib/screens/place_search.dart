@@ -137,7 +137,8 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
                   GroupRow(
                     leading: Avatar(a['recipientName'] ?? '?', radius: 16),
                     title: a['recipientName'],
-                    subtitle: '${a['address']} · ${a['recipientPhone']}',
+                    subtitle:
+                        '${a['address']} · ${formatPhone(a['recipientPhone'], compact: true)}',
                     onTap: () => Navigator.pop(context, StopDraft.fromSaved(a)),
                   ),
               ],

@@ -17,7 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String _accountType = 'INDIVIDUAL';
   bool _loading = false;
   final _name = TextEditingController();
-  final _phone = TextEditingController();
+  final _phone = PhoneController();
   final _password = TextEditingController();
 
   /// Inscriptions des livreurs indépendants ouvertes par LETO ?
@@ -41,14 +41,17 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final api = Api.instance;
       if (_registerMode) {
+        final error = _phone.validate();
+        if (error != null) throw ApiException(error);
         await api.register(
           _name.text.trim(),
-          _phone.text.trim(),
+          _phone.e164!,
           _password.text,
           _accountType,
         );
       } else {
-        await api.login(_phone.text.trim(), _password.text);
+        // Numéro mal formé : envoyé tel quel, l'API répond par un message clair
+        await api.login(_phone.e164 ?? _phone.text.trim(), _password.text);
       }
       hapticSuccess();
       if (mounted) goHome(context);
@@ -180,12 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         : 'Votre nom',
                     icon: CupertinoIcons.person,
                   ),
-                GroupField(
-                  controller: _phone,
-                  placeholder: '07 01 02 03 04',
-                  prefix: '+225',
-                  keyboardType: TextInputType.phone,
-                ),
+                PhoneField(controller: _phone),
                 GroupField(
                   controller: _password,
                   placeholder: 'Mot de passe',

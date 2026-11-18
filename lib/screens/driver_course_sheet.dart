@@ -148,7 +148,8 @@ class _CourseSheetState extends State<_CourseSheet> {
     final value = await prompt(
       context,
       'Votre prix',
-      message: 'Entre ${fcfa(base + 50)} et ${fcfa(base * 2)}',
+      message:
+          'Entre ${formatMoney(base + 50, widget.d['currency'])} et ${formatMoney(base * 2, widget.d['currency'])}',
       initial: '${_round50(base * 1.3)}',
       keyboard: TextInputType.number,
       ok: 'Proposer',
@@ -264,7 +265,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                               ),
                             ),
                           Text(
-                            fcfa(d['price']),
+                            formatMoney(d['price'], d['currency']),
                             style: TextStyles.largeTitle.copyWith(
                               color: p.label,
                             ),
@@ -297,7 +298,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                       icon: vehicleIcons[d['vehicleType']],
                     ),
                     const CashPill(),
-                    if (cod > 0) CodBadge(cod),
+                    if (cod > 0) CodBadge(cod, currency: d['currency']),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -322,7 +323,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                           detail: [
                             s['details'],
                             if ((s['codAmount'] ?? 0) > 0)
-                              'Encaisser ${fcfa(s['codAmount'])}',
+                              'Encaisser ${formatMoney(s['codAmount'], d['currency'])}',
                           ].whereType<String>().join(' · '),
                         ),
                     ],
@@ -363,7 +364,9 @@ class _CourseSheetState extends State<_CourseSheet> {
                     minimumSize: const Size.fromHeight(54),
                   ),
                   onPressed: _busy ? null : _accept,
-                  child: Text('Accepter pour ${fcfa(d['price'])}'),
+                  child: Text(
+                    'Accepter pour ${formatMoney(d['price'], d['currency'])}',
+                  ),
                 ),
                 if (_assigned) ...[
                   const SizedBox(height: 10),
@@ -381,7 +384,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Pill(
-                        'Votre proposition : ${fcfa(widget.myOffer!['price'])} · en attente du client',
+                        'Votre proposition : ${formatMoney(widget.myOffer!['price'], d['currency'])} · en attente du client',
                         color: accentDeep,
                         icon: CupertinoIcons.hourglass,
                       ),
@@ -400,7 +403,10 @@ class _CourseSheetState extends State<_CourseSheet> {
                         Expanded(
                           child: _PriceChip(
                             key: ValueKey('propose-$f'),
-                            label: fcfa(_round50(d['price'] * f)),
+                            label: formatMoney(
+                              _round50(d['price'] * f),
+                              d['currency'],
+                            ),
                             onTap: _busy
                                 ? null
                                 : () => _propose(_round50(d['price'] * f)),

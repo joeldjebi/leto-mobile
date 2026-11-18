@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../labels.dart';
 import '../main.dart';
 import 'widgets.dart';
 
@@ -82,7 +83,8 @@ class _AddressBookScreenState extends State<AddressBookScreen> {
                   child: GroupRow(
                     leading: Avatar(a['recipientName'] ?? '?', radius: 18),
                     title: a['recipientName'],
-                    subtitle: '${a['address']}\n+225 ${a['recipientPhone']}',
+                    subtitle:
+                        '${a['address']}\n${formatPhone(a['recipientPhone'])}',
                     value: (a['usedCount'] ?? 0) > 1
                         ? '×${a['usedCount']}'
                         : null,

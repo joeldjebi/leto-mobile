@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../labels.dart';
 import '../main.dart';
 
 const _seenKey = 'leto_onboarding_seen';
@@ -530,7 +531,7 @@ class _OrderArt extends StatelessWidget {
                     style: TextStyles.caption.copyWith(color: p.secondaryLabel),
                   ),
                   Text(
-                    '1 500 F',
+                    formatMoney(1500),
                     style: TextStyles.displaySmall.copyWith(color: p.label),
                   ),
                 ],

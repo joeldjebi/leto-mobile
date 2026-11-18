@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+export 'countries.dart' show currencyLabel, formatMoney, formatPhone, telUri;
+
 /// Libellés et icônes partagés (offres, délais, paiements, statuts)
 
 const statusLabels = {
@@ -36,14 +38,6 @@ const speedLabels = {
   'STANDARD': 'Standard',
   'SCHEDULED': 'Dans 2 heures',
 };
-
-String fcfa(num n) {
-  final s = n.toInt().toString().replaceAllMapped(
-    RegExp(r'\B(?=(\d{3})+(?!\d))'),
-    (_) => ' ',
-  );
-  return '$s F';
-}
 
 String km(num d) => d < 1
     ? '${(d * 1000).round()} m'
