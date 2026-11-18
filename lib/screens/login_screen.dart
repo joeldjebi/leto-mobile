@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../brand.dart';
 import '../main.dart';
 import 'independent_screens.dart';
 import 'widgets.dart';
@@ -103,11 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.two_wheeler,
-                  color: Colors.white,
-                  size: 52,
-                ),
+                child: const Center(child: LetoMark.onAccent(size: 56)),
               ),
             ),
             const SizedBox(height: 20),

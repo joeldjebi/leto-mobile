@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../brand.dart';
 import '../labels.dart';
 import '../main.dart';
 
@@ -86,43 +87,48 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
               child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Transform.scale(
-                      scale: 0.86 + 0.14 * pop,
-                      child: const _LogoTile(size: 112),
-                    ),
-                    const SizedBox(height: 26),
-                    Opacity(
-                      opacity: word,
-                      child: Transform.translate(
-                        offset: Offset(0, 14 * (1 - word)),
-                        child: const Text(
-                          'LETO',
-                          style: TextStyle(
-                            fontFamily: 'BarlowCondensed',
-                            fontWeight: FontWeight.w800,
-                            fontSize: 52,
-                            height: 1,
-                            letterSpacing: 6,
-                            color: Colors.white,
+                // Au départ la tuile est exactement là où le splash natif l'affiche (centrée),
+                // puis le bloc remonte pendant que « LETO » apparaît
+                child: Transform.translate(
+                  offset: Offset(0, 62 * (1 - word)),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Transform.scale(
+                        scale: 1 + 0.05 * math.sin(pop * math.pi), // même taille que le splash natif, petit rebond
+                        child: const _LogoTile(size: 124),
+                      ),
+                      const SizedBox(height: 26),
+                      Opacity(
+                        opacity: word,
+                        child: Transform.translate(
+                          offset: Offset(0, 14 * (1 - word)),
+                          child: const Text(
+                            'LETO',
+                            style: TextStyle(
+                              fontFamily: 'BarlowCondensed',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 52,
+                              height: 1,
+                              letterSpacing: 6,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Opacity(
-                      opacity: tag,
-                      child: Text(
-                        'Livraison à Abidjan',
-                        style: TextStyles.callout.copyWith(
-                          color: Colors.white.withValues(alpha: 0.82),
-                          letterSpacing: 0.4,
+                      const SizedBox(height: 10),
+                      Opacity(
+                        opacity: tag,
+                        child: Text(
+                          'Livraison à Abidjan',
+                          style: TextStyles.callout.copyWith(
+                            color: Colors.white.withValues(alpha: 0.82),
+                            letterSpacing: 0.4,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -133,7 +139,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-/// Carré blanc arrondi avec la moto LETO (identique au splash natif)
+/// Carré blanc arrondi avec le symbole LETO (identique au splash natif)
 class _LogoTile extends StatelessWidget {
   final double size;
   const _LogoTile({required this.size});
@@ -153,10 +159,7 @@ class _LogoTile extends StatelessWidget {
           ),
         ],
       ),
-      child: ShaderMask(
-        shaderCallback: (r) => letoGradient.createShader(r),
-        child: Icon(Icons.two_wheeler, size: size * 0.66, color: Colors.white),
-      ),
+      child: Center(child: LetoMark(size: size * 0.6)),
     );
   }
 }

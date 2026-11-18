@@ -65,6 +65,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_native_splash: ^2.4.7
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -141,3 +142,13 @@ flutter_native_splash:
     image: assets/brand/splash_logo.png
   fullscreen: false
   web: false
+
+# Icône de l'app (dart run flutter_launcher_icons) : symbole LETO « Le code »
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/brand/app_icon.png
+  remove_alpha_ios: true
+  adaptive_icon_background: "#6D28D9"
+  adaptive_icon_foreground: assets/brand/app_icon_fg.png
+  min_sdk_android: 21
