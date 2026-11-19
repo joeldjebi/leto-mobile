@@ -39,8 +39,9 @@ class ApiException implements Exception {
 String? trackingUrl(Map d) {
   final token = d['trackingToken'];
   if (token == null) return null;
+  // Site public (l'espace sa.leto… est réservé à l'administration)
   final base = apiUrl == prodApiUrl
-      ? 'https://sa.leto.performx.online'
+      ? 'https://leto.performx.online'
       : apiUrl.replaceFirst(':3000', ':5173');
   return '$base/#/suivi/$token';
 }
