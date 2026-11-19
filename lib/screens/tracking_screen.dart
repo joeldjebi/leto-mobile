@@ -13,6 +13,7 @@ import '../live_activity.dart';
 import '../main.dart';
 import '../realtime.dart';
 import 'cancel_reasons.dart';
+import 'searching_header.dart';
 import 'share_codes.dart';
 import 'widgets.dart';
 
@@ -24,7 +25,17 @@ class TrackingScreen extends StatefulWidget {
   State<TrackingScreen> createState() => _TrackingScreenState();
 }
 
-class _TrackingScreenState extends State<TrackingScreen> {
+class _TrackingScreenState extends State<TrackingScreen>
+    with SingleTickerProviderStateMixin {
+  // Recherche d'un livreur : ondes radar, livreurs autour du départ, délai d'expiration
+  late final AnimationController _radar = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  )..repeat();
+  List<NearbyDriver> _nearby = [];
+  int _expiryMin = 0;
+  Timer? _nearbyTimer;
+
   final api = Api.instance;
   final _map = MapController();
   Map<String, dynamic>? _d;
@@ -50,9 +61,15 @@ class _TrackingScreenState extends State<TrackingScreen> {
       if (!_finished) _load();
     });
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_offers.isEmpty || !mounted) return;
+      if (!mounted) return;
+      if (_offers.isEmpty) return;
       setState(() => _offers.removeWhere((o) => _secondsLeft(o) <= 0));
     });
+    _loadExpiry();
+    _nearbyTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _loadNearby(),
+    );
     final s = Realtime.instance.socket;
     s.on('driver:location', _onDriverLocation);
     s.on('delivery:updated', _onDeliveryUpdated);
@@ -71,6 +88,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
   void dispose() {
     _timer?.cancel();
     _ticker?.cancel();
+    _nearbyTimer?.cancel();
+    _radar.dispose();
     final s = Realtime.instance.socket;
     s.off('driver:location', _onDriverLocation);
     s.off('delivery:updated', _onDeliveryUpdated);
@@ -175,10 +194,41 @@ class _TrackingScreenState extends State<TrackingScreen> {
       }
       _fitDriver();
       _loadOffers();
+      if (first) _loadNearby();
       DeliveryLive.instance.sync(d, driver: false, etaMin: _etaMin(d));
     } catch (e) {
       if (mounted) showError(context, e);
     }
+  }
+
+  /// Livreurs disponibles autour du départ (ceux qui peuvent recevoir la demande)
+  Future<void> _loadNearby() async {
+    final d = _d;
+    if (d == null || d['status'] != 'PENDING') {
+      if (_nearby.isNotEmpty && mounted) setState(() => _nearby = []);
+      return;
+    }
+    try {
+      final l = await api.nearbyDrivers(
+        pointOf(d, 'pickup')!,
+        companyId: d['forIndependents'] == true
+            ? kIndependentId
+            : d['targetCompanyId'] as String?,
+      );
+      if (mounted) setState(() => _nearby = l);
+    } catch (_) {}
+  }
+
+  /// Délai d'expiration des commandes fixé par l'admin (0 = jamais)
+  Future<void> _loadExpiry() async {
+    try {
+      final g = await api.grid();
+      if (mounted) {
+        setState(
+          () => _expiryMin = (g['orderExpiryMin'] as num?)?.toInt() ?? 0,
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadRoute(Map<String, dynamic> d) async {
@@ -409,6 +459,26 @@ class _TrackingScreenState extends State<TrackingScreen> {
                   },
                   layers: [
                     if (_route != null) routeLayer(_route!.points),
+                    if (d != null && d['status'] == 'PENDING') ...[
+                      AnimatedBuilder(
+                        animation: _radar,
+                        builder: (_, _) => CircleLayer(
+                          circles: [
+                            for (final k in const [0.0, 0.5])
+                              _pulse(
+                                pointOf(d, 'pickup')!,
+                                (_radar.value + k) % 1,
+                              ),
+                          ],
+                        ),
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          for (final n in _nearby)
+                            nearbyDriverMarker(n.point, n.vehicle),
+                        ],
+                      ),
+                    ],
                     MarkerLayer(
                       markers: [
                         if (d != null) pickupMarker(pointOf(d, 'pickup')!),
@@ -478,6 +548,16 @@ class _TrackingScreenState extends State<TrackingScreen> {
     );
   }
 
+  /// Onde radar autour du départ (t de 0 à 1 : s'élargit et s'efface)
+  CircleMarker _pulse(LatLng center, double t) => CircleMarker(
+    point: center,
+    radius: 60 + 900 * t,
+    useRadiusInMeter: true,
+    color: accent.withValues(alpha: 0.16 * (1 - t)),
+    borderColor: accent.withValues(alpha: 0.4 * (1 - t)),
+    borderStrokeWidth: 2,
+  );
+
   List<Widget> _panel(Map<String, dynamic> d, Palette p) {
     final status = d['status'] as String;
     final n = _stops.length;
@@ -498,20 +578,20 @@ class _TrackingScreenState extends State<TrackingScreen> {
     };
 
     return [
-      Text(title, style: TextStyles.title2.copyWith(color: p.label)),
-      const SizedBox(height: 10),
       if (status == 'PENDING') ...[
-        const LinearProgressIndicator(
-          minHeight: 3,
-          borderRadius: BorderRadius.all(Radius.circular(2)),
-          color: accent,
+        SearchingHeader(
+          createdAt:
+              DateTime.tryParse(d['createdAt'] ?? '')?.toLocal() ??
+              DateTime.now(),
+          nearby: _nearby.length,
+          expiryMin: _expiryMin,
+          price: formatMoney(d['price'], d['currency']),
+          targeted: d['targetCompanyId'] != null,
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Votre demande est visible par les livreurs à proximité.',
-          style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
+      ] else ...[
+        Text(title, style: TextStyles.title2.copyWith(color: p.label)),
+        const SizedBox(height: 10),
       ],
       if (status == 'PENDING' && _offers.isNotEmpty) ...[
         Text(
