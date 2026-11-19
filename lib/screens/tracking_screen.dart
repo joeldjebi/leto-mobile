@@ -113,7 +113,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     _timer?.cancel();
     _ticker?.cancel();
     _nearbyTimer?.cancel();
-    _stopSharing(notify: true);
+    _stopSharing(notify: true, disposing: true);
     _radar.dispose();
     _move.dispose();
     _livePos.dispose();
@@ -252,7 +252,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     });
   }
 
-  void _stopSharing({bool notify = false}) {
+  void _stopSharing({bool notify = false, bool disposing = false}) {
     _shareGps?.cancel();
     _shareGps = null;
     _shareTimer?.cancel();
@@ -264,7 +264,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         'deliveryId': widget.id,
       });
     }
-    if (mounted) setState(() {});
+    if (mounted && !disposing) setState(() {});
   }
 
   void _toggleFollow() {
