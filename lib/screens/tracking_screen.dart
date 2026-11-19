@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +27,7 @@ class TrackingScreen extends StatefulWidget {
 }
 
 class _TrackingScreenState extends State<TrackingScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // Recherche d'un livreur : ondes radar, livreurs autour du départ, délai d'expiration
   late final AnimationController _radar = AnimationController(
     vsync: this,
@@ -44,6 +45,17 @@ class _TrackingScreenState extends State<TrackingScreen>
   Timer? _ticker;
   bool _mapReady = false;
   LatLng? _driverPos;
+
+  // Livreur en direct : glissement continu entre deux points GPS, cap, caméra qui suit
+  late final AnimationController _move = AnimationController(vsync: this)
+    ..addListener(_onMoveTick);
+  final _livePos = ValueNotifier<LatLng?>(null);
+  LatLng? _moveFrom;
+  DateTime? _lastFixAt;
+  double _headingTurns =
+      0; // cumulé (tours) pour tourner toujours par le plus court
+  bool _hasHeading = false;
+  bool _follow = false;
   bool _driverFitted = false;
   void Function()? _unsubscribe;
   List<Map<String, dynamic>> _offers = [];
@@ -90,6 +102,8 @@ class _TrackingScreenState extends State<TrackingScreen>
     _ticker?.cancel();
     _nearbyTimer?.cancel();
     _radar.dispose();
+    _move.dispose();
+    _livePos.dispose();
     final s = Realtime.instance.socket;
     s.off('driver:location', _onDriverLocation);
     s.off('delivery:updated', _onDeliveryUpdated);
@@ -108,17 +122,94 @@ class _TrackingScreenState extends State<TrackingScreen>
 
   void _onDriverLocation(dynamic e) {
     if (!mounted || e is! Map || e['deliveryId'] != widget.id) return;
-    setState(
-      () => _driverPos = LatLng(
-        (e['lat'] as num).toDouble(),
-        (e['lng'] as num).toDouble(),
-      ),
+    final next = LatLng(
+      (e['lat'] as num).toDouble(),
+      (e['lng'] as num).toDouble(),
     );
+    _animateDriver(next, heading: (e['heading'] as num?)?.toDouble());
+    setState(() => _driverPos = next);
     _fitDriver();
     // Heure d'arrivée à jour dans la Live Activity (mise à jour seulement si elle change)
     final d = _d;
     if (d != null) {
       DeliveryLive.instance.sync(d, driver: false, etaMin: _etaMin(d));
+    }
+  }
+
+  /// Fait glisser le marqueur du point affiché vers le nouveau point, en une durée égale à
+  /// l'intervalle entre deux positions : le livreur avance sans à-coups ni arrêts.
+  void _animateDriver(LatLng next, {double? heading}) {
+    final now = DateTime.now();
+    final shown = _livePos.value;
+    final gap = _lastFixAt == null
+        ? 1000
+        : now.difference(_lastFixAt!).inMilliseconds;
+    _lastFixAt = now;
+    final jump = shown == null ? 0.0 : distanceKm(shown, next) * 1000;
+    // Premier point, ou saut irréaliste (reprise après coupure) : on place directement
+    if (shown == null || jump > 400) {
+      _move.stop();
+      _livePos.value = next;
+      _moveFrom = next;
+      _driverPos = next;
+      _followTo(next);
+      return;
+    }
+    // Cap : celui du GPS en mouvement, sinon la direction du déplacement
+    final bearing =
+        heading ?? (jump > 4 ? _bearing(_driverPos ?? shown, next) : null);
+    if (bearing != null) _turnTo(bearing);
+    _moveFrom = shown;
+    _move.duration = Duration(
+      milliseconds: (gap * 1.1).clamp(500, 4000).round(),
+    );
+    _move.forward(from: 0);
+  }
+
+  void _onMoveTick() {
+    final a = _moveFrom, b = _driverPos;
+    if (a == null || b == null) return;
+    final t = _move.value;
+    final p = LatLng(
+      a.latitude + (b.latitude - a.latitude) * t,
+      a.longitude + (b.longitude - a.longitude) * t,
+    );
+    _livePos.value = p;
+    _followTo(p);
+  }
+
+  void _followTo(LatLng p) {
+    if (_follow && _mapReady) _map.move(p, math.max(_map.camera.zoom, 16));
+  }
+
+  void _turnTo(double deg) {
+    final current = _headingTurns % 1;
+    var delta = deg / 360 - current;
+    if (delta > 0.5) delta -= 1;
+    if (delta < -0.5) delta += 1;
+    _headingTurns += delta;
+    _hasHeading = true;
+  }
+
+  static double _bearing(LatLng a, LatLng b) {
+    final la1 = a.latitude * math.pi / 180, la2 = b.latitude * math.pi / 180;
+    final dl = (b.longitude - a.longitude) * math.pi / 180;
+    final y = math.sin(dl) * math.cos(la2);
+    final x =
+        math.cos(la1) * math.sin(la2) -
+        math.sin(la1) * math.cos(la2) * math.cos(dl);
+    return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
+  }
+
+  void _toggleFollow() {
+    final pos = _livePos.value;
+    if (pos == null) return;
+    hapticTap();
+    setState(() => _follow = !_follow);
+    if (_follow) {
+      _map.move(pos, math.max(_map.camera.zoom, 16));
+    } else {
+      _fitDriverAndNext();
     }
   }
 
@@ -186,6 +277,8 @@ class _TrackingScreenState extends State<TrackingScreen>
             (driver['lastLat'] as num).toDouble(),
             (driver['lastLng'] as num).toDouble(),
           );
+          _livePos.value = _driverPos;
+          _moveFrom = _driverPos;
         }
       });
       if (first) {
@@ -268,6 +361,12 @@ class _TrackingScreenState extends State<TrackingScreen>
   /// Au premier point GPS du livreur : cadre le livreur et sa prochaine étape
   void _fitDriver() {
     if (_driverFitted || !_mapReady || _d == null || _driverPos == null) return;
+    _fitDriverAndNext();
+    _driverFitted = true;
+  }
+
+  void _fitDriverAndNext() {
+    if (!_mapReady || _d == null || _driverPos == null) return;
     final next = _d!['status'] == 'PICKED_UP'
         ? _stops
               .where((s) => s['status'] == 'PENDING')
@@ -280,7 +379,6 @@ class _TrackingScreenState extends State<TrackingScreen>
               .firstOrNull
         : pointOf(_d!, 'pickup');
     fitPoints(_map, [_driverPos, next]);
-    _driverFitted = true;
   }
 
   // ---------- Proposez votre prix ----------
@@ -457,6 +555,10 @@ class _TrackingScreenState extends State<TrackingScreen>
                     _mapReady = true;
                     _fit();
                   },
+                  // L'utilisateur déplace la carte : la caméra arrête de suivre le livreur
+                  onMove: (_, gesture) {
+                    if (gesture && _follow) setState(() => _follow = false);
+                  },
                   layers: [
                     if (_route != null) routeLayer(_route!.points),
                     if (d != null && d['status'] == 'PENDING') ...[
@@ -494,20 +596,22 @@ class _TrackingScreenState extends State<TrackingScreen>
                           ),
                       ],
                     ),
-                    // Livreur en temps réel : glisse en douceur d'une position à la suivante
+                    // Livreur en temps réel : avance en continu, orienté dans son sens de marche
                     if (_driverPos != null && d != null && _active(d))
-                      TweenAnimationBuilder<LatLng>(
-                        tween: _LatLngTween(end: _driverPos),
-                        duration: const Duration(milliseconds: 1200),
-                        curve: Curves.easeInOut,
+                      ValueListenableBuilder<LatLng?>(
+                        valueListenable: _livePos,
                         builder: (_, pos, _) => MarkerLayer(
                           markers: [
-                            driverMarker(
-                              pos,
-                              vehicle:
-                                  d['driver']?['vehicleType'] ??
-                                  d['vehicleType'],
-                            ),
+                            if (pos != null)
+                              driverMarker(
+                                pos,
+                                vehicle:
+                                    d['driver']?['vehicleType'] ??
+                                    d['vehicleType'],
+                                headingTurns: _hasHeading
+                                    ? _headingTurns
+                                    : null,
+                              ),
                           ],
                         ),
                       ),
@@ -522,6 +626,22 @@ class _TrackingScreenState extends State<TrackingScreen>
                     ),
                   ),
                 ),
+                if (_driverPos != null && d != null && _active(d))
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: Semantics(
+                      label: _follow
+                          ? 'Arrêter de suivre le livreur'
+                          : 'Suivre le livreur',
+                      child: MapButton(
+                        _follow
+                            ? CupertinoIcons.location_fill
+                            : CupertinoIcons.location,
+                        onTap: _toggleFollow,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1306,20 +1426,6 @@ class _OfferTile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Interpolation entre deux positions (animation du livreur)
-class _LatLngTween extends Tween<LatLng> {
-  _LatLngTween({super.end});
-
-  @override
-  LatLng lerp(double t) {
-    final a = begin ?? end!, b = end!;
-    return LatLng(
-      a.latitude + (b.latitude - a.latitude) * t,
-      a.longitude + (b.longitude - a.longitude) * t,
     );
   }
 }

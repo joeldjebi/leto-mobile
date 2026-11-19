@@ -392,28 +392,26 @@ class _DriverHomeState extends State<DriverHome> {
     // L'app reste connectée en arrière-plan pour recevoir les courses (notifications + sons)
     LetoNotifier.instance.startKeepAlive(driver: true);
     if (devPosition == null) {
-      _gps =
-          Geolocator.getPositionStream(
-            locationSettings: Platform.isIOS
-                // iPhone : la localisation en arrière-plan garde la connexion ouverte
-                ? AppleSettings(
-                    accuracy: LocationAccuracy.high,
-                    distanceFilter: 10,
-                    allowBackgroundLocationUpdates: true,
-                    showBackgroundLocationIndicator: true,
-                    pauseLocationUpdatesAutomatically: false,
-                    activityType: ActivityType.otherNavigation,
-                  )
-                : const LocationSettings(
-                    accuracy: LocationAccuracy.high,
-                    distanceFilter: 10,
-                  ),
-          ).listen(
-            (p) => _sendPosition(LatLng(p.latitude, p.longitude)),
-            onError: (_) {},
-          );
+      // Suivi pro : une position toutes les 1 à 2 s en mouvement (3 m de seuil), cap et vitesse inclus
+      _gps = Geolocator.getPositionStream(
+        locationSettings: Platform.isIOS
+            // iPhone : la localisation en arrière-plan garde la connexion ouverte
+            ? AppleSettings(
+                accuracy: LocationAccuracy.bestForNavigation,
+                distanceFilter: 3,
+                allowBackgroundLocationUpdates: true,
+                showBackgroundLocationIndicator: true,
+                pauseLocationUpdatesAutomatically: false,
+                activityType: ActivityType.otherNavigation,
+              )
+            : AndroidSettings(
+                accuracy: LocationAccuracy.high,
+                distanceFilter: 3,
+                intervalDuration: const Duration(seconds: 2),
+              ),
+      ).listen(_onGps, onError: (_) {});
     }
-    _heartbeat = Timer.periodic(const Duration(seconds: 20), (_) {
+    _heartbeat = Timer.periodic(const Duration(seconds: 10), (_) {
       if (_me != null) _sendPosition(_me!);
     });
     _load();
@@ -437,11 +435,29 @@ class _DriverHomeState extends State<DriverHome> {
     _heartbeat?.cancel();
   }
 
-  void _sendPosition(LatLng p) {
+  DateTime _lastSent = DateTime(2000);
+
+  /// Point GPS : ignore les mesures imprécises, limite l'envoi à une position par seconde
+  void _onGps(Position p) {
+    if (p.accuracy > 60) return;
+    final now = DateTime.now();
+    if (now.difference(_lastSent).inMilliseconds < 900) return;
+    _sendPosition(
+      LatLng(p.latitude, p.longitude),
+      // Le cap GPS n'a de sens qu'en mouvement (> 1 m/s ≈ 4 km/h)
+      heading: p.speed > 1 && p.heading >= 0 ? p.heading : null,
+      speed: p.speed >= 0 ? p.speed : null,
+    );
+  }
+
+  void _sendPosition(LatLng p, {double? heading, double? speed}) {
+    _lastSent = DateTime.now();
     if (mounted) setState(() => _me = p);
     Realtime.instance.socket.emit('driver:location', {
       'lat': p.latitude,
       'lng': p.longitude,
+      'heading': ?heading,
+      'speed': ?speed,
     });
   }
 

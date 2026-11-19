@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -238,26 +239,73 @@ IconData vehicleIcon(String? vehicle) => switch (vehicle) {
 };
 
 /// Livreur de la course suivie : l'icône de son engin dans une pastille
-Marker driverMarker(LatLng p, {String? vehicle}) => Marker(
+Marker driverMarker(
+  LatLng p, {
+  String? vehicle,
+  double? headingTurns,
+}) => Marker(
   point: p,
-  width: 46,
-  height: 46,
-  child: Container(
-    decoration: BoxDecoration(
-      color: ink,
-      shape: BoxShape.circle,
-      border: Border.all(color: Colors.white, width: 3),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x4D000000),
-          blurRadius: 12,
-          offset: Offset(0, 4),
+  width: 64,
+  height: 64,
+  child: Stack(
+    alignment: Alignment.center,
+    children: [
+      // Sens de marche : une pointe qui tourne en douceur autour de la pastille
+      if (headingTurns != null)
+        AnimatedRotation(
+          turns: headingTurns,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOut,
+          child: const CustomPaint(
+            size: Size(64, 64),
+            painter: _HeadingPainter(),
+          ),
         ),
-      ],
-    ),
-    child: Icon(vehicleIcon(vehicle), color: Colors.white, size: 24),
+      Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: ink,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x4D000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(vehicleIcon(vehicle), color: Colors.white, size: 24),
+      ),
+    ],
   ),
 );
+
+class _HeadingPainter extends CustomPainter {
+  const _HeadingPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.width / 2;
+    final path = ui.Path()
+      ..moveTo(c, 0)
+      ..lineTo(c + 9, 12)
+      ..lineTo(c - 9, 12)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawPath(path, Paint()..color = const Color(0xFF6D28D9));
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
 
 /// Livreur disponible autour du client (carte d'accueil) : icône de son engin
 Marker nearbyDriverMarker(LatLng p, String vehicle) => Marker(
