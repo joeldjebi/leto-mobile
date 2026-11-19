@@ -60,6 +60,11 @@ class _TrackingScreenState extends State<TrackingScreen>
   bool _hasHeading = false;
   bool _follow = false;
 
+  // Panneau déroulant : moitié de l'écran au départ, agrandissable presque en plein écran
+  static const _sheetMid = 0.5, _sheetMax = 0.94, _sheetMin = 0.24;
+  final _sheet = DraggableScrollableController();
+  final _sheetExtent = ValueNotifier<double>(_sheetMid);
+
   // « Montrer au livreur où je me trouve » : partage de ma position tant que l'écran est ouvert
   bool _sharing = false;
   LatLng? _myPos;
@@ -116,6 +121,8 @@ class _TrackingScreenState extends State<TrackingScreen>
     _stopSharing(notify: true, disposing: true);
     _radar.dispose();
     _move.dispose();
+    _sheet.dispose();
+    _sheetExtent.dispose();
     _livePos.dispose();
     final s = Realtime.instance.socket;
     s.off('driver:location', _onDriverLocation);
@@ -192,7 +199,13 @@ class _TrackingScreenState extends State<TrackingScreen>
   }
 
   void _followTo(LatLng p) {
-    if (_follow && _mapReady) _map.move(p, math.max(_map.camera.zoom, 16));
+    if (_follow && _mapReady) {
+      _map.move(
+        p,
+        math.max(_map.camera.zoom, 16),
+        offset: _visibleCenterOffset,
+      );
+    }
   }
 
   void _turnTo(double deg) {
@@ -273,7 +286,11 @@ class _TrackingScreenState extends State<TrackingScreen>
     hapticTap();
     setState(() => _follow = !_follow);
     if (_follow) {
-      _map.move(pos, math.max(_map.camera.zoom, 16));
+      _map.move(
+        pos,
+        math.max(_map.camera.zoom, 16),
+        offset: _visibleCenterOffset,
+      );
     } else {
       _fitDriverAndNext();
     }
@@ -403,13 +420,20 @@ class _TrackingScreenState extends State<TrackingScreen>
       if (!mounted) return;
       setState(() => _route = r);
       if (_mapReady && !_driverFitted) {
-        fitPoints(_map, [
-          ...pts,
-          ...r.points,
-        ], padding: const EdgeInsets.fromLTRB(40, 90, 40, 30));
+        fitPoints(_map, [...pts, ...r.points], padding: _fitPad());
       }
     } catch (_) {}
   }
+
+  /// Marges du cadrage : la partie de la carte cachée par le panneau est exclue
+  EdgeInsets _fitPad({double side = 40}) {
+    final h = MediaQuery.sizeOf(context).height;
+    return EdgeInsets.fromLTRB(side, 100, side, h * _sheetExtent.value + 30);
+  }
+
+  /// Décalage pour centrer un point dans la partie visible de la carte (au-dessus du panneau)
+  Offset get _visibleCenterOffset =>
+      Offset(0, -MediaQuery.sizeOf(context).height * _sheetExtent.value / 2);
 
   List<LatLng> get _allPoints => [
     if (_d != null) pointOf(_d!, 'pickup')!,
@@ -419,10 +443,7 @@ class _TrackingScreenState extends State<TrackingScreen>
 
   void _fit() {
     if (_mapReady && _d != null) {
-      fitPoints(_map, [
-        ..._allPoints,
-        ...?_route?.points,
-      ], padding: const EdgeInsets.fromLTRB(40, 90, 40, 30));
+      fitPoints(_map, [..._allPoints, ...?_route?.points], padding: _fitPad());
     }
   }
 
@@ -446,10 +467,7 @@ class _TrackingScreenState extends State<TrackingScreen>
               )
               .firstOrNull
         : pointOf(_d!, 'pickup');
-    fitPoints(_map, [
-      _driverPos,
-      next,
-    ], padding: const EdgeInsets.fromLTRB(70, 120, 70, 70));
+    fitPoints(_map, [_driverPos, next], padding: _fitPad(side: 70));
   }
 
   // ---------- Proposez votre prix ----------
@@ -612,133 +630,211 @@ class _TrackingScreenState extends State<TrackingScreen>
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final d = _d;
+    final h = MediaQuery.sizeOf(context).height;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
       backgroundColor: p.background,
-      body: Column(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                LetoMap(
-                  controller: _map,
-                  center: d == null ? abidjan : pointOf(d, 'pickup')!,
-                  onReady: () {
-                    _mapReady = true;
-                    _fit();
-                  },
-                  // L'utilisateur déplace la carte : la caméra arrête de suivre le livreur
-                  onMove: (_, gesture) {
-                    if (gesture && _follow) setState(() => _follow = false);
-                  },
-                  layers: [
-                    if (_route != null) routeLayer(_route!.points),
-                    if (d != null && d['status'] == 'PENDING') ...[
-                      AnimatedBuilder(
-                        animation: _radar,
-                        builder: (_, _) => CircleLayer(
-                          circles: [
-                            for (final k in const [0.0, 0.5])
-                              _pulse(
-                                pointOf(d, 'pickup')!,
-                                (_radar.value + k) % 1,
-                              ),
+      body: NotificationListener<DraggableScrollableNotification>(
+        onNotification: (n) {
+          _sheetExtent.value = n.extent;
+          return false;
+        },
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Stack(
+                children: [
+                  LetoMap(
+                    controller: _map,
+                    center: d == null ? abidjan : pointOf(d, 'pickup')!,
+                    onReady: () {
+                      _mapReady = true;
+                      _fit();
+                    },
+                    // L'utilisateur déplace la carte : la caméra arrête de suivre le livreur
+                    onMove: (_, gesture) {
+                      if (gesture && _follow) setState(() => _follow = false);
+                    },
+                    layers: [
+                      if (_route != null) routeLayer(_route!.points),
+                      if (d != null && d['status'] == 'PENDING') ...[
+                        AnimatedBuilder(
+                          animation: _radar,
+                          builder: (_, _) => CircleLayer(
+                            circles: [
+                              for (final k in const [0.0, 0.5])
+                                _pulse(
+                                  pointOf(d, 'pickup')!,
+                                  (_radar.value + k) % 1,
+                                ),
+                            ],
+                          ),
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            for (final n in _nearby)
+                              nearbyDriverMarker(n.point, n.vehicle),
                           ],
                         ),
-                      ),
+                      ],
                       MarkerLayer(
                         markers: [
-                          for (final n in _nearby)
-                            nearbyDriverMarker(n.point, n.vehicle),
+                          if (d != null) pickupMarker(pointOf(d, 'pickup')!),
+                          for (final s in _stops)
+                            stopMarker(
+                              context,
+                              LatLng(
+                                (s['lat'] as num).toDouble(),
+                                (s['lng'] as num).toDouble(),
+                              ),
+                              s['position'] + 1,
+                              status: s['status'],
+                            ),
                         ],
                       ),
-                    ],
-                    MarkerLayer(
-                      markers: [
-                        if (d != null) pickupMarker(pointOf(d, 'pickup')!),
-                        for (final s in _stops)
-                          stopMarker(
-                            context,
-                            LatLng(
-                              (s['lat'] as num).toDouble(),
-                              (s['lng'] as num).toDouble(),
-                            ),
-                            s['position'] + 1,
-                            status: s['status'],
+                      // Ma position, si je la partage avec le livreur
+                      if (_sharing && _myPos != null)
+                        MarkerLayer(markers: [myMarker(_myPos!)]),
+                      // Livreur en temps réel : avance en continu, orienté dans son sens de marche
+                      if (_driverPos != null && d != null && _active(d))
+                        ValueListenableBuilder<LatLng?>(
+                          valueListenable: _livePos,
+                          builder: (_, pos, _) => MarkerLayer(
+                            markers: [
+                              if (pos != null)
+                                driverMarker(
+                                  pos,
+                                  vehicle:
+                                      d['driver']?['vehicleType'] ??
+                                      d['vehicleType'],
+                                  headingTurns: _hasHeading
+                                      ? _headingTurns
+                                      : null,
+                                ),
+                            ],
                           ),
-                      ],
-                    ),
-                    // Ma position, si je la partage avec le livreur
-                    if (_sharing && _myPos != null)
-                      MarkerLayer(markers: [myMarker(_myPos!)]),
-                    // Livreur en temps réel : avance en continu, orienté dans son sens de marche
-                    if (_driverPos != null && d != null && _active(d))
-                      ValueListenableBuilder<LatLng?>(
-                        valueListenable: _livePos,
-                        builder: (_, pos, _) => MarkerLayer(
-                          markers: [
-                            if (pos != null)
-                              driverMarker(
-                                pos,
-                                vehicle:
-                                    d['driver']?['vehicleType'] ??
-                                    d['vehicleType'],
-                                headingTurns: _hasHeading
-                                    ? _headingTurns
-                                    : null,
-                              ),
-                          ],
                         ),
-                      ),
-                  ],
-                ),
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: MapButton(
-                      CupertinoIcons.chevron_back,
-                      onTap: () => Navigator.pop(context),
-                    ),
+                    ],
                   ),
-                ),
-                if (_driverPos != null && d != null && _active(d))
-                  Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: Semantics(
-                      label: _follow
-                          ? 'Arrêter de suivre le livreur'
-                          : 'Suivre le livreur',
-                      child: MapButton(
-                        _follow
-                            ? CupertinoIcons.location_fill
-                            : CupertinoIcons.location,
-                        onTap: _toggleFollow,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              // La carte garde au moins la moitié de l'écran ; le panneau défile au-delà
-              maxHeight: MediaQuery.of(context).size.height * 0.5,
-            ),
-            child: SingleChildScrollView(
-              child: GlassPanel(
-                children: d == null
-                    ? [
-                        const Padding(
-                          padding: EdgeInsets.all(20),
-                          child: CupertinoActivityIndicator(),
-                        ),
-                      ]
-                    : _panel(d, p),
+                ],
               ),
             ),
-          ),
-        ],
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: MapButton(
+                  CupertinoIcons.chevron_back,
+                  onTap: () => Navigator.pop(context),
+                ),
+              ),
+            ),
+            // Suivre le livreur : bouton posé juste au-dessus du panneau
+            if (_driverPos != null && d != null && _active(d))
+              ValueListenableBuilder<double>(
+                valueListenable: _sheetExtent,
+                builder: (_, extent, child) => Positioned(
+                  right: 12,
+                  bottom: h * extent + 12,
+                  child: AnimatedOpacity(
+                    opacity: extent > 0.75 ? 0 : 1,
+                    duration: Motion.fast,
+                    child: child,
+                  ),
+                ),
+                child: Semantics(
+                  label: _follow
+                      ? 'Arrêter de suivre le livreur'
+                      : 'Suivre le livreur',
+                  child: MapButton(
+                    _follow
+                        ? CupertinoIcons.location_fill
+                        : CupertinoIcons.location,
+                    onTap: _toggleFollow,
+                  ),
+                ),
+              ),
+            DraggableScrollableSheet(
+              controller: _sheet,
+              initialChildSize: _sheetMid,
+              minChildSize: _sheetMin,
+              maxChildSize: _sheetMax,
+              snap: true,
+              snapSizes: const [_sheetMid],
+              builder: (ctx, scroll) => DecoratedBox(
+                decoration: BoxDecoration(
+                  color: p.card,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(30),
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1F000000),
+                      blurRadius: 30,
+                      offset: Offset(0, -6),
+                    ),
+                  ],
+                ),
+                child: ListView(
+                  controller: scroll,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    0,
+                    20,
+                    24 + bottomInset + (_finished ? 72 : 0),
+                  ),
+                  children: [
+                    // Poignée : un appui agrandit ou réduit le panneau
+                    Semantics(
+                      button: true,
+                      label: 'Agrandir ou réduire le détail de la livraison',
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _toggleSheet,
+                        child: const Padding(
+                          padding: EdgeInsets.only(top: 10, bottom: 14),
+                          child: Grabber(),
+                        ),
+                      ),
+                    ),
+                    if (d == null)
+                      const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: CupertinoActivityIndicator(),
+                      )
+                    else
+                      ..._panel(d, p),
+                  ],
+                ),
+              ),
+            ),
+            // Course terminée : « Terminer » toujours visible en bas
+            if (d != null && _finished)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  color: p.card,
+                  padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomInset),
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Terminer'),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
+    );
+  }
+
+  void _toggleSheet() {
+    hapticTap();
+    final open = _sheetExtent.value < (_sheetMid + _sheetMax) / 2;
+    _sheet.animateTo(
+      open ? _sheetMax : _sheetMid,
+      duration: Motion.medium,
+      curve: Motion.curve,
     );
   }
 
@@ -927,6 +1023,67 @@ class _TrackingScreenState extends State<TrackingScreen>
         RatingCard(delivery: d, onRated: (nd) => setState(() => _d = nd)),
         const SizedBox(height: 16),
       ],
+      // ----- Paiement et détails -----
+      InsetGroup(
+        margin: const EdgeInsets.only(bottom: 18),
+        children: [
+          GroupRow(
+            leading: IconBadge(
+              CupertinoIcons.money_dollar_circle_fill,
+              color: p.green,
+            ),
+            title: 'Espèces',
+            subtitle: 'Paiement au livreur',
+            trailing: Text(
+              formatMoney(d['price'], d['currency']),
+              style: TextStyles.headline.copyWith(color: p.label),
+            ),
+          ),
+          GroupRow(
+            leading: IconBadge(CupertinoIcons.info, color: p.secondaryLabel),
+            title: 'Détails de la commande',
+            subtitle: [
+              vehicleLabels[d['vehicleType']],
+              speedLabels[d['speed']],
+              if (d['distanceKm'] != null) km(d['distanceKm']),
+            ].whereType<String>().join(' · '),
+            chevron: true,
+            onTap: () => showOrderDetails(context, d),
+          ),
+        ],
+      ),
+      // ----- Expéditeur -----
+      Text('Expéditeur', style: TextStyles.headline.copyWith(color: p.label)),
+      const SizedBox(height: 6),
+      InsetGroup(
+        margin: const EdgeInsets.only(bottom: 18),
+        children: [
+          GroupRow(
+            leading: IconBadge(CupertinoIcons.phone_fill, color: p.green),
+            title: formatPhone(d['pickupPhone']),
+            subtitle:
+                (d['pickupContactName'] ?? d['client']?['name']) as String?,
+            onTap: () => callPhone(context, d['pickupPhone']),
+          ),
+          GroupRow(
+            leading: const IconBadge(CupertinoIcons.circle_fill, color: ink),
+            title: d['pickupAddress'] ?? '',
+            subtitle: [
+              d['pickupCommune'],
+              d['pickupDetails'],
+            ].whereType<String>().where((x) => x.isNotEmpty).join(' · '),
+          ),
+          if ((d['courierComment'] ?? '').toString().isNotEmpty)
+            GroupRow(
+              leading: IconBadge(
+                CupertinoIcons.chat_bubble_text_fill,
+                color: p.blue,
+              ),
+              title: d['courierComment'],
+              subtitle: 'Instructions pour le livreur',
+            ),
+        ],
+      ),
       // ----- Destinataires -----
       Row(
         children: [
@@ -978,26 +1135,6 @@ class _TrackingScreenState extends State<TrackingScreen>
             ],
           ],
         ),
-      ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Text(
-            d['distanceKm'] != null
-                ? '${km(d['distanceKm'])} · ${vehicleLabels[d['vehicleType']]} · ${speedLabels[d['speed']]}'
-                : '',
-            style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
-          ),
-          const Spacer(),
-          Text(
-            'Espèces  ',
-            style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
-          ),
-          Text(
-            formatMoney(d['price'], d['currency']),
-            style: TextStyles.title3.copyWith(color: p.label),
-          ),
-        ],
       ),
       // Annuler : à part, tout en bas, loin des actions courantes
       if (status == 'PENDING' || status == 'ACCEPTED') ...[
@@ -1377,6 +1514,46 @@ class _StopTile extends StatelessWidget {
                   ),
               ],
             ],
+          ),
+          // Coordonnées du destinataire : téléphone (appel), précisions, colis
+          Padding(
+            padding: const EdgeInsets.only(left: 40, top: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: () => callPhone(context, stop['recipientPhone']),
+                  child: Text(
+                    formatPhone(stop['recipientPhone']),
+                    style: TextStyles.footnote.copyWith(
+                      color: p.blue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (subtitle != stop['address'])
+                  Text(
+                    '${stop['address']} (${stop['commune']})',
+                    style: TextStyles.footnote.copyWith(
+                      color: p.secondaryLabel,
+                    ),
+                  ),
+                if ((stop['details'] ?? '').toString().isNotEmpty)
+                  Text(
+                    stop['details'],
+                    style: TextStyles.footnote.copyWith(
+                      color: p.secondaryLabel,
+                    ),
+                  ),
+                if ((stop['packageDescription'] ?? '').toString().isNotEmpty)
+                  Text(
+                    'Colis : ${stop['packageDescription']}',
+                    style: TextStyles.footnote.copyWith(
+                      color: p.secondaryLabel,
+                    ),
+                  ),
+              ],
+            ),
           ),
           if (cod > 0 && status != 'FAILED')
             Padding(

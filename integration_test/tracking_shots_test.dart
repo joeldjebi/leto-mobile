@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:leto/main.dart' as app;
 import 'package:leto/screens/tracking_screen.dart';
+import 'package:leto/screens/widgets.dart';
 
 Future<void> wait(WidgetTester t, double seconds) async {
   for (var i = 0; i < seconds * 20; i++) {
@@ -35,7 +36,11 @@ void main() {
     await wait(t, 3);
     shot('sharing');
     await wait(t, 1);
-    await t.drag(find.byType(SingleChildScrollView).last, const Offset(0, -500));
+    // Panneau agrandi (appui sur la poignée), puis bas de la liste
+    await t.tap(find.byType(Grabber).first);
+    await wait(t, 1.5);
+    shot('expanded');
+    await t.drag(find.byType(ListView).last, const Offset(0, -900));
     await wait(t, 1.5);
     shot('accepted_bottom');
     await wait(t, 2);
@@ -45,9 +50,9 @@ void main() {
     await wait(t, 6);
     shot('delivered');
     await wait(t, 2);
+    await t.drag(find.byType(ListView).last, const Offset(0, -250));
+    await wait(t, 1.5);
     await t.tap(find.byIcon(CupertinoIcons.star).last);
-    await wait(t, 1);
-    await t.drag(find.byType(SingleChildScrollView).last, const Offset(0, -250));
     await wait(t, 1.5);
     shot('rating');
     await wait(t, 2);
