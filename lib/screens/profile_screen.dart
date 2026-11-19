@@ -22,6 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final _name = TextEditingController(text: _user['name']);
   late final _phone = PhoneController(_user['phone']);
   late String? _accountType = _user['accountType'];
+  late final _plate = TextEditingController(text: _user['plate'] ?? '');
   final _current = TextEditingController();
   final _newPassword = TextEditingController();
   bool _saving = false;
@@ -51,6 +52,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   bool get _isClient => _user['role'] == 'CLIENT';
+
+  /// Livreur d'entreprise : il renseigne son immatriculation (celle d'un indépendant vient de son dossier)
+  bool get _editsPlate => _user['role'] == 'DRIVER' && !api.isIndependent;
   bool get _phoneChanged =>
       !samePhone(_phone.e164 ?? _phone.text, _user['phone']);
   bool get _needsPassword => _phoneChanged || _newPassword.text.isNotEmpty;
@@ -76,6 +80,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'name': name,
         if (_phoneChanged) 'phone': phone,
         if (_isClient && _accountType != null) 'accountType': _accountType,
+        if (_editsPlate && _plate.text.trim() != (_user['plate'] ?? ''))
+          'plate': _plate.text.trim(),
         if (_newPassword.text.isNotEmpty) 'newPassword': _newPassword.text,
         if (_needsPassword) 'currentPassword': _current.text,
       });
@@ -199,6 +205,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             PhoneField(controller: _phone, onChanged: (_) => setState(() {})),
           ],
         ),
+        if (_editsPlate)
+          InsetGroup(
+            header: 'Engin',
+            footer:
+                'Affichée au client pendant la course pour qu’il vous reconnaisse.',
+            children: [
+              GroupField(
+                controller: _plate,
+                placeholder: 'Immatriculation (ex. AA 551 KR 01)',
+                icon: CupertinoIcons.number,
+                capitalization: TextCapitalization.characters,
+              ),
+            ],
+          ),
         InsetGroup(
           header: 'Mot de passe',
           footer: _needsPassword

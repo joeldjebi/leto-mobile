@@ -954,6 +954,7 @@ class GroupField extends StatelessWidget {
 
   /// Bouton à droite du champ, sur la même ligne (ex. répertoire, position)
   final Widget? trailing;
+  final TextCapitalization capitalization;
   const GroupField({
     super.key,
     required this.controller,
@@ -966,6 +967,7 @@ class GroupField extends StatelessWidget {
     this.maxLines = 1,
     this.onChanged,
     this.trailing,
+    this.capitalization = TextCapitalization.none,
   });
 
   @override
@@ -993,6 +995,7 @@ class GroupField extends StatelessWidget {
             child: TextFormField(
               controller: controller,
               obscureText: obscure,
+              textCapitalization: capitalization,
               keyboardType: keyboardType,
               validator: validator,
               onChanged: onChanged,

@@ -62,6 +62,7 @@ class _ClientHomeState extends State<ClientHome> {
   @override
   void initState() {
     super.initState();
+    repeatOrder.addListener(_onRepeat);
     _loadActive();
     loadFavoriteCompany().then((c) {
       if (!mounted) return;
@@ -79,8 +80,52 @@ class _ClientHomeState extends State<ClientHome> {
 
   @override
   void dispose() {
+    repeatOrder.removeListener(_onRepeat);
     _driversTimer?.cancel();
     super.dispose();
+  }
+
+  /// « Répéter » depuis le suivi d'une course : même départ, mêmes destinataires, même engin
+  void _onRepeat() {
+    final d = repeatOrder.value;
+    if (d == null || !mounted) return;
+    repeatOrder.value = null;
+    final stops = ((d['stops'] as List?) ?? [])
+        .cast<Map<String, dynamic>>()
+        .where((s) => s['status'] != 'CANCELLED')
+        .take(_maxStops);
+    setState(() {
+      _pickup = Place(
+        d['pickupAddress'] ?? '',
+        d['pickupCommune'] ?? '',
+        LatLng(
+          (d['pickupLat'] as num).toDouble(),
+          (d['pickupLng'] as num).toDouble(),
+        ),
+      );
+      _vehicle = d['vehicleType'] ?? _vehicle;
+      _stops
+        ..clear()
+        ..addAll([
+          for (final s in stops)
+            StopDraft(
+              Place(
+                s['address'] ?? '',
+                s['recipientName'] ?? '',
+                LatLng(
+                  (s['lat'] as num).toDouble(),
+                  (s['lng'] as num).toDouble(),
+                ),
+              ),
+              name: s['recipientName'] ?? '',
+              phone: s['recipientPhone'] ?? '',
+              details: s['details'] ?? '',
+            )..description = s['packageDescription'] ?? '',
+        ]);
+    });
+    if (_stops.isEmpty) return;
+    showInfo(context, 'Commande reprise : vérifiez puis continuez');
+    _showSummary();
   }
 
   Future<void> _loadDrivers() async {

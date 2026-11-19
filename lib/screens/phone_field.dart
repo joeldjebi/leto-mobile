@@ -21,12 +21,22 @@ class CountryFlag extends StatelessWidget {
     final w = height * 4 / 3;
     final code = iso.toLowerCase();
     Widget fallback() => Container(
-          width: w,
-          height: height,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: Palette.of(context).fill, borderRadius: BorderRadius.circular(3)),
-          child: Text(iso.toUpperCase(), style: TextStyle(fontSize: height * 0.55, fontWeight: FontWeight.w700, color: Palette.of(context).secondaryLabel)),
-        );
+      width: w,
+      height: height,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Palette.of(context).fill,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        iso.toUpperCase(),
+        style: TextStyle(
+          fontSize: height * 0.55,
+          fontWeight: FontWeight.w700,
+          color: Palette.of(context).secondaryLabel,
+        ),
+      ),
+    );
     if (!RegExp(r'^[a-z]{2}$').hasMatch(code)) return fallback();
     return Semantics(
       label: 'Drapeau ${iso.toUpperCase()}',
@@ -39,7 +49,8 @@ class CountryFlag extends StatelessWidget {
           fit: BoxFit.cover,
           excludeFromSemantics: true,
           errorBuilder: (_, _, _) => fallback(),
-          frameBuilder: (_, child, frame, sync) => frame == null && !sync ? fallback() : child,
+          frameBuilder: (_, child, frame, sync) =>
+              frame == null && !sync ? fallback() : child,
         ),
       ),
     );
@@ -164,7 +175,10 @@ class PhoneField extends StatelessWidget {
               style: bodyStyle,
               maxLines: 1,
               softWrap: false,
-              strutStyle: StrutStyle.fromTextStyle(TextStyles.body, forceStrutHeight: true),
+              strutStyle: StrutStyle.fromTextStyle(
+                TextStyles.body,
+                forceStrutHeight: true,
+              ),
             ),
           ],
         );
@@ -467,7 +481,10 @@ class _CountrySheetState extends State<_CountrySheet> {
                                       children: [
                                         SizedBox(
                                           width: 30,
-                                          child: CountryFlag(iso: c.iso, height: 20),
+                                          child: CountryFlag(
+                                            iso: c.iso,
+                                            height: 20,
+                                          ),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(

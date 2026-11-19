@@ -106,7 +106,8 @@ class LetoNotifier {
 
   /// Demande l'autorisation d'afficher des notifications (à la connexion)
   Future<void> requestPermission() async {
-    if (!_supported) return;
+    // Captures d'écran automatisées : pas de fenêtre d'autorisation par-dessus l'app
+    if (!_supported || const bool.fromEnvironment('SCREENSHOTS')) return;
     try {
       await _plugin
           .resolvePlatformSpecificImplementation<

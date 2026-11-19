@@ -16,6 +16,8 @@ import '../realtime.dart';
 import 'cancel_reasons.dart';
 import 'searching_header.dart';
 import 'share_codes.dart';
+import 'tracking_parts.dart';
+import '../models.dart';
 import 'widgets.dart';
 
 /// Suivi d'une course / tournée côté expéditeur, en temps réel.
@@ -68,6 +70,9 @@ class _TrackingScreenState extends State<TrackingScreen>
   @override
   void initState() {
     super.initState();
+    // Animations créées tout de suite (et non à la première utilisation, qui pouvait tomber dans dispose)
+    _radar;
+    _move;
     _load();
     _timer = Timer.periodic(const Duration(seconds: 20), (_) {
       if (!_finished) _load();
@@ -378,7 +383,10 @@ class _TrackingScreenState extends State<TrackingScreen>
               )
               .firstOrNull
         : pointOf(_d!, 'pickup');
-    fitPoints(_map, [_driverPos, next]);
+    fitPoints(_map, [
+      _driverPos,
+      next,
+    ], padding: const EdgeInsets.fromLTRB(70, 120, 70, 70));
   }
 
   // ---------- Proposez votre prix ----------
@@ -710,8 +718,8 @@ class _TrackingScreenState extends State<TrackingScreen>
         ),
         const SizedBox(height: 14),
       ] else ...[
-        Text(title, style: TextStyles.title2.copyWith(color: p.label)),
-        const SizedBox(height: 10),
+        _header(d, p, fallback: title),
+        const SizedBox(height: 18),
       ],
       if (status == 'PENDING' && _offers.isNotEmpty) ...[
         Text(
@@ -730,7 +738,13 @@ class _TrackingScreenState extends State<TrackingScreen>
           ),
         const SizedBox(height: 6),
       ],
-      if (status != 'CANCELLED') StatusSteps(status),
+      if (status != 'CANCELLED' && status != 'PENDING')
+        DeliveryProgress(
+          status,
+          vehicle: d['driver']?['vehicleType'] ?? d['vehicleType'],
+        ),
+      const SizedBox(height: 18),
+      _actions(d, p),
       // Commande expirée (aucun livreur dans le délai fixé par LETO)
       if (status == 'CANCELLED' && d['cancelledBy'] == 'Expiration')
         _notice(
@@ -769,39 +783,6 @@ class _TrackingScreenState extends State<TrackingScreen>
                         'Seuls ses livreurs la voient. Sans réponse dans 5 min, vous pourrez l’ouvrir à tous.',
                   );
           },
-        ),
-        const SizedBox(height: 12),
-      ],
-      if (trackingUrl(d) != null && !_finished) ...[
-        Builder(
-          builder: (ctx) => Pressable(
-            onTap: () => _shareTracking(ctx, d),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: ShapeDecoration(
-                color: p.accentSoft,
-                shape: RoundedSuperellipseBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(CupertinoIcons.link, color: accent, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Partager le suivi en direct',
-                      style: TextStyles.subheadline.copyWith(
-                        color: accent,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const Icon(CupertinoIcons.share, color: accent, size: 18),
-                ],
-              ),
-            ),
-          ),
         ),
         const SizedBox(height: 12),
       ],
@@ -858,8 +839,10 @@ class _TrackingScreenState extends State<TrackingScreen>
         ),
         const SizedBox(height: 12),
       ],
-      if (d['driver'] != null) _driverCard(d, p),
-      const SizedBox(height: 12),
+      if (status == 'DELIVERED' && d['driver'] != null) ...[
+        RatingCard(delivery: d, onRated: (nd) => setState(() => _d = nd)),
+        const SizedBox(height: 16),
+      ],
       // ----- Destinataires -----
       Row(
         children: [
@@ -932,15 +915,19 @@ class _TrackingScreenState extends State<TrackingScreen>
           ),
         ],
       ),
+      // Annuler : à part, tout en bas, loin des actions courantes
       if (status == 'PENDING' || status == 'ACCEPTED') ...[
-        const SizedBox(height: 12),
-        CupertinoButton(
-          onPressed: _cancel,
-          child: Text(
-            status == 'PENDING' ? 'Annuler la demande' : 'Annuler la livraison',
-            style: TextStyles.body.copyWith(color: p.red),
+        const SizedBox(height: 22),
+        Center(
+          child: RoundAction(
+            icon: RoundIcon(CupertinoIcons.xmark, color: p.red),
+            label: status == 'PENDING'
+                ? 'Annuler la demande'
+                : 'Annuler la livraison',
+            onTap: _cancel,
           ),
         ),
+        const SizedBox(height: 8),
       ],
     ];
   }
@@ -1046,62 +1033,134 @@ class _TrackingScreenState extends State<TrackingScreen>
     }
   }
 
-  Widget _driverCard(Map<String, dynamic> d, Palette p) {
-    final driver = d['driver'];
-    final independent = d['company']?['independent'] == true;
-    final card = Container(
-      padding: const EdgeInsets.all(12),
-      decoration: ShapeDecoration(
-        color: p.card,
-        shape: RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-      ),
-      child: Row(
-        children: [
-          Avatar(driver['name'], radius: 22, photo: driver['avatarUrl']),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (independent)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 3),
-                    child: IndependentBadge(),
+  /// Titre « quand ? » : prise en charge / livraison dans ≈ N min, avec une phrase de contexte
+  (String, String?) _headline(Map<String, dynamic> d, String fallback) {
+    final status = d['status'] as String;
+    final eta = _etaMin(d);
+    final driver = (d['driver']?['name'] as String?)?.split(' ').first;
+    final pending = _stops.where((s) => s['status'] == 'PENDING').toList();
+    final next = pending.firstOrNull;
+    final n = _stops.length;
+    final done = _stops.where((s) => s['status'] == 'DELIVERED').length;
+    switch (status) {
+      case 'ACCEPTED':
+        return (
+          eta != null ? 'Prise en charge dans ≈$eta min' : fallback,
+          '${driver ?? 'Le livreur'} se rend au point de départ pour récupérer le colis.',
+        );
+      case 'PICKED_UP':
+        if (next != null && next['arrivedAt'] != null) {
+          return (
+            'Le livreur est arrivé',
+            'Chez ${next['recipientName']} · ${next['address']}',
+          );
+        }
+        return (
+          eta != null ? 'Livraison dans ≈$eta min' : fallback,
+          n > 1
+              ? 'Tournée : $done/$n livrés. Prochain arrêt : ${next?['recipientName'] ?? '—'}.'
+              : 'Colis récupéré : ${driver ?? 'le livreur'} se dirige vers ${next?['recipientName'] ?? 'le destinataire'}.',
+        );
+      case 'DELIVERED':
+        final t = DateTime.tryParse(d['deliveredAt'] ?? '')?.toLocal();
+        return (
+          fallback == 'Livraison terminée' ? 'Livré' : fallback,
+          t == null
+              ? null
+              : 'Le ${t.day.toString().padLeft(2, '0')}/${t.month.toString().padLeft(2, '0')} à ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
+        );
+      default:
+        return (fallback, d['cancelReason'] as String?);
+    }
+  }
+
+  Widget _header(
+    Map<String, dynamic> d,
+    Palette p, {
+    required String fallback,
+  }) {
+    final (title, subtitle) = _headline(d, fallback);
+    final driver = d['driver'] as Map?;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: TextStyles.title1.copyWith(color: p.label)),
+              if (subtitle != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyles.subheadline.copyWith(
+                    color: p.secondaryLabel,
                   ),
-                Text(
-                  driver['name'],
-                  style: TextStyles.headline.copyWith(color: p.label),
-                ),
-                Text(
-                  [
-                    if (_etaMin(d) != null)
-                      d['status'] == 'ACCEPTED'
-                          ? 'au départ dans ~${_etaMin(d)} min'
-                          : 'chez le destinataire dans ~${_etaMin(d)} min',
-                    independent ? '' : d['company']?['name'] ?? '',
-                    if (_active(d) && _driverPos != null && _etaMin(d) == null)
-                      'position en direct',
-                  ].where((x) => x.isNotEmpty).join(' · '),
-                  style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
                 ),
               ],
-            ),
+            ],
           ),
-          Icon(CupertinoIcons.phone_fill, size: 16, color: p.green),
-          const SizedBox(width: 4),
-          SelectableText(
-            formatPhone(driver['phone'], compact: true),
-            style: TextStyles.subheadline.copyWith(
-              color: p.label,
-              fontWeight: FontWeight.w600,
-            ),
+        ),
+        if (driver != null && d['status'] != 'CANCELLED') ...[
+          const SizedBox(width: 12),
+          VehiclePlate(
+            vehicle: driver['vehicleType'] ?? d['vehicleType'],
+            plate: driver['plate'],
           ),
         ],
-      ),
+      ],
     );
-    return card;
+  }
+
+  /// Rangée d'actions : livreur, appeler, partager le suivi, détails, répéter
+  Widget _actions(Map<String, dynamic> d, Palette p) {
+    final driver = d['driver'] as Map?;
+    final active = _active(d);
+    final items = <Widget>[
+      if (driver != null)
+        RoundAction(
+          icon: DriverPhoto(driver),
+          label: driver['name'] ?? '',
+          onTap: () => showOrderDetails(context, d),
+        ),
+      if (driver != null && (active || d['status'] == 'DELIVERED'))
+        RoundAction(
+          icon: const RoundIcon(CupertinoIcons.phone_fill),
+          label: 'Appeler le livreur',
+          onTap: () => callPhone(context, driver['phone']),
+        ),
+      if (trackingUrl(d) != null && !_finished)
+        Builder(
+          builder: (ctx) => RoundAction(
+            icon: const RoundIcon(CupertinoIcons.arrowshape_turn_up_right_fill),
+            label: 'Partager le suivi',
+            onTap: () => _shareTracking(ctx, d),
+          ),
+        ),
+      RoundAction(
+        icon: const RoundIcon(CupertinoIcons.info),
+        label: 'Détails',
+        onTap: () => showOrderDetails(context, d),
+      ),
+      if (_finished)
+        RoundAction(
+          icon: const RoundIcon(CupertinoIcons.arrow_clockwise, color: accent),
+          label: 'Répéter',
+          onTap: () => _repeat(d),
+        ),
+    ];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: items,
+    );
+  }
+
+  /// Repasser la même commande : l'accueil reprend le départ et les destinataires
+  void _repeat(Map<String, dynamic> d) {
+    hapticTap();
+    repeatOrder.value = d;
+    Navigator.of(context).popUntil((r) => r.isFirst);
   }
 }
 

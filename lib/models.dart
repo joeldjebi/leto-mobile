@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'api.dart';
 
 /// Arrêt en cours de saisie (côté client), avant la création de la course
@@ -25,3 +26,6 @@ class StopDraft {
     details: a['details'] ?? '',
   );
 }
+
+/// « Répéter » une course terminée : l'accueil client reprend son départ et ses destinataires
+final repeatOrder = ValueNotifier<Map<String, dynamic>?>(null);

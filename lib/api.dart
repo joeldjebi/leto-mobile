@@ -353,6 +353,18 @@ class Api {
       await _request('GET', '/companies/directory');
 
   /// Course adressée à une entreprise sans réponse : l'ouvrir à toutes
+  /// Note du livreur après la livraison (1 à 5 étoiles, compliments, commentaire)
+  Future<Map<String, dynamic>> rate(
+    String id, {
+    required int stars,
+    List<String> tags = const [],
+    String comment = '',
+  }) async => await _request('POST', '/deliveries/$id/rate', {
+    'stars': stars,
+    if (tags.isNotEmpty) 'tags': tags,
+    if (comment.trim().isNotEmpty) 'comment': comment.trim(),
+  });
+
   Future<dynamic> openToAll(String id) =>
       _request('POST', '/deliveries/$id/open-to-all');
 
