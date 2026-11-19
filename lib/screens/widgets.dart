@@ -328,6 +328,35 @@ Marker nearbyDriverMarker(LatLng p, String vehicle) => Marker(
   ),
 );
 
+/// Client qui partage sa position avec le livreur (pastille bleue)
+Marker clientMarker(LatLng p) => Marker(
+  point: p,
+  width: 40,
+  height: 40,
+  child: Semantics(
+    label: 'Position du client',
+    child: Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2563EB),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x40000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: const Icon(
+        CupertinoIcons.person_fill,
+        color: Colors.white,
+        size: 20,
+      ),
+    ),
+  ),
+);
+
 /// Ma position (point violet)
 Marker myMarker(LatLng p) => Marker(
   point: p,

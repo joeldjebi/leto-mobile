@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -58,6 +59,12 @@ class _TrackingScreenState extends State<TrackingScreen>
       0; // cumulé (tours) pour tourner toujours par le plus court
   bool _hasHeading = false;
   bool _follow = false;
+
+  // « Montrer au livreur où je me trouve » : partage de ma position tant que l'écran est ouvert
+  bool _sharing = false;
+  LatLng? _myPos;
+  StreamSubscription<Position>? _shareGps;
+  Timer? _shareTimer;
   bool _driverFitted = false;
   void Function()? _unsubscribe;
   List<Map<String, dynamic>> _offers = [];
@@ -106,6 +113,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     _timer?.cancel();
     _ticker?.cancel();
     _nearbyTimer?.cancel();
+    _stopSharing(notify: true);
     _radar.dispose();
     _move.dispose();
     _livePos.dispose();
@@ -206,6 +214,59 @@ class _TrackingScreenState extends State<TrackingScreen>
     return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
   }
 
+  Future<void> _startSharing() async {
+    final first = await myPosition();
+    if (!mounted) return;
+    if (first == null) {
+      showError(
+        context,
+        'Activez la localisation pour montrer votre position au livreur.',
+      );
+      return;
+    }
+    setState(() => _sharing = true);
+    _sendMyPos(first);
+    if (devPosition == null) {
+      _shareGps =
+          Geolocator.getPositionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 10,
+            ),
+          ).listen((p) {
+            if (p.accuracy <= 80) _sendMyPos(LatLng(p.latitude, p.longitude));
+          }, onError: (_) {});
+    }
+    // Même immobile, la position reste « fraîche » côté livreur
+    _shareTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (_myPos != null) _sendMyPos(_myPos!);
+    });
+  }
+
+  void _sendMyPos(LatLng p) {
+    if (mounted) setState(() => _myPos = p);
+    Realtime.instance.socket.emit('client:location', {
+      'deliveryId': widget.id,
+      'lat': p.latitude,
+      'lng': p.longitude,
+    });
+  }
+
+  void _stopSharing({bool notify = false}) {
+    _shareGps?.cancel();
+    _shareGps = null;
+    _shareTimer?.cancel();
+    _shareTimer = null;
+    if (!_sharing) return;
+    _sharing = false;
+    if (notify) {
+      Realtime.instance.socket.emit('client:location:stop', {
+        'deliveryId': widget.id,
+      });
+    }
+    if (mounted) setState(() {});
+  }
+
   void _toggleFollow() {
     final pos = _livePos.value;
     if (pos == null) return;
@@ -286,6 +347,8 @@ class _TrackingScreenState extends State<TrackingScreen>
           _moveFrom = _driverPos;
         }
       });
+      // Course terminée ou annulée : le partage de position s'arrête (le serveur le retire aussi)
+      if (_sharing && !_active(d)) _stopSharing();
       if (first) {
         _fit();
         _loadRoute(d);
@@ -604,6 +667,9 @@ class _TrackingScreenState extends State<TrackingScreen>
                           ),
                       ],
                     ),
+                    // Ma position, si je la partage avec le livreur
+                    if (_sharing && _myPos != null)
+                      MarkerLayer(markers: [myMarker(_myPos!)]),
                     // Livreur en temps réel : avance en continu, orienté dans son sens de marche
                     if (_driverPos != null && d != null && _active(d))
                       ValueListenableBuilder<LatLng?>(
@@ -745,6 +811,24 @@ class _TrackingScreenState extends State<TrackingScreen>
         ),
       const SizedBox(height: 18),
       _actions(d, p),
+      if (_active(d) && d['driver'] != null) ...[
+        const SizedBox(height: 16),
+        InsetGroup(
+          margin: EdgeInsets.zero,
+          children: [
+            GroupSwitch(
+              leading: IconBadge(CupertinoIcons.location_fill, color: p.blue),
+              title: 'Montrer au livreur où je me trouve',
+              subtitle: _sharing
+                  ? 'Le livreur voit votre position en direct'
+                  : 'Utile s’il vous cherche au point de rendez-vous',
+              value: _sharing,
+              onChanged: (v) =>
+                  v ? _startSharing() : _stopSharing(notify: true),
+            ),
+          ],
+        ),
+      ],
       // Commande expirée (aucun livreur dans le délai fixé par LETO)
       if (status == 'CANCELLED' && d['cancelledBy'] == 'Expiration')
         _notice(

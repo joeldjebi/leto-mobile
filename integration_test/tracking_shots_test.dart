@@ -30,6 +30,11 @@ void main() {
     await wait(t, 6);
     shot('accepted');
     await wait(t, 2);
+    // « Montrer au livreur où je me trouve »
+    await t.tap(find.byType(CupertinoSwitch).first);
+    await wait(t, 3);
+    shot('sharing');
+    await wait(t, 1);
     await t.drag(find.byType(SingleChildScrollView).last, const Offset(0, -500));
     await wait(t, 1.5);
     shot('accepted_bottom');

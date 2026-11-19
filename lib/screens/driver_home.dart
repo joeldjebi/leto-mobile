@@ -117,6 +117,7 @@ class _DriverHomeState extends State<DriverHome> {
     s.on('remittance:updated', _onRemittance);
     s.on('delivery:assigned', _onAssigned);
     s.on('delivery:reordered', _onReordered);
+    s.on('client:location', _onClientLocation);
     SharedPreferences.getInstance().then((p) {
       if (p.getBool('driver_online') == true) _goOnline();
     });
@@ -133,6 +134,7 @@ class _DriverHomeState extends State<DriverHome> {
     s.off('offer:rejected', _onOfferRejected);
     s.off('stop:arrived', _onArrived);
     s.off('stop:cancelled', _onStopCancelled);
+    s.off('client:location', _onClientLocation);
     s.off('stop:cancel-refused', _onCancelRefused);
     s.off('delivery:cancelled', _onDeliveryCancelled);
     s.off('remittance:updated', _onRemittance);
@@ -303,6 +305,51 @@ class _DriverHomeState extends State<DriverHome> {
     if (_sheetScroll?.hasClients == true) _sheetScroll!.jumpTo(0);
   }
 
+  /// Position partagée par le client d'une course (« Montrer au livreur où je me trouve »)
+  final _clientPos = <String, (LatLng, DateTime)>{};
+
+  void _onClientLocation(dynamic e) {
+    if (!mounted) return;
+    setState(() => _onClientLocationData(e));
+  }
+
+  void _onClientLocationData(dynamic e) {
+    if (e is! Map || e['deliveryId'] is! String) return;
+    if (e['stopped'] == true) {
+      _clientPos.remove(e['deliveryId']);
+    } else {
+      _clientPos[e['deliveryId']] = (
+        LatLng((e['lat'] as num).toDouble(), (e['lng'] as num).toDouble()),
+        DateTime.tryParse(e['at'] ?? '')?.toLocal() ?? DateTime.now(),
+      );
+    }
+  }
+
+  /// Position du client encore fraîche (moins de 2 min), sinon null
+  (LatLng, DateTime)? _clientOf(Map? d) {
+    final c = d == null ? null : _clientPos[d['id']];
+    if (c == null || DateTime.now().difference(c.$2).inSeconds > 120) {
+      return null;
+    }
+    return c;
+  }
+
+  /// Ligne « Le client partage sa position » : distance, fraîcheur, itinéraire
+  Widget? _clientRow(Map d, Palette p) {
+    final c = _clientOf(d);
+    if (c == null) return null;
+    final ago = DateTime.now().difference(c.$2).inSeconds;
+    return GroupRow(
+      leading: IconBadge(CupertinoIcons.person_crop_circle_fill, color: p.blue),
+      title: 'Le client partage sa position',
+      subtitle: [
+        if (_me != null) 'à ${km(distanceKm(_me!, c.$1))}',
+        ago < 10 ? 'en direct' : 'il y a $ago s',
+      ].join(' · '),
+      trailing: _navButton(c.$1, p),
+    );
+  }
+
   Future<void> _load() async {
     try {
       final r = await Future.wait([
@@ -328,6 +375,21 @@ class _DriverHomeState extends State<DriverHome> {
           _available.sort((a, b) => _distanceTo(a).compareTo(_distanceTo(b)));
         }
       });
+      // Positions partagées par les clients de mes courses en cours (si l'app a été rouverte)
+      if (_active.isNotEmpty) {
+        Realtime.instance.socket.emitWithAck(
+          'driver:client-locations',
+          null,
+          ack: (dynamic list) {
+            if (!mounted || list is! List) return;
+            setState(() {
+              for (final e in list) {
+                _onClientLocationData(e);
+              }
+            });
+          },
+        );
+      }
       // Course en cours : suivi en direct hors de l'app (Live Activity / notification fixe)
       DeliveryLive.instance.sync(
         _current,
@@ -679,6 +741,7 @@ class _DriverHomeState extends State<DriverHome> {
                       active['status'] == 'ACCEPTED' &&
                       target != null)
                     pickupMarker(target),
+                  if (_clientOf(active) case final c?) clientMarker(c.$1),
                   if (_me != null) myMarker(_me!),
                 ],
               ),
@@ -951,6 +1014,7 @@ class _DriverHomeState extends State<DriverHome> {
               subtitle: 'Expéditeur',
               trailing: _phone(d['pickupPhone'], p),
             ),
+            ?_clientRow(d, p),
             if (d['pickupPhotoUrl'] != null)
               GroupRow(
                 leading: AddressPhoto(d['pickupPhotoUrl'], size: 44),
@@ -1014,6 +1078,7 @@ class _DriverHomeState extends State<DriverHome> {
               subtitle: 'Expéditeur',
               trailing: _phone(d['pickupPhone'], p),
             ),
+            ?_clientRow(d, p),
             for (final s in back)
               GroupRow(
                 leading: Icon(
@@ -1073,6 +1138,7 @@ class _DriverHomeState extends State<DriverHome> {
               subtitle: next['packageDescription'] ?? 'Destinataire',
               trailing: _phone(next['recipientPhone'], p),
             ),
+            ?_clientRow(d, p),
             if (next['photoUrl'] != null)
               GroupRow(
                 leading: AddressPhoto(next['photoUrl'], size: 44),
