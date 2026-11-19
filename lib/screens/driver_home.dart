@@ -15,6 +15,7 @@ import '../api.dart';
 import '../geo.dart';
 import '../labels.dart';
 import '../live_activity.dart';
+import '../live_route.dart';
 import '../main.dart';
 import '../notifications.dart';
 import '../realtime.dart';
@@ -34,7 +35,7 @@ class DriverHome extends StatefulWidget {
   State<DriverHome> createState() => _DriverHomeState();
 }
 
-class _DriverHomeState extends State<DriverHome> {
+class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   final api = Api.instance;
   final _map = MapController();
 
@@ -58,8 +59,16 @@ class _DriverHomeState extends State<DriverHome> {
   List<Map<String, dynamic>> _mine = [];
   Map<String, Map<String, dynamic>> _myOffers = {};
 
-  RouteInfo? _activeRoute;
-  String? _activeRouteKey;
+  /// Itinéraire en direct vers la prochaine étape (recalculé si le livreur dévie, consommé au fil du trajet)
+  final _nav = LiveRoute();
+
+  /// Mode navigation : la carte suit le livreur, orientée dans son sens de marche
+  bool _navMode = false;
+  double _headingDeg = 0;
+  double _headingTurns = 0;
+  bool _hasHeading = false;
+  bool _autoTracking = false;
+  final _sheetExtent = ValueNotifier<double>(0.5);
 
   List<Map<String, dynamic>> get _active => _mine
       .where((d) => ['ACCEPTED', 'PICKED_UP'].contains(d['status']))
@@ -94,6 +103,7 @@ class _DriverHomeState extends State<DriverHome> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
     api
         .grid()
@@ -125,6 +135,8 @@ class _DriverHomeState extends State<DriverHome> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _sheetExtent.dispose();
     _timer?.cancel();
     _clock?.cancel();
     _stopGps();
@@ -305,6 +317,22 @@ class _DriverHomeState extends State<DriverHome> {
     if (_sheetScroll?.hasClients == true) _sheetScroll!.jumpTo(0);
   }
 
+  /// Retour au premier plan (après Google Maps, un appel…) : connexion et GPS relancés
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final s = Realtime.instance.socket;
+    if (!s.connected) s.connect();
+    if (_online && devPosition == null) {
+      _gps?.cancel();
+      _gps = _positionStream().listen(_onGps, onError: (_) {});
+      myPosition().then((p) {
+        if (p != null && mounted) _sendPosition(p);
+      });
+    }
+    _load();
+  }
+
   /// Position partagée par le client d'une course (« Montrer au livreur où je me trouve »)
   final _clientPos = <String, (LatLng, DateTime)>{};
 
@@ -391,12 +419,13 @@ class _DriverHomeState extends State<DriverHome> {
         );
       }
       // Course en cours : suivi en direct hors de l'app (Live Activity / notification fixe)
-      DeliveryLive.instance.sync(
-        _current,
-        driver: true,
-        etaMin: _activeRoute?.durationMin,
-      );
+      DeliveryLive.instance.sync(_current, driver: true, etaMin: _nav.etaMin);
       _refreshActiveRoute();
+      // Course en cours mais GPS éteint (hors ligne) : le suivi démarre tout seul, sinon le client ne voit rien bouger
+      if (_active.isNotEmpty && !_online && !_autoTracking) {
+        _autoTracking = true;
+        _goOnline();
+      }
     } catch (e) {
       if (mounted) showError(context, e);
     }
@@ -407,34 +436,87 @@ class _DriverHomeState extends State<DriverHome> {
     return (_me == null || p == null) ? double.infinity : distanceKm(_me!, p);
   }
 
+  /// Itinéraire vers la prochaine étape : calculé au changement d'étape, puis suivi à chaque position GPS
   Future<void> _refreshActiveRoute() async {
     final d = _current;
     if (d == null) {
-      if (_activeRoute != null) setState(() => _activeRoute = null);
-      _activeRouteKey = null;
+      if (_nav.hasRoute) setState(_nav.clear);
       return;
     }
     final to = _targetOf(d);
-    final from = _me ?? pointOf(d, 'pickup');
+    // Sans ma position, l'itinéraire part du départ seulement si je l'ai déjà quitté (colis récupéré)
+    final from =
+        _me ?? (d['status'] == 'PICKED_UP' ? pointOf(d, 'pickup') : null);
     if (to == null || from == null) return;
-    final key = '${d['id']}-${d['status']}-${_nextStop(d)?['id']}';
-    if (key == _activeRouteKey) return;
-    _activeRouteKey = key;
-    try {
-      final r = await api.route(from, to);
-      if (!mounted) return;
-      setState(() => _activeRoute = r);
-      fitPoints(
-        _map,
-        [from, to, ...r.points],
-        padding: EdgeInsets.fromLTRB(
-          50,
-          110,
-          50,
-          MediaQuery.of(context).size.height * 0.5,
-        ),
-      );
-    } catch (_) {}
+    final newTarget = _nav.target == null || distanceM(_nav.target!, to) > 15;
+    if (!_nav.update(from, to)) return;
+    if (await _nav.fetch(from) && mounted) {
+      setState(() {});
+      if (newTarget && !_navMode) _fitRoute();
+    }
+  }
+
+  /// Cadre ma position, la prochaine étape et le trajet restant (au-dessus du panneau)
+  void _fitRoute() {
+    final d = _current;
+    final to = d == null ? null : _targetOf(d);
+    final from = _me ?? (d == null ? null : pointOf(d, 'pickup'));
+    if (from == null || to == null) return;
+    fitPoints(
+      _map,
+      [from, to, ..._nav.remaining],
+      padding: EdgeInsets.fromLTRB(
+        50,
+        110,
+        50,
+        MediaQuery.of(context).size.height * _sheetExtent.value + 20,
+      ),
+    );
+  }
+
+  /// Flux GPS du livreur : une position toutes les 1 à 2 s en mouvement (seuil 3 m)
+  Stream<Position> _positionStream() => Geolocator.getPositionStream(
+    locationSettings: Platform.isIOS
+        ? AppleSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 3,
+            allowBackgroundLocationUpdates: true,
+            showBackgroundLocationIndicator: true,
+            pauseLocationUpdatesAutomatically: false,
+            activityType: ActivityType.otherNavigation,
+          )
+        : AndroidSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 3,
+            intervalDuration: const Duration(seconds: 2),
+          ),
+  );
+
+  void _toggleNav() {
+    hapticTap();
+    setState(() => _navMode = !_navMode);
+    if (_navMode) {
+      _followMe();
+    } else {
+      _map.rotate(0);
+      _fitRoute();
+    }
+  }
+
+  /// Mode navigation : centré sur moi (dans la partie visible), carte orientée vers ma direction
+  void _followMe() {
+    final me = _shownMe;
+    if (!_navMode || me == null) return;
+    final h = MediaQuery.of(context).size.height;
+    _map.rotate(_hasHeading ? -_headingDeg : 0);
+    _map.move(me, 17, offset: Offset(0, -h * _sheetExtent.value / 2 + 40));
+  }
+
+  /// Ma position affichée : recalée sur l'itinéraire si je suis dessus
+  LatLng? get _shownMe {
+    final f = _nav.fix;
+    if (_me == null) return null;
+    return _nav.hasRoute && f != null && f.offRouteM < 30 ? f.snapped : _me;
   }
 
   // ---------- En ligne / Hors ligne ----------
@@ -455,23 +537,7 @@ class _DriverHomeState extends State<DriverHome> {
     LetoNotifier.instance.startKeepAlive(driver: true);
     if (devPosition == null) {
       // Suivi pro : une position toutes les 1 à 2 s en mouvement (3 m de seuil), cap et vitesse inclus
-      _gps = Geolocator.getPositionStream(
-        locationSettings: Platform.isIOS
-            // iPhone : la localisation en arrière-plan garde la connexion ouverte
-            ? AppleSettings(
-                accuracy: LocationAccuracy.bestForNavigation,
-                distanceFilter: 3,
-                allowBackgroundLocationUpdates: true,
-                showBackgroundLocationIndicator: true,
-                pauseLocationUpdatesAutomatically: false,
-                activityType: ActivityType.otherNavigation,
-              )
-            : AndroidSettings(
-                accuracy: LocationAccuracy.high,
-                distanceFilter: 3,
-                intervalDuration: const Duration(seconds: 2),
-              ),
-      ).listen(_onGps, onError: (_) {});
+      _gps = _positionStream().listen(_onGps, onError: (_) {});
     }
     _heartbeat = Timer.periodic(const Duration(seconds: 10), (_) {
       if (_me != null) _sendPosition(_me!);
@@ -514,7 +580,25 @@ class _DriverHomeState extends State<DriverHome> {
 
   void _sendPosition(LatLng p, {double? heading, double? speed}) {
     _lastSent = DateTime.now();
+    if (heading != null) {
+      // Rotation par le plus court chemin (pas de tour complet entre 359° et 1°)
+      var delta = heading / 360 - (_headingTurns % 1);
+      if (delta > 0.5) delta -= 1;
+      if (delta < -0.5) delta += 1;
+      _headingTurns += delta;
+      _headingDeg = heading;
+      _hasHeading = true;
+    }
     if (mounted) setState(() => _me = p);
+    // Itinéraire en direct : position recalée, reste du trajet, recalcul si je dévie
+    final d = _current;
+    final to = d == null ? null : _targetOf(d);
+    if (to != null && _nav.update(p, to)) {
+      _nav.fetch(p).then((ok) {
+        if (ok && mounted) setState(() {});
+      });
+    }
+    _followMe();
     Realtime.instance.socket.emit('driver:location', {
       'lat': p.latitude,
       'lng': p.longitude,
@@ -706,11 +790,18 @@ class _DriverHomeState extends State<DriverHome> {
         children: [
           LetoMap(
             controller: _map,
+            // Je déplace la carte moi-même : le mode navigation s'arrête
+            onMove: (_, gesture) {
+              if (gesture && _navMode) {
+                setState(() => _navMode = false);
+                _map.rotate(0);
+              }
+            },
             layers: [
-              if (_activeRoute != null)
+              if (active != null && _nav.hasRoute)
                 routeLayer(
-                  _activeRoute!.points,
-                  color: active?['status'] == 'ACCEPTED' ? p.blue : p.green,
+                  _nav.remaining,
+                  color: active['status'] == 'ACCEPTED' ? p.blue : p.green,
                 ),
               MarkerLayer(
                 markers: [
@@ -742,7 +833,15 @@ class _DriverHomeState extends State<DriverHome> {
                       target != null)
                     pickupMarker(target),
                   if (_clientOf(active) case final c?) clientMarker(c.$1),
-                  if (_me != null) myMarker(_me!),
+                  // Moi : flèche orientée dans mon sens de marche pendant une course, point sinon
+                  if (_shownMe != null)
+                    active != null
+                        ? driverMarker(
+                            _shownMe!,
+                            vehicle: api.user?['vehicleType'],
+                            headingTurns: _hasHeading ? _headingTurns : null,
+                          )
+                        : myMarker(_shownMe!),
                 ],
               ),
             ],
@@ -843,62 +942,93 @@ class _DriverHomeState extends State<DriverHome> {
               ),
             ),
           ),
-          DraggableScrollableSheet(
-            initialChildSize: 0.5,
-            minChildSize: 0.18,
-            maxChildSize: 0.92,
-            snap: true,
-            snapSizes: const [0.5],
-            builder: (context, scroll) {
-              _sheetScroll = scroll;
-              return ClipRSuperellipse(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
+          // Navigation : la carte me suit, orientée dans mon sens de marche
+          if (active != null && _me != null)
+            ValueListenableBuilder<double>(
+              valueListenable: _sheetExtent,
+              builder: (_, extent, child) => Positioned(
+                right: 12,
+                bottom: MediaQuery.of(context).size.height * extent + 12,
+                child: AnimatedOpacity(
+                  opacity: extent > 0.75 ? 0 : 1,
+                  duration: Motion.fast,
+                  child: child,
                 ),
-                child: Container(
-                  color: p.background,
-                  child: CustomScrollView(
-                    controller: scroll,
-                    slivers: [
-                      SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _SheetHeader(
-                          color: p.background,
-                          child: CupertinoSlidingSegmentedControl<int>(
-                            groupValue: _tab,
-                            onValueChanged: (i) {
-                              hapticTap();
-                              _setTab(i ?? 0);
-                            },
-                            children: {
-                              0: _seg(
-                                'Courses${_online && _available.isNotEmpty ? ' (${_available.length})' : ''}',
-                              ),
-                              1: _seg(
-                                'En cours${_active.isNotEmpty ? ' (${_active.length})' : ''}',
-                              ),
-                              2: _seg('Gains'),
-                              3: _seg('Carnet'),
-                            },
+              ),
+              child: Semantics(
+                label: _navMode
+                    ? 'Quitter le mode navigation'
+                    : 'Mode navigation',
+                child: MapButton(
+                  _navMode
+                      ? CupertinoIcons.location_north_fill
+                      : CupertinoIcons.location_north,
+                  onTap: _toggleNav,
+                ),
+              ),
+            ),
+          NotificationListener<DraggableScrollableNotification>(
+            onNotification: (n) {
+              _sheetExtent.value = n.extent;
+              return false;
+            },
+            child: DraggableScrollableSheet(
+              initialChildSize: 0.5,
+              minChildSize: 0.18,
+              maxChildSize: 0.92,
+              snap: true,
+              snapSizes: const [0.5],
+              builder: (context, scroll) {
+                _sheetScroll = scroll;
+                return ClipRSuperellipse(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                  child: Container(
+                    color: p.background,
+                    child: CustomScrollView(
+                      controller: scroll,
+                      slivers: [
+                        SliverPersistentHeader(
+                          pinned: true,
+                          delegate: _SheetHeader(
+                            color: p.background,
+                            child: CupertinoSlidingSegmentedControl<int>(
+                              groupValue: _tab,
+                              onValueChanged: (i) {
+                                hapticTap();
+                                _setTab(i ?? 0);
+                              },
+                              children: {
+                                0: _seg(
+                                  'Courses${_online && _available.isNotEmpty ? ' (${_available.length})' : ''}',
+                                ),
+                                1: _seg(
+                                  'En cours${_active.isNotEmpty ? ' (${_active.length})' : ''}',
+                                ),
+                                2: _seg('Gains'),
+                                3: _seg('Carnet'),
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                      SliverPadding(
-                        padding: const EdgeInsets.only(bottom: 32),
-                        sliver: SliverList(
-                          delegate: SliverChildListDelegate(switch (_tab) {
-                            0 => _ordersTab(p),
-                            1 => _activeTab(p),
-                            3 => [const DriverLogbook()],
-                            _ => _gainsTab(p),
-                          }),
+                        SliverPadding(
+                          padding: const EdgeInsets.only(bottom: 32),
+                          sliver: SliverList(
+                            delegate: SliverChildListDelegate(switch (_tab) {
+                              0 => _ordersTab(p),
+                              1 => _activeTab(p),
+                              3 => [const DriverLogbook()],
+                              _ => _gainsTab(p),
+                            }),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -986,9 +1116,9 @@ class _DriverHomeState extends State<DriverHome> {
     final stops = _stopsOf(d);
     final n = stops.length;
     final done = stops.where((s) => s['status'] != 'PENDING').length;
-    final routeInfo = _activeRoute == null
+    final routeInfo = !_nav.hasRoute
         ? null
-        : '${_activeRoute!.durationMin} min · ${km(_activeRoute!.distanceKm)}';
+        : '${_nav.etaMin} min · ${km((_nav.remainingM ?? 0) / 1000)}';
 
     // Étape 1 : récupérer les colis
     if (d['status'] == 'ACCEPTED') {

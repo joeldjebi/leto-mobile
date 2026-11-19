@@ -88,7 +88,8 @@ Widget homeFor() {
   if (!api.isLoggedIn) return const LoginScreen();
   // Notifications locales par le temps réel (autorisation demandée une fois)
   // Vidéo de démonstration (--dart-define=DEMO=true) : pas de fenêtre système par-dessus l'enregistrement
-  if (!const bool.fromEnvironment('DEMO')) LetoNotifier.instance.requestPermission();
+  if (!const bool.fromEnvironment('DEMO'))
+    LetoNotifier.instance.requestPermission();
   LetoNotifier.instance.attach();
   if (api.isIndependent) return const IndependentGate();
   return api.role == 'DRIVER' ? const DriverHome() : const ClientHome();

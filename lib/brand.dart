@@ -15,14 +15,17 @@ class LetoMark extends StatelessWidget {
 
   /// Version blanche (sur fond violet)
   const LetoMark.onAccent({super.key, this.size = 48})
-      : dots = Colors.white,
-        accent = const Color(0xFF4ADE80);
+    : dots = Colors.white,
+      accent = const Color(0xFF4ADE80);
 
   @override
   Widget build(BuildContext context) => Semantics(
-        label: 'LETO',
-        child: CustomPaint(size: Size.square(size), painter: _MarkPainter(dots, accent)),
-      );
+    label: 'LETO',
+    child: CustomPaint(
+      size: Size.square(size),
+      painter: _MarkPainter(dots, accent),
+    ),
+  );
 }
 
 class _MarkPainter extends CustomPainter {
@@ -57,5 +60,6 @@ class _MarkPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_MarkPainter old) => old.dots != dots || old.accent != accent;
+  bool shouldRepaint(_MarkPainter old) =>
+      old.dots != dots || old.accent != accent;
 }

@@ -243,6 +243,7 @@ Marker driverMarker(
   LatLng p, {
   String? vehicle,
   double? headingTurns,
+  bool stale = false,
 }) => Marker(
   point: p,
   width: 64,
@@ -265,7 +266,8 @@ Marker driverMarker(
         width: 46,
         height: 46,
         decoration: BoxDecoration(
-          color: ink,
+          // Grisé quand la position n'est plus à jour (signal perdu)
+          color: stale ? const Color(0xFF8E8E93) : ink,
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 3),
           boxShadow: const [

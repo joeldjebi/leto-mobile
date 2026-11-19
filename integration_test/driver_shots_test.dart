@@ -1,6 +1,7 @@
 // Captures côté livreur : course en cours avec la position partagée par le client (ligne « SHOT:nom »).
 // flutter test integration_test/driver_shots_test.dart -d <simulateur> --dart-define=API_URL=local
 //   --dart-define=DEV_PHONE=<livreur> --dart-define=DEV_PASSWORD=… --dart-define=DEV_LAT=… --dart-define=DEV_LNG=…
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -24,5 +25,13 @@ void main() {
     // ignore: avoid_print
     print('SHOT:driver_client');
     await wait(t, 2);
+    final navButton = find.byIcon(CupertinoIcons.location_north);
+    if (navButton.evaluate().isNotEmpty) {
+      await t.tap(navButton.first);
+      await wait(t, 3);
+      // ignore: avoid_print
+      print('SHOT:driver_nav');
+      await wait(t, 1);
+    }
   });
 }

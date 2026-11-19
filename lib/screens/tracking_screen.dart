@@ -12,6 +12,7 @@ import '../api.dart';
 import '../geo.dart';
 import '../labels.dart';
 import '../live_activity.dart';
+import '../live_route.dart';
 import '../main.dart';
 import '../realtime.dart';
 import 'cancel_reasons.dart';
@@ -30,7 +31,7 @@ class TrackingScreen extends StatefulWidget {
 }
 
 class _TrackingScreenState extends State<TrackingScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   // Recherche d'un livreur : ondes radar, livreurs autour du départ, délai d'expiration
   late final AnimationController _radar = AnimationController(
     vsync: this,
@@ -60,6 +61,10 @@ class _TrackingScreenState extends State<TrackingScreen>
   bool _hasHeading = false;
   bool _follow = false;
 
+  /// Trajet réel du livreur vers sa prochaine étape (recalé, consommé, recalculé s'il dévie)
+  final _live = LiveRoute();
+  DateTime _lastGesture = DateTime(2000);
+
   // Panneau déroulant : moitié de l'écran au départ, agrandissable presque en plein écran
   static const _sheetMid = 0.5, _sheetMax = 0.94, _sheetMin = 0.24;
   final _sheet = DraggableScrollableController();
@@ -85,12 +90,17 @@ class _TrackingScreenState extends State<TrackingScreen>
     // Animations créées tout de suite (et non à la première utilisation, qui pouvait tomber dans dispose)
     _radar;
     _move;
+    WidgetsBinding.instance.addObserver(this);
     _load();
-    _timer = Timer.periodic(const Duration(seconds: 20), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!_finished) _load();
     });
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+    _ticker = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
+      // Signal du livreur perdu / retrouvé : marqueur grisé et mention « position il y a… »
+      if (_driverStale != _wasStale || (_driverStale && t.tick % 30 == 0)) {
+        setState(() => _wasStale = _driverStale);
+      }
       if (_offers.isEmpty) return;
       setState(() => _offers.removeWhere((o) => _secondsLeft(o) <= 0));
     });
@@ -118,6 +128,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     _timer?.cancel();
     _ticker?.cancel();
     _nearbyTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _stopSharing(notify: true, disposing: true);
     _radar.dispose();
     _move.dispose();
@@ -140,19 +151,88 @@ class _TrackingScreenState extends State<TrackingScreen>
 
   // ---------- Temps réel ----------
 
+  /// Retour au premier plan : la connexion a pu tomber pendant l'arrière-plan
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final s = Realtime.instance.socket;
+    if (!s.connected) s.connect();
+    _load();
+  }
+
+  /// Dernière position reçue du livreur, et si elle n'est plus à jour (plus d'1 min)
+  DateTime? _lastDriverFix;
+  bool _wasStale = false;
+  bool get _driverStale =>
+      _lastDriverFix != null &&
+      DateTime.now().difference(_lastDriverFix!).inSeconds > 60;
+
   void _onDriverLocation(dynamic e) {
     if (!mounted || e is! Map || e['deliveryId'] != widget.id) return;
-    final next = LatLng(
+    final gps = LatLng(
       (e['lat'] as num).toDouble(),
       (e['lng'] as num).toDouble(),
     );
+    _lastDriverFix = DateTime.now();
+    final next = _trackLive(gps);
     _animateDriver(next, heading: (e['heading'] as num?)?.toDouble());
     setState(() => _driverPos = next);
     _fitDriver();
+    _keepInView();
     // Heure d'arrivée à jour dans la Live Activity (mise à jour seulement si elle change)
     final d = _d;
     if (d != null) {
       DeliveryLive.instance.sync(d, driver: false, etaMin: _etaMin(d));
+    }
+  }
+
+  /// Prochaine étape du livreur : le départ, puis le prochain destinataire
+  LatLng? _liveTarget(Map d) {
+    if (d['status'] == 'ACCEPTED') return pointOf(d, 'pickup');
+    if (d['status'] != 'PICKED_UP') return null;
+    final s = _stops.where((s) => s['status'] == 'PENDING').firstOrNull;
+    return s == null
+        ? null
+        : LatLng((s['lat'] as num).toDouble(), (s['lng'] as num).toDouble());
+  }
+
+  /// Met à jour le trajet en direct et renvoie la position à afficher (recalée sur la route si proche)
+  LatLng _trackLive(LatLng gps) {
+    final d = _d;
+    final target = d == null ? null : _liveTarget(d);
+    if (target == null) {
+      _live.clear();
+      return gps;
+    }
+    if (_live.update(gps, target)) {
+      final firstRoute = !_live.hasRoute;
+      _live.fetch(gps).then((ok) {
+        if (!ok || !mounted) return;
+        setState(() {});
+        // Premier trajet connu : cadrage sur le livreur, le trajet et l'étape (sauf si l'utilisateur a bougé la carte)
+        if (firstRoute &&
+            !_follow &&
+            DateTime.now().difference(_lastGesture).inSeconds > 20) {
+          _fitDriverAndNext();
+        }
+      });
+    }
+    final f = _live.fix;
+    return f != null && f.offRouteM < 35 ? f.snapped : gps;
+  }
+
+  /// Sans suivi ni geste récent : recadre si le livreur sort de la partie visible de la carte
+  void _keepInView() {
+    if (_follow || !_mapReady || _driverPos == null) return;
+    if (DateTime.now().difference(_lastGesture).inSeconds < 20) return;
+    final size = MediaQuery.sizeOf(context);
+    final o = _map.camera.latLngToScreenOffset(_driverPos!);
+    final visibleBottom = size.height * (1 - _sheetExtent.value) - 30;
+    if (o.dx < 30 ||
+        o.dx > size.width - 30 ||
+        o.dy < 90 ||
+        o.dy > visibleBottom) {
+      _fitDriverAndNext();
     }
   }
 
@@ -364,6 +444,28 @@ class _TrackingScreenState extends State<TrackingScreen>
           _moveFrom = _driverPos;
         }
       });
+      // Filet de sécurité : position enregistrée par le serveur plus récente que la dernière reçue
+      // en direct (connexion tombée, retour d'arrière-plan) → le livreur avance quand même
+      final driver = d['driver'];
+      final savedAt = DateTime.tryParse(
+        driver?['lastLocationAt'] ?? '',
+      )?.toLocal();
+      if (_active(d) &&
+          savedAt != null &&
+          driver['lastLat'] != null &&
+          (_lastDriverFix == null ||
+              savedAt.difference(_lastDriverFix!).inSeconds > 5)) {
+        _onDriverLocation({
+          'deliveryId': widget.id,
+          'lat': driver['lastLat'],
+          'lng': driver['lastLng'],
+        });
+        _lastDriverFix = savedAt;
+      } else if (_driverPos != null && _active(d)) {
+        // Trajet réel dès l'ouverture, puis à chaque changement d'étape
+        final shown = _trackLive(_driverPos!);
+        if (shown != _driverPos) setState(() => _driverPos = shown);
+      }
       // Course terminée ou annulée : le partage de position s'arrête (le serveur le retire aussi)
       if (_sharing && !_active(d)) _stopSharing();
       if (first) {
@@ -467,7 +569,12 @@ class _TrackingScreenState extends State<TrackingScreen>
               )
               .firstOrNull
         : pointOf(_d!, 'pickup');
-    fitPoints(_map, [_driverPos, next], padding: _fitPad(side: 70));
+    // Le livreur, sa prochaine étape et le trajet qui les relie
+    fitPoints(_map, [
+      _driverPos,
+      next,
+      ..._live.remaining,
+    ], padding: _fitPad(side: 60));
   }
 
   // ---------- Proposez votre prix ----------
@@ -653,10 +760,21 @@ class _TrackingScreenState extends State<TrackingScreen>
                     },
                     // L'utilisateur déplace la carte : la caméra arrête de suivre le livreur
                     onMove: (_, gesture) {
-                      if (gesture && _follow) setState(() => _follow = false);
+                      if (!gesture) return;
+                      _lastGesture = DateTime.now();
+                      if (_follow) setState(() => _follow = false);
                     },
                     layers: [
-                      if (_route != null) routeLayer(_route!.points),
+                      // Tournée prévue (estompée pendant la course) et trajet réel du livreur par-dessus
+                      if (_route != null)
+                        routeLayer(
+                          _route!.points,
+                          color: d != null && _active(d) && _live.hasRoute
+                              ? accent.withValues(alpha: 0.3)
+                              : accent,
+                        ),
+                      if (d != null && _active(d) && _live.hasRoute)
+                        routeLayer(_live.remaining, color: p.blue),
                       if (d != null && d['status'] == 'PENDING') ...[
                         AnimatedBuilder(
                           animation: _radar,
@@ -710,6 +828,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                                   headingTurns: _hasHeading
                                       ? _headingTurns
                                       : null,
+                                  stale: _driverStale,
                                 ),
                             ],
                           ),
@@ -1207,6 +1326,8 @@ class _TrackingScreenState extends State<TrackingScreen>
   /// Délai d'arrivée estimé du livreur (départ, puis prochain arrêt) : 20 km/h en ville
   int? _etaMin(Map<String, dynamic> d) {
     if (_driverPos == null || !_active(d)) return null;
+    // Trajet réel connu : temps restant sur l'itinéraire
+    if (_live.hasRoute && _live.etaMin != null) return _live.etaMin;
     final LatLng? target;
     if (d['status'] == 'ACCEPTED') {
       target = pointOf(d, 'pickup');
@@ -1301,6 +1422,12 @@ class _TrackingScreenState extends State<TrackingScreen>
     required String fallback,
   }) {
     final (title, subtitle) = _headline(d, fallback);
+    final staleMin = _driverStale && _active(d)
+        ? math.max(
+            1,
+            (DateTime.now().difference(_lastDriverFix!).inSeconds / 60).round(),
+          )
+        : null;
     final driver = d['driver'] as Map?;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1317,6 +1444,25 @@ class _TrackingScreenState extends State<TrackingScreen>
                   style: TextStyles.subheadline.copyWith(
                     color: p.secondaryLabel,
                   ),
+                ),
+              ],
+              if (staleMin != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.antenna_radiowaves_left_right,
+                      size: 15,
+                      color: p.yellow,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Signal du livreur interrompu : dernière position il y a $staleMin min',
+                        style: TextStyles.footnote.copyWith(color: p.yellow),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ],
