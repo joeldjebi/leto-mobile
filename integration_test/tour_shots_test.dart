@@ -23,11 +23,15 @@ void main() {
 
   testWidgets('livreur : tournée, Plus tard', (t) async {
     app.main();
-    await wait(t, 8);
+    await wait(t, 10);
+    // Carte : toutes les étapes de la tournée, numérotées
+    shot('tour_map');
+    await wait(t, 3);
     await t.tap(find.textContaining('En cours').first);
     await wait(t, 3);
     final list = find.byKey(const Key('plan-list'));
     expect(list, findsOneWidget);
+    expect(find.byKey(const Key('tour-pin-0')), findsOneWidget);
     // Panneau agrandi pour voir la tournée
     await t.drag(find.text('Ma tournée'), const Offset(0, -420));
     await wait(t, 2);

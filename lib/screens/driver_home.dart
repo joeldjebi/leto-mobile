@@ -493,6 +493,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       // Course en cours : suivi en direct hors de l'app (Live Activity / notification fixe)
       DeliveryLive.instance.sync(_current, driver: true, etaMin: _nav.etaMin);
       _refreshActiveRoute();
+      _fitTourIfChanged();
       // Course en cours mais GPS éteint (hors ligne) : le suivi démarre tout seul, sinon le client ne voit rien bouger
       if (_active.isNotEmpty && !_online && !_autoTracking) {
         _autoTracking = true;
@@ -529,7 +530,35 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   }
 
   /// Cadre ma position, la prochaine étape et le trajet restant (au-dessus du panneau)
+  /// Tournée affichée en entier (à chaque changement d'étapes : nouvelle course, étape faite, ordre changé)
+  String _fittedPlan = '';
+  void _fitTourIfChanged() {
+    final sig = _plan.join(',');
+    if (sig == _fittedPlan || _navMode) return;
+    _fittedPlan = sig;
+    final pts = _tourPoints().map((t) => t.point).toList();
+    if (pts.length < 2) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      fitPoints(
+        _map,
+        [?_me, ...pts],
+        // Marges : boutons de la carte en haut, panneau en bas
+        padding: EdgeInsets.fromLTRB(
+          70,
+          190,
+          90,
+          MediaQuery.of(context).size.height * _sheetExtent.value + 20,
+        ),
+      );
+    });
+  }
+
   void _fitRoute() {
+    if (_tourPoints().length > 1) {
+      _fittedPlan = '';
+      return _fitTourIfChanged();
+    }
     final d = _current;
     final to = d == null ? null : _targetOf(d);
     final from = _me ?? (d == null ? null : pointOf(d, 'pickup'));
@@ -856,6 +885,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     final p = Palette.of(context);
     final active = _current;
     final target = active == null ? null : _targetOf(active);
+    // Plusieurs étapes : la carte montre toute la tournée, numérotée dans l'ordre de passage
+    final tour = _tourPoints();
+    final tourMode = tour.length > 1;
 
     return Scaffold(
       backgroundColor: p.background,
@@ -871,6 +903,18 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               }
             },
             layers: [
+              // Ordre de la tournée : pointillés de ma position à la dernière étape
+              if (tourMode)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: [?_shownMe, ...tour.map((t) => t.point)],
+                      strokeWidth: 3,
+                      color: p.secondaryLabel.withValues(alpha: 0.55),
+                      pattern: StrokePattern.dashed(segments: const [8, 7]),
+                    ),
+                  ],
+                ),
               if (active != null && _nav.hasRoute)
                 routeLayer(
                   _nav.remaining,
@@ -893,7 +937,30 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                           ),
                         ),
                       ),
-                  if (active != null)
+                  if (tourMode)
+                    for (final (i, t) in tour.indexed.toList().reversed)
+                      Marker(
+                        key: Key('tour-pin-$i'),
+                        point: t.point,
+                        width: i == 0 ? 44 : 34,
+                        height: i == 0 ? 44 : 34,
+                        child: GestureDetector(
+                          onTap: () {
+                            hapticTap();
+                            setState(() => _selectedId = t.courseId);
+                            _setTab(1);
+                            _refreshActiveRoute();
+                          },
+                          child: _TourPin(
+                            number: i + 1,
+                            color: t.color,
+                            icon: t.icon,
+                            next: i == 0,
+                            faded: t.courseId != active?['id'],
+                          ),
+                        ),
+                      ),
+                  if (active != null && !tourMode)
                     for (final s in _stopsOf(active))
                       stopMarker(
                         context,
@@ -902,6 +969,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                         status: s['status'],
                       ),
                   if (active != null &&
+                      !tourMode &&
                       active['status'] == 'ACCEPTED' &&
                       target != null)
                     pickupMarker(target),
@@ -1332,6 +1400,44 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       icon: CupertinoIcons.cube_box_fill,
       color: p.red,
     );
+  }
+
+  /// Étapes de la tournée à placer sur la carte, dans l'ordre de passage
+  List<({LatLng point, String courseId, Color color, IconData icon})>
+  _tourPoints() {
+    final p = Palette.of(context);
+    final out =
+        <({LatLng point, String courseId, Color color, IconData icon})>[];
+    for (final k in _plan) {
+      final course = _courseOfKey(k);
+      final d = _active.where((x) => x['id'] == course).firstOrNull;
+      if (d == null) continue;
+      LatLng? pt;
+      if (k.startsWith('S:')) {
+        final stop = _stopsOf(
+          d,
+        ).where((s) => s['id'] == k.substring(2)).firstOrNull;
+        if (stop != null) pt = _pt(stop);
+      } else {
+        pt = pointOf(d, 'pickup');
+      }
+      if (pt == null) continue;
+      out.add((
+        point: pt,
+        courseId: course!,
+        color: k.startsWith('P:')
+            ? p.green
+            : k.startsWith('R:')
+            ? p.yellow
+            : accent,
+        icon: k.startsWith('P:')
+            ? CupertinoIcons.arrow_up
+            : k.startsWith('R:')
+            ? CupertinoIcons.arrow_uturn_left
+            : CupertinoIcons.cube_box_fill,
+      ));
+    }
+    return out;
   }
 
   /// « Ma tournée » : toutes les étapes dans l'ordre, à réorganiser (glisser, Faire maintenant, Plus tard)
@@ -2595,4 +2701,71 @@ class _RemittanceSheetState extends State<_RemittanceSheet> {
       ),
     );
   }
+}
+
+/// Étape de la tournée sur la carte : numéro dans l'ordre de passage, couleur selon l'action
+/// (vert = récupérer, violet = livrer, jaune = rapporter). La prochaine étape est plus grande.
+class _TourPin extends StatelessWidget {
+  final int number;
+  final Color color;
+  final IconData icon;
+  final bool next;
+  final bool faded;
+  const _TourPin({
+    required this.number,
+    required this.color,
+    required this.icon,
+    required this.next,
+    required this.faded,
+  });
+
+  @override
+  Widget build(BuildContext context) => Opacity(
+    opacity: faded && !next ? 0.6 : 1,
+    child: Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: next ? 3.5 : 2.5),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x40000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Text(
+              '$number',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: next ? 16 : 13,
+              ),
+            ),
+          ),
+        ),
+        // Pastille de l'action (récupérer, livrer, rapporter)
+        Positioned(
+          right: -4,
+          bottom: -4,
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 1.5),
+            ),
+            child: Icon(icon, size: 11, color: color),
+          ),
+        ),
+      ],
+    ),
+  );
 }
