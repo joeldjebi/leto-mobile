@@ -1045,7 +1045,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
                     image ??
                         Container(
                           decoration: const BoxDecoration(
-                            gradient: letoGradient,
+                            color: letoFill,
                           ),
                           child: const Icon(
                             CupertinoIcons.camera_fill,

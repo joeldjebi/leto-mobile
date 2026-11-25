@@ -1376,7 +1376,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         title: 'Récupérer · ${d['pickupCommune'] ?? d['pickupAddress']}',
         subtitle: [if (sender.isNotEmpty) sender, price].join(' · '),
         icon: CupertinoIcons.arrow_up_circle_fill,
-        color: p.green,
+        color: ink,
       );
     }
     if (key.startsWith('R:')) {
@@ -1426,7 +1426,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         point: pt,
         courseId: course!,
         color: k.startsWith('P:')
-            ? p.green
+            ? ink
             : k.startsWith('R:')
             ? p.yellow
             : accent,
@@ -1681,7 +1681,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         InsetGroup(
           children: [
             GroupRow(
-              leading: _dot('A', p.green),
+              leading: _dot('A', ink),
               title: '${d['pickupAddress']} (${d['pickupCommune']})',
               subtitle: d['pickupDetails'],
               trailing: _navButton(pointOf(d, 'pickup'), p),
@@ -1746,7 +1746,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               'Remettez les colis à l’expéditeur : il vous donne son code de retour pour terminer la tournée.',
           children: [
             GroupRow(
-              leading: _dot('A', p.green),
+              leading: _dot('A', ink),
               title: '${d['pickupAddress']} (${d['pickupCommune']})',
               trailing: _navButton(pointOf(d, 'pickup'), p),
             ),
@@ -1863,8 +1863,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             children: [
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: p.green,
-                  foregroundColor: Colors.white,
+                  backgroundColor: primaryButton,
+                  foregroundColor: onPrimaryButton,
                 ),
                 onPressed: () => _deliver(d, next),
                 child: Text(
@@ -2126,11 +2126,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         margin: const EdgeInsets.symmetric(horizontal: 16),
         padding: const EdgeInsets.all(18),
         decoration: ShapeDecoration(
-          gradient: const LinearGradient(
-            colors: [accentLight, accent],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: ink,
           shape: RoundedSuperellipseBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -2386,7 +2382,7 @@ class _OrderCard extends StatelessWidget {
                 if (match?['kind'] == 'ROUTE')
                   Pill(
                     'Sur votre trajet',
-                    color: p.green,
+                    color: p.blue,
                     icon: CupertinoIcons.arrow_branch,
                   ),
                 const Spacer(),
@@ -2418,7 +2414,7 @@ class _OrderCard extends StatelessWidget {
                       if (d['distanceKm'] != null) km(d['distanceKm']),
                       if (d['durationMin'] != null) '~${d['durationMin']} min',
                     ].join(' · '),
-                    color: p.green,
+                    color: p.label,
                   ),
                 ),
               ],

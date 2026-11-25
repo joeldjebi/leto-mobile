@@ -130,7 +130,7 @@ class OrderAlert {
       return null;
     } catch (e) {
       _ring?.cancel();
-      return e.toString().replaceFirst('Exception: ', '');
+      return friendlyError(e);
     }
   }
 
@@ -237,7 +237,7 @@ class _OrderAlertViewState extends State<_OrderAlertView>
     final fromMe = o['fromMeKm'] as num?;
 
     final (badge, badgeColor, badgeIcon) = switch (match?['kind']) {
-      'ROUTE' => ('Sur votre trajet', p.green, CupertinoIcons.arrow_branch),
+      'ROUTE' => ('Sur votre trajet', p.blue, CupertinoIcons.arrow_branch),
       'NEARBY' => (
         'À ${km(fromMe ?? match?['km'] ?? 0)} de vous',
         p.blue,
@@ -421,7 +421,7 @@ class _OrderAlertViewState extends State<_OrderAlertView>
                         const SizedBox(height: 14),
                         leg(
                           'A',
-                          p.green,
+                          ink,
                           o['pickupCommune'] as String?,
                           o['pickupAddress'] as String?,
                         ),
@@ -438,7 +438,7 @@ class _OrderAlertViewState extends State<_OrderAlertView>
                         ),
                         leg(
                           stops > 1 ? '$stops' : 'B',
-                          p.red,
+                          accent,
                           o['dropCommune'] as String?,
                           stops > 1
                               ? '$stops arrêts'
@@ -511,8 +511,8 @@ class _OrderAlertViewState extends State<_OrderAlertView>
                                       ? null
                                       : _accept,
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: p.green,
-                                    foregroundColor: Colors.white,
+                                    backgroundColor: primaryButton,
+                                    foregroundColor: onPrimaryButton,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),

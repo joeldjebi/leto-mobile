@@ -221,7 +221,7 @@ class _IndependentGateState extends State<IndependentGate> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _error.toString(),
+                      friendlyError(_error),
                       textAlign: TextAlign.center,
                       style: TextStyles.body.copyWith(color: p.label),
                     ),
@@ -990,7 +990,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
             padding: const EdgeInsets.all(18),
             decoration: ShapeDecoration(
-              gradient: letoGradient,
+              color: ink,
               shape: RoundedSuperellipseBorder(
                 borderRadius: BorderRadius.circular(20),
               ),

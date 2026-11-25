@@ -339,7 +339,7 @@ Marker clientMarker(LatLng p) => Marker(
     label: 'Position du client',
     child: Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF2563EB),
+        color: ink,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 3),
         boxShadow: const [
@@ -506,8 +506,7 @@ class CenterPin extends StatelessWidget {
                               width: 46,
                               height: 46,
                               decoration: ShapeDecoration(
-                                gradient: dropoff ? letoGradient : null,
-                                color: dropoff ? null : ink,
+                                color: dropoff ? letoFill : ink,
                                 shape: RoundedSuperellipseBorder(
                                   borderRadius: BorderRadius.circular(15),
                                 ),
@@ -1151,9 +1150,9 @@ class StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final color = switch (status) {
-      'PENDING' => const Color(0xFFC79100),
+      'PENDING' => p.secondaryLabel,
       'ACCEPTED' => p.blue,
-      'PICKED_UP' => const Color(0xFFAF52DE),
+      'PICKED_UP' => p.label,
       'DELIVERED' => p.green,
       _ => p.secondaryLabel,
     };
@@ -1234,7 +1233,7 @@ class PointLine extends StatelessWidget {
             margin: const EdgeInsets.only(top: 1),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: color ?? (marker == 'A' ? p.green : accent),
+              color: color ?? (marker == 'A' ? ink : accent),
               shape: BoxShape.circle,
             ),
             child: Text(
@@ -1692,7 +1691,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 }
 
 /// Couleur des livreurs indépendants (toujours signalés au client)
-const independentColor = Color(0xFFF59E0B);
+const independentColor = sunOrange;
 
 /// Badge « Livreur indépendant » : bien visible partout où le client voit le livreur
 class IndependentBadge extends StatelessWidget {

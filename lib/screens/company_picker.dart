@@ -262,7 +262,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
             width: 44,
             height: 44,
             decoration: ShapeDecoration(
-              gradient: letoGradient,
+              color: letoFill,
               shape: RoundedSuperellipseBorder(
                 borderRadius: BorderRadius.circular(14),
               ),

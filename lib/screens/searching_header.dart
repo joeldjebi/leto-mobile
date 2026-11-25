@@ -109,7 +109,7 @@ class _SearchingHeaderState extends State<SearchingHeader>
                       height: 34,
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: letoGradient,
+                        color: letoFill,
                       ),
                       child: const Icon(
                         CupertinoIcons.search,

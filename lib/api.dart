@@ -27,6 +27,34 @@ final String apiUrl = switch (const String.fromEnvironment('API_URL')) {
 /// URL complète d'une photo stockée par l'API (/uploads/...)
 String photoUrl(String path) => '$apiUrl$path';
 
+/// Message générique : jamais de détail technique affiché à l'utilisateur
+const genericError = 'Une erreur est survenue. Réessayez dans un instant.';
+const offlineError = 'Impossible de joindre le serveur. Vérifiez votre connexion.';
+
+/// Texte à afficher pour une erreur : messages prévus pour l'utilisateur, sinon message générique
+String friendlyError(Object? e) {
+  if (e is ApiException) return e.message;
+  if (e is String && e.trim().isNotEmpty) return e;
+  return genericError;
+}
+
+/// Message renvoyé par l'API, sauf erreur interne ou réponse illisible
+String _apiMessage(int status, Object? data, String fallback) {
+  if (status >= 500) return genericError;
+  final msg = data is Map ? data['message'] : null;
+  final text = msg is List ? msg.join('\n') : msg?.toString();
+  return (text == null || text.trim().isEmpty) ? fallback : text;
+}
+
+Object? _decode(http.Response res) {
+  if (res.bodyBytes.isEmpty) return null;
+  try {
+    return jsonDecode(utf8.decode(res.bodyBytes));
+  } catch (_) {
+    return null; // page d'erreur HTML d'un proxy, réponse coupée…
+  }
+}
+
 class ApiException implements Exception {
   final String message;
   ApiException(this.message);
@@ -316,11 +344,18 @@ class Api {
               contentType: _imageType(file.path),
             ),
           );
-    final res = await http.Response.fromStream(await req.send());
-    final data = jsonDecode(utf8.decode(res.bodyBytes));
-    if (res.statusCode >= 400) {
+    final http.Response res;
+    try {
+      res = await http.Response.fromStream(
+        await req.send().timeout(const Duration(seconds: 60)),
+      );
+    } catch (_) {
+      throw ApiException(offlineError);
+    }
+    final data = _decode(res);
+    if (res.statusCode >= 400 || data is! Map || data['url'] == null) {
       throw ApiException(
-        data['message']?.toString() ?? 'Échec de l’envoi de la photo',
+        _apiMessage(res.statusCode, data, 'Échec de l’envoi de la photo. Réessayez.'),
       );
     }
     return data['url'];
@@ -588,21 +623,13 @@ class Api {
         await req.send().timeout(const Duration(seconds: 15)),
       );
     } catch (_) {
-      throw ApiException(
-        'Impossible de joindre le serveur. Vérifiez votre connexion.',
-      );
+      throw ApiException(offlineError);
     }
-    final data = res.body.isEmpty
-        ? null
-        : jsonDecode(utf8.decode(res.bodyBytes));
+    final data = _decode(res);
     if (res.statusCode >= 400) {
-      final msg = data is Map ? data['message'] : null;
-      throw ApiException(
-        msg is List
-            ? msg.join('\n')
-            : (msg?.toString() ?? 'Erreur ${res.statusCode}'),
-      );
+      throw ApiException(_apiMessage(res.statusCode, data, genericError));
     }
+    if (data == null && res.bodyBytes.isNotEmpty) throw ApiException(genericError);
     return data;
   }
 }

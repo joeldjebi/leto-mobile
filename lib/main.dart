@@ -17,7 +17,12 @@ export 'theme.dart'
         accentDeep,
         accentLight,
         ink,
-        letoGradient,
+        letoFill,
+        onPrimaryButton,
+        primaryButton,
+        sunOrange,
+        sunOrangeVif,
+        sunYellow,
         letoOrange,
         Motion,
         Palette,
@@ -110,10 +115,8 @@ void showError(BuildContext context, Object e) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
-      SnackBar(
-        content: Text(e.toString()),
-        backgroundColor: Palette.of(context).red,
-      ),
+      // Jamais de fond rouge ni de message technique
+      SnackBar(content: Text(friendlyError(e))),
     );
 }
 

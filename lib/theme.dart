@@ -15,7 +15,7 @@ const sunOrangeVif = Color(0xFFE86A17);
 /// Orange foncé dérivé de la charte : le jaune et l'orange sont trop clairs pour du texte sur blanc.
 const accent = Color(0xFFC2410C);
 
-/// Accent clair (dégradés, mode sombre)
+/// Accent clair (mode sombre)
 const accentLight = sunOrange;
 
 /// Accent profond (textes sur fond jaune pâle)
@@ -31,12 +31,8 @@ const onPrimaryButton = ink;
 /// Ancien nom conservé pour compatibilité
 const letoOrange = accent;
 
-/// Dégradé des rayons du soleil (jaune → orange vif)
-const letoGradient = LinearGradient(
-  colors: [sunYellow, sunOrangeVif],
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-);
+/// Aplat des pastilles d'icônes (orange vif de la charte). Pas de dégradé dans l'identité LETO.
+const letoFill = sunOrangeVif;
 
 /// Couleurs système (clair / sombre), accessibles via `Palette.of(context)`.
 @immutable
@@ -50,10 +46,10 @@ class Palette extends ThemeExtension<Palette> {
   final Color separator;
   final Color fill; // champs, pastilles, carte d'offre non sélectionnée
   final Color glass; // panneaux au-dessus de la carte
-  final Color accentSoft; // fond violet pâle
+  final Color accentSoft; // fond jaune pâle
   final Color green;
   final Color red;
-  final Color blue;
+  final Color blue; // information (orange de la charte, plus de bleu)
   final Color yellow;
 
   const Palette({
@@ -86,8 +82,8 @@ class Palette extends ThemeExtension<Palette> {
     accentSoft: Color(0xFFFFF4D6),
     green: Color(0xFF16A34A),
     red: Color(0xFFE11D48),
-    blue: Color(0xFF2563EB),
-    yellow: Color(0xFFD97706),
+    blue: accent, // ancien bleu : orange foncé de la charte
+    yellow: sunOrangeVif,
   );
 
   static const dark = Palette(
@@ -103,8 +99,8 @@ class Palette extends ThemeExtension<Palette> {
     accentSoft: Color(0xFF3A2A0E),
     green: Color(0xFF22C55E),
     red: Color(0xFFFB7185),
-    blue: Color(0xFF60A5FA),
-    yellow: Color(0xFFFBBF24),
+    blue: sunOrange,
+    yellow: sunYellow,
   );
 
   static Palette of(BuildContext context) =>

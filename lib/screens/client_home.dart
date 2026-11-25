@@ -769,7 +769,7 @@ class _ClientHomeState extends State<ClientHome> {
     width: 52,
     height: 52,
     decoration: ShapeDecoration(
-      gradient: letoGradient,
+      color: letoFill,
       shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(16)),
       shadows: [
         BoxShadow(
@@ -1232,7 +1232,7 @@ class _ActiveBanner extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: ShapeDecoration(
-                gradient: letoGradient,
+                color: letoFill,
                 shape: RoundedSuperellipseBorder(
                   borderRadius: BorderRadius.circular(13),
                 ),
