@@ -75,11 +75,26 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       .where((d) => ['ACCEPTED', 'PICKED_UP'].contains(d['status']))
       .toList();
 
-  /// Course affichée dans « En cours » (choisie parmi les courses en cours, sinon la première)
+  /// Tournée : ordre de passage de toutes les étapes (P:course, S:arrêt, R:retour), donné par le serveur
+  List<String> _plan = [];
+  num? _planKm;
+  num? _planBestKm;
+
+  /// Course de la première étape de la tournée
+  String? get _planCourseId {
+    for (final k in _plan) {
+      final id = _courseOfKey(k);
+      if (id != null) return id;
+    }
+    return null;
+  }
+
+  /// Course affichée dans « En cours » : celle choisie par le livreur, sinon celle de la prochaine étape
   String? _selectedId;
   Map<String, dynamic>? get _current => _active.isEmpty
       ? null
       : _active.where((d) => d['id'] == _selectedId).firstOrNull ??
+            _active.where((d) => d['id'] == _planCourseId).firstOrNull ??
             _active.first;
 
   /// Règles de répartition (Tarifs et règles) : courses en même temps, rayon du livreur occupé
@@ -141,6 +156,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.on('delivery:assigned', _onAssigned);
     s.on('delivery:reordered', _onReordered);
     s.on('client:location', _onClientLocation);
+    s.on('plan:changed', _onChanged);
     OrderAlert.instance.accepted.addListener(_onAlertAccepted);
     OrderAlert.instance.open.addListener(_onAlertOpen);
     SharedPreferences.getInstance().then((p) {
@@ -167,6 +183,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.off('remittance:updated', _onRemittance);
     s.off('delivery:assigned', _onAssigned);
     s.off('delivery:reordered', _onReordered);
+    s.off('plan:changed', _onChanged);
     OrderAlert.instance.accepted.removeListener(_onAlertAccepted);
     OrderAlert.instance.open.removeListener(_onAlertOpen);
     super.dispose();
@@ -437,6 +454,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         api.myOffers(),
         api.billingStatus().catchError((_) => <String, dynamic>{'ok': true}),
         api.myCash().catchError((_) => <String, dynamic>{}),
+        api.driverPlan().catchError((_) => <String, dynamic>{}),
       ]);
       if (!mounted) return;
       setState(() {
@@ -446,6 +464,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         _blocked = billing['ok'] == false ? billing['reason'] as String? : null;
         _available = r[0].cast<Map<String, dynamic>>();
         _mine = r[1].cast<Map<String, dynamic>>();
+        _applyPlan(r[5] as Map<String, dynamic>);
         // Alerte d'une course prise entre-temps par un autre livreur : retirée
         OrderAlert.instance.keepOnly(_available.map((d) => d['id'] as String));
         _myOffers = {
@@ -1154,93 +1173,361 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   // ----- En cours -----
   /// Toutes les courses en cours : sélecteur au-dessus du détail de la course choisie
   List<Widget> _activeTab(Palette p) => [
-    if (_active.length > 1) _courseSwitcher(p),
+    if (_plan.where((k) => _taskInfo(k, p) != null).length > 1) _tour(p),
     ..._activeDetail(p),
   ];
 
-  Widget _courseSwitcher(Palette p) {
+  // ----- Tournée -----
+  void _applyPlan(Map<String, dynamic> res) {
+    if (res['keys'] is! List) return;
+    _plan = (res['keys'] as List).cast<String>();
+    _planKm = res['km'] as num?;
+    _planBestKm = res['optimizedKm'] as num?;
+  }
+
+  /// Course d'une étape (clé P:/R: = course, S: = arrêt d'une course)
+  String? _courseOfKey(String k) {
+    final id = k.substring(2);
+    if (k.startsWith('S:')) {
+      for (final d in _active) {
+        if (_stopsOf(d).any((s) => s['id'] == id)) return d['id'] as String;
+      }
+      return null;
+    }
+    return id;
+  }
+
+  /// Règles : récupérer avant de livrer, rapporter après le dernier arrêt (null si l'ordre est valable)
+  String? _planError(List<String> keys) {
+    final seen = <String>{};
+    for (final k in keys) {
+      final course = _courseOfKey(k);
+      if (!k.startsWith('P:') &&
+          keys.contains('P:$course') &&
+          !seen.contains('P:$course')) {
+        return 'Récupérez les colis avant de les livrer';
+      }
+      if (k.startsWith('R:') &&
+          keys.any(
+            (o) =>
+                o.startsWith('S:') &&
+                _courseOfKey(o) == course &&
+                !seen.contains(o),
+          )) {
+        return 'Le retour des colis vient après le dernier arrêt';
+      }
+      seen.add(k);
+    }
+    return null;
+  }
+
+  /// Enregistre le nouvel ordre (affiché tout de suite, annulé si le serveur le refuse)
+  Future<void> _savePlan(List<String> keys, {String? done}) async {
+    final err = _planError(keys);
+    if (err != null) {
+      showError(context, err);
+      return;
+    }
+    final before = _plan;
+    hapticTap();
+    setState(() {
+      _plan = keys;
+      _selectedId = null;
+    });
+    try {
+      final res = await api.saveDriverPlan(keys);
+      if (!mounted) return;
+      setState(() => _applyPlan(res));
+      if (done != null) showInfo(context, done);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _plan = before);
+      showError(context, e);
+    }
+    await _load();
+  }
+
+  /// Étapes liées : le départ d'une course entraîne ses arrêts et son retour
+  List<String> _withDependents(String key) {
+    if (!key.startsWith('P:')) return [key];
+    final course = key.substring(2);
+    return _plan.where((k) => k == key || _courseOfKey(k) == course).toList();
+  }
+
+  /// « Faire maintenant » : l'étape (et son départ s'il n'est pas fait) passe en tête
+  void _doNow(String key) {
+    final course = _courseOfKey(key);
+    final head = [
+      if (!key.startsWith('P:') && _plan.contains('P:$course')) 'P:$course',
+      key,
+    ];
+    _savePlan([
+      ...head,
+      ..._plan.where((k) => !head.contains(k)),
+    ], done: 'Étape placée en premier');
+  }
+
+  /// « Plus tard » : l'étape (et ce qui en dépend) passe en fin de tournée — destinataire indisponible…
+  void _later(String key) {
+    final tail = _withDependents(key);
+    _savePlan([
+      ..._plan.where((k) => !tail.contains(k)),
+      ...tail,
+    ], done: 'Étape repoussée en fin de tournée');
+  }
+
+  Future<void> _optimizePlan() async {
+    hapticTap();
+    try {
+      final res = await api.optimizeDriverPlan();
+      if (!mounted) return;
+      setState(() {
+        _applyPlan(res);
+        _selectedId = null;
+      });
+      showInfo(context, 'Tournée optimisée · ${km(res['km'] ?? 0)}');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+    await _load();
+  }
+
+  /// Une étape de la tournée : ce qu'il faut faire, où, pour quelle course
+  ({String title, String subtitle, IconData icon, Color color})? _taskInfo(
+    String key,
+    Palette p,
+  ) {
+    final course = _courseOfKey(key);
+    final d = _active.where((x) => x['id'] == course).firstOrNull;
+    if (d == null) return null;
+    final price = formatMoney(d['price'], d['currency']);
+    if (key.startsWith('P:')) {
+      final sender =
+          (d['pickupContactName'] ?? d['client']?['name'] ?? '') as String;
+      return (
+        title: 'Récupérer · ${d['pickupCommune'] ?? d['pickupAddress']}',
+        subtitle: [if (sender.isNotEmpty) sender, price].join(' · '),
+        icon: CupertinoIcons.arrow_up_circle_fill,
+        color: p.green,
+      );
+    }
+    if (key.startsWith('R:')) {
+      return (
+        title: 'Rapporter les colis · ${d['pickupCommune'] ?? ''}',
+        subtitle: 'Retour à l’expéditeur · $price',
+        icon: CupertinoIcons.arrow_uturn_left_circle_fill,
+        color: p.yellow,
+      );
+    }
+    final stop = _stopsOf(
+      d,
+    ).where((s) => s['id'] == key.substring(2)).firstOrNull;
+    if (stop == null) return null;
+    return (
+      title: 'Livrer ${stop['recipientName']}',
+      subtitle: [
+        stop['commune'] ?? stop['address'],
+        price,
+      ].whereType<String>().join(' · '),
+      icon: CupertinoIcons.cube_box_fill,
+      color: p.red,
+    );
+  }
+
+  /// « Ma tournée » : toutes les étapes dans l'ordre, à réorganiser (glisser, Faire maintenant, Plus tard)
+  Widget _tour(Palette p) {
+    final keys = _plan.where((k) => _taskInfo(k, p) != null).toList();
     final cur = _current?['id'];
+    final accent = Theme.of(context).colorScheme.primary;
+    final canOptimize =
+        _planKm != null &&
+        _planBestKm != null &&
+        _planKm! - _planBestKm! >= 0.3;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-            child: Text(
-              '${_active.length} courses en cours',
-              style: TextStyles.headline.copyWith(color: p.label),
+            padding: const EdgeInsets.fromLTRB(20, 4, 12, 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ma tournée',
+                        style: TextStyles.title3.copyWith(color: p.label),
+                      ),
+                      Text(
+                        [
+                          '${keys.length} étapes',
+                          if (_active.length > 1) '${_active.length} courses',
+                          if (_planKm != null) km(_planKm!),
+                        ].join(' · '),
+                        style: TextStyles.footnote.copyWith(
+                          color: p.secondaryLabel,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (canOptimize)
+                  TextButton.icon(
+                    key: const Key('plan-optimize'),
+                    onPressed: _optimizePlan,
+                    icon: const Icon(CupertinoIcons.wand_stars, size: 18),
+                    label: Text('Optimiser (−${km(_planKm! - _planBestKm!)})'),
+                  ),
+              ],
             ),
           ),
-          SizedBox(
-            height: 84,
-            child: ListView.separated(
-              key: const Key('active-switcher'),
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _active.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: p.card,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: ReorderableListView.builder(
+              key: const Key('plan-list'),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
+              itemCount: keys.length,
+              proxyDecorator: (child, _, _) => Material(
+                elevation: 6,
+                color: p.card,
+                borderRadius: BorderRadius.circular(12),
+                child: child,
+              ),
+              onReorder: (from, to) {
+                final next = [...keys];
+                final k = next.removeAt(from);
+                next.insert(to > from ? to - 1 : to, k);
+                _savePlan(next);
+              },
               itemBuilder: (_, i) {
-                final d = _active[i];
-                final on = d['id'] == cur;
-                final picked = d['status'] == 'PICKED_UP';
-                final stop = picked ? _nextStop(d) : null;
-                final where = picked
-                    ? (stop?['commune'] ?? stop?['recipientName'] ?? 'Livraison')
-                    : (d['pickupCommune'] ?? 'Départ');
-                final accent = Theme.of(context).colorScheme.primary;
-                return GestureDetector(
-                  onTap: () {
-                    hapticTap();
-                    setState(() => _selectedId = d['id'] as String);
-                    _refreshActiveRoute();
-                    DeliveryLive.instance.sync(_current, driver: true, etaMin: _nav.etaMin);
-                  },
-                  child: AnimatedContainer(
-                    duration: Motion.fast,
-                    width: 172,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: on ? accent.withValues(alpha: 0.12) : p.card,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: on ? accent : p.separator, width: on ? 2 : 1),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              picked ? CupertinoIcons.cube_box_fill : CupertinoIcons.arrow_up_circle_fill,
-                              size: 15,
-                              color: picked ? p.red : p.green,
+                final k = keys[i];
+                final t = _taskInfo(k, p)!;
+                final on = _courseOfKey(k) == cur;
+                return Material(
+                  key: ValueKey(k),
+                  color: on ? accent.withValues(alpha: 0.08) : p.card,
+                  child: InkWell(
+                    onTap: () {
+                      hapticTap();
+                      setState(() => _selectedId = _courseOfKey(k));
+                      _refreshActiveRoute();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                      decoration: BoxDecoration(
+                        border: i == keys.length - 1
+                            ? null
+                            : Border(
+                                bottom: BorderSide(
+                                  color: p.separator,
+                                  width: 0.5,
+                                ),
+                              ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 26,
+                            height: 26,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: i == 0 ? accent : p.fill,
+                              shape: BoxShape.circle,
                             ),
-                            const SizedBox(width: 5),
-                            Expanded(
-                              child: Text(
-                                picked ? 'À livrer' : 'À récupérer',
-                                style: TextStyles.footnote.copyWith(color: p.secondaryLabel, fontWeight: FontWeight.w600),
+                            child: Text(
+                              '${i + 1}',
+                              style: TextStyle(
+                                color: i == 0 ? Colors.white : p.label,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
                               ),
                             ),
-                            Text(
-                              formatMoney(d['price'], d['currency']),
-                              style: TextStyles.footnote.copyWith(color: p.label, fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(width: 10),
+                          Icon(t.icon, color: t.color, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  t.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyles.subheadline.copyWith(
+                                    color: p.label,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  t.subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyles.footnote.copyWith(
+                                    color: p.secondaryLabel,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$where',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyles.headline.copyWith(color: p.label),
-                        ),
-                      ],
+                          ),
+                          PopupMenuButton<String>(
+                            key: Key('plan-menu-$i'),
+                            icon: Icon(
+                              CupertinoIcons.ellipsis,
+                              color: p.secondaryLabel,
+                              size: 20,
+                            ),
+                            onSelected: (a) =>
+                                a == 'now' ? _doNow(k) : _later(k),
+                            itemBuilder: (_) => [
+                              if (i > 0)
+                                const PopupMenuItem(
+                                  value: 'now',
+                                  child: Text('Faire maintenant'),
+                                ),
+                              if (i < keys.length - 1)
+                                const PopupMenuItem(
+                                  value: 'later',
+                                  child: Text('Plus tard (en fin de tournée)'),
+                                ),
+                            ],
+                          ),
+                          ReorderableDragStartListener(
+                            index: i,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              child: Icon(
+                                CupertinoIcons.line_horizontal_3,
+                                color: p.tertiaryLabel,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
               },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+            child: Text(
+              'Maintenez la poignée à droite et glissez pour changer l’ordre. Destinataire indisponible ? « Plus tard » : livrez ailleurs et revenez.',
+              style: TextStyles.caption.copyWith(color: p.tertiaryLabel),
             ),
           ),
         ],
@@ -1484,6 +1771,14 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                 color: p.red,
                 onPressed: () => _reportProblem(d, next),
               ),
+              if (_plan.length > 1 && _plan.last != 'S:${next['id']}') ...[
+                const SizedBox(height: 10),
+                TintedButton(
+                  'Livrer plus tard',
+                  icon: CupertinoIcons.clock,
+                  onPressed: () => _later('S:${next['id']}'),
+                ),
+              ],
             ],
           ),
         ),
@@ -1980,7 +2275,11 @@ class _OrderCard extends StatelessWidget {
                 if (d['speed'] == 'SCHEDULED')
                   Pill('Dans 2 h', color: p.blue, icon: CupertinoIcons.clock),
                 if (match?['kind'] == 'ROUTE')
-                  Pill('Sur votre trajet', color: p.green, icon: CupertinoIcons.arrow_branch),
+                  Pill(
+                    'Sur votre trajet',
+                    color: p.green,
+                    icon: CupertinoIcons.arrow_branch,
+                  ),
                 const Spacer(),
                 Icon(vehicleIcons[d['vehicleType']], color: p.label, size: 26),
               ],

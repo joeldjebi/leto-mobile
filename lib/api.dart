@@ -401,6 +401,27 @@ class Api {
       await _request('GET', '/deliveries/driver');
   Future<dynamic> accept(String id) =>
       _request('POST', '/deliveries/$id/accept');
+
+  /// Tournée du livreur : ordre de passage de toutes ses courses en cours
+  Future<Map<String, dynamic>> driverPlan() async => Map<String, dynamic>.from(
+    await _request('GET', '/deliveries/driver/plan'),
+  );
+  Future<Map<String, dynamic>> saveDriverPlan(List<String> keys) async =>
+      Map<String, dynamic>.from(
+        await _request('PUT', '/deliveries/driver/plan', {'keys': keys}),
+      );
+  Future<Map<String, dynamic>> optimizeDriverPlan() async =>
+      Map<String, dynamic>.from(
+        await _request('POST', '/deliveries/driver/plan/optimize'),
+      );
+
+  /// Réponse à l'alerte « nouvelle course » (refusée, expirée) : statistiques de réactivité
+  Future<void> alertResponse(String id, String action) async {
+    try {
+      await _request('POST', '/deliveries/$id/alert', {'action': action});
+    } catch (_) {}
+  }
+
   Future<dynamic> pickup(String id) =>
       _request('POST', '/deliveries/$id/pickup');
 

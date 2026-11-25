@@ -88,14 +88,20 @@ class OrderAlert {
       builder: (_) => _OrderAlertView(
         payload: p,
         onAccept: () => _accept(p),
-        onDecline: () => _close(handled: true),
+        onDecline: () {
+          Api.instance.alertResponse(p['deliveryId'] as String, 'DECLINED');
+          _close(handled: true);
+        },
         onDetails: () {
           final id = p['deliveryId'] as String;
           _close(handled: true);
           open.value = null;
           open.value = id;
         },
-        onTimeout: () => _close(handled: true),
+        onTimeout: () {
+          Api.instance.alertResponse(p['deliveryId'] as String, 'EXPIRED');
+          _close(handled: true);
+        },
       ),
     );
     overlay.insert(_entry!);
