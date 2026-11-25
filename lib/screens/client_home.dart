@@ -59,6 +59,12 @@ class _ClientHomeState extends State<ClientHome> {
   List<NearbyDriver> _drivers = [];
   Timer? _driversTimer;
 
+  /// Le client a déplacé la carte lui-même : plus de recadrage automatique
+  bool _userMoved = false;
+
+  /// Point de départ pour lequel la carte a déjà été recadrée sur les livreurs
+  LatLng? _fittedFor;
+
   @override
   void initState() {
     super.initState();
@@ -131,7 +137,9 @@ class _ClientHomeState extends State<ClientHome> {
   Future<void> _loadDrivers() async {
     try {
       final l = await api.nearbyDrivers(_center, companyId: _company?.id);
-      if (mounted) setState(() => _drivers = l);
+      if (!mounted) return;
+      setState(() => _drivers = l);
+      _fitDriversIfHidden();
     } catch (_) {
       // carte sans livreurs : sans gravité
     }
@@ -139,17 +147,54 @@ class _ClientHomeState extends State<ClientHome> {
 
   // ---------- Carte ----------
 
+  /// Livreurs en ligne mais hors de l'écran : on dézoome (sans déplacer le point de départ)
+  /// pour montrer les 3 plus proches. Une fois par point de départ, jamais après un geste du client.
+  void _fitDriversIfHidden() {
+    if (_mode != _Mode.pickup || _userMoved || _drivers.isEmpty) return;
+    final center = _center;
+    const dist = Distance();
+    if (_fittedFor != null && dist(_fittedFor!, center) < 50) return;
+    final MapCamera cam;
+    try {
+      cam = _map.camera;
+    } catch (_) {
+      return; // carte pas encore affichée
+    }
+    _fittedFor = center;
+    if (_drivers.any((d) => cam.visibleBounds.contains(d.point))) return;
+    final near = [..._drivers]
+      ..sort((a, b) => dist(center, a.point).compareTo(dist(center, b.point)));
+    // Points symétriques autour du départ : le centre de la carte (et donc l'adresse) ne bouge pas
+    final pts = <LatLng>[
+      center,
+      for (final d in near.take(3)) ...[
+        d.point,
+        LatLng(2 * center.latitude - d.point.latitude, 2 * center.longitude - d.point.longitude),
+      ],
+    ];
+    _map.fitCamera(
+      CameraFit.coordinates(
+        coordinates: pts,
+        padding: const EdgeInsets.all(96),
+        maxZoom: cam.zoom,
+        minZoom: 12,
+      ),
+    );
+  }
+
   Future<void> _locateMe() async {
     final pos = await myPosition();
     if (pos == null || !mounted) return;
     _map.move(pos, 16);
     _center = pos;
+    _userMoved = false;
     _lookupCenter();
     _loadDrivers();
   }
 
   void _onMove(MapCamera camera, bool gesture) {
     _center = camera.center;
+    if (gesture) _userMoved = true;
     if (gesture && !_moving) setState(() => _moving = true);
   }
 
@@ -183,6 +228,7 @@ class _ClientHomeState extends State<ClientHome> {
   void _moveTo(Place p) {
     _map.move(p.point, 17);
     _center = p.point;
+    _userMoved = false;
     setState(() => _centerPlace = p);
     if (_mode == _Mode.pickup) {
       api.eta(p.point).then((e) => mounted ? setState(() => _eta = e) : null);

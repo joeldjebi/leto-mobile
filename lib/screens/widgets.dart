@@ -310,23 +310,31 @@ class _HeadingPainter extends CustomPainter {
 }
 
 /// Livreur disponible autour du client (carte d'accueil) : icône de son engin
+/// Livreur en ligne autour du client : point bien visible (anneau noir, centre blanc), comme un repère discret
 Marker nearbyDriverMarker(LatLng p, String vehicle) => Marker(
   point: p,
-  width: 40,
-  height: 40,
-  child: Container(
-    decoration: ShapeDecoration(
-      color: Colors.white,
-      shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(13)),
-      shadows: const [
-        BoxShadow(
-          color: Color(0x33000000),
-          blurRadius: 10,
-          offset: Offset(0, 3),
-        ),
-      ],
+  width: 24,
+  height: 24,
+  child: Semantics(
+    label: vehicle == 'CAR'
+        ? 'Livreur en voiture'
+        : vehicle == 'CARGO'
+        ? 'Livreur en cargo'
+        : 'Livreur à moto',
+    child: Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: ink, width: 5.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x40000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
     ),
-    child: Icon(vehicleIcon(vehicle), color: ink, size: 26),
   ),
 );
 
