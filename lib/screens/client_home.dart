@@ -373,7 +373,7 @@ class _ClientHomeState extends State<ClientHome> {
     context,
     items: [
       (
-        CupertinoIcons.cube_box_fill,
+        PhosphorIconsFill.package,
         accent,
         'Mes livraisons',
         () => Navigator.push(
@@ -390,7 +390,7 @@ class _ClientHomeState extends State<ClientHome> {
         ).then((_) => _loadActive()),
       ),
       (
-        CupertinoIcons.book_fill,
+        PhosphorIconsFill.book,
         Palette.of(context).blue,
         'Carnet d’adresses',
         () => Navigator.push(
@@ -527,7 +527,7 @@ class _ClientHomeState extends State<ClientHome> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            PhosphorIcons.plus(PhosphorIconsStyle.bold),
+                            PhosphorIconsBold.plus,
                             color: accent,
                             size: 20,
                           ),
@@ -641,12 +641,12 @@ class _ClientHomeState extends State<ClientHome> {
                               duration: Motion.fast,
                               child: _mode == _Mode.pickup
                                   ? MapButton(
-                                      PhosphorIcons.userCircle(),
+                                      PhosphorIconsBold.userCircle,
                                       key: const ValueKey('account'),
                                       onTap: _openAccount,
                                     )
                                   : MapButton(
-                                      PhosphorIcons.arrowLeft(),
+                                      PhosphorIconsBold.arrowLeft,
                                       key: const ValueKey('back'),
                                       onTap: _backToPickup,
                                     ),
@@ -684,7 +684,7 @@ class _ClientHomeState extends State<ClientHome> {
                     right: 16,
                     bottom: overlap + 14,
                     child: MapButton(
-                      PhosphorIcons.navigationArrow(),
+                      PhosphorIconsBold.navigationArrow,
                       onTap: _locateMe,
                     ),
                   ),
@@ -822,7 +822,7 @@ class _ClientHomeState extends State<ClientHome> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            PhosphorIcons.plus(PhosphorIconsStyle.bold),
+            PhosphorIconsBold.plus,
             size: 15,
             color: accent,
           ),
@@ -857,10 +857,10 @@ class _ClientHomeState extends State<ClientHome> {
         children: [
           Icon(
             _company == null
-                ? CupertinoIcons.bolt_fill
+                ? PhosphorIconsFill.lightning
                 : _company.isIndependent
-                ? Icons.two_wheeler
-                : CupertinoIcons.building_2_fill,
+                ? PhosphorIconsFill.moped
+                : PhosphorIconsFill.buildings,
             size: 18,
             color: _company.isIndependent ? independentColor : accent,
           ),
@@ -924,7 +924,7 @@ class _ClientHomeState extends State<ClientHome> {
     ),
     const SizedBox(height: 10),
     _row(
-      leading: _inkTile(PhosphorIcons.package(PhosphorIconsStyle.fill)),
+      leading: _inkTile(PhosphorIconsFill.package),
       caption: 'Prise en charge',
       value: _moving ? '…' : _centerPlace?.label,
       placeholder: 'Recherche de l’adresse…',
@@ -933,7 +933,7 @@ class _ClientHomeState extends State<ClientHome> {
     _divider(p),
     _row(
       leading: _softTile(
-        PhosphorIcons.flagCheckered(PhosphorIconsStyle.fill),
+        PhosphorIconsFill.flagCheckered,
         p,
       ),
       caption: 'Livraison',
@@ -968,7 +968,7 @@ class _ClientHomeState extends State<ClientHome> {
         : '≈ ${_quote!['durationMin']} min · ${km(_quote!['distanceKm'])}';
     return [
       _row(
-        leading: _inkTile(PhosphorIcons.package(PhosphorIconsStyle.fill)),
+        leading: _inkTile(PhosphorIconsFill.package),
         caption: 'Prise en charge',
         value: _pickup?.label,
         onTap: _searchPickup,
@@ -976,7 +976,7 @@ class _ClientHomeState extends State<ClientHome> {
       _divider(p),
       _row(
         leading: _softTile(
-          PhosphorIcons.flagCheckered(PhosphorIconsStyle.fill),
+          PhosphorIconsFill.flagCheckered,
           p,
         ),
         caption: route ?? 'Calcul de l’itinéraire…',
@@ -1238,7 +1238,7 @@ class _ActiveBanner extends StatelessWidget {
                 ),
               ),
               child: Icon(
-                PhosphorIcons.moped(PhosphorIconsStyle.fill),
+                PhosphorIconsFill.moped,
                 color: Colors.white,
                 size: 22,
               ),
@@ -1267,7 +1267,7 @@ class _ActiveBanner extends StatelessWidget {
               ),
             ),
             Icon(
-              PhosphorIcons.caretRight(PhosphorIconsStyle.bold),
+              PhosphorIconsBold.caretRight,
               color: Colors.white54,
               size: 18,
             ),

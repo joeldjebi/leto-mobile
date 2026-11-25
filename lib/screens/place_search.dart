@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -99,7 +100,7 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: () => Navigator.maybePop(context),
-          child: const Icon(CupertinoIcons.back, color: accent, size: 28),
+          child: const Icon(PhosphorIconsBold.caretLeft, color: accent, size: 28),
         ),
       ),
       body: ListView(
@@ -122,7 +123,7 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
             InsetGroup(
               children: [
                 GroupRow(
-                  leading: IconBadge(CupertinoIcons.map, color: color),
+                  leading: IconBadge(PhosphorIconsBold.mapTrifold, color: color),
                   title: 'Choisir sur la carte',
                   chevron: true,
                   onTap: () => Navigator.pop(context, chooseOnMap),
@@ -155,7 +156,7 @@ class _PlaceSearchScreenState extends State<PlaceSearchScreen> {
                 for (final r in _results)
                   GroupRow(
                     leading: IconBadge(
-                      CupertinoIcons.location_solid,
+                      PhosphorIconsFill.mapPin,
                       color: p.blue,
                     ),
                     title: r.label,

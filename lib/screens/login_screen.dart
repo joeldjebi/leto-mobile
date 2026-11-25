@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -145,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Expanded(
                                 child: _typeCard(
                                   'INDIVIDUAL',
-                                  CupertinoIcons.person_fill,
+                                  PhosphorIconsFill.user,
                                   'Particulier',
                                   'J’envoie des colis',
                                   p,
@@ -155,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Expanded(
                                 child: _typeCard(
                                   'SHOP',
-                                  CupertinoIcons.bag_fill,
+                                  PhosphorIconsFill.bag,
                                   'Boutique',
                                   'Je livre mes clients',
                                   p,
@@ -180,13 +181,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     placeholder: _accountType == 'SHOP'
                         ? 'Nom de la boutique'
                         : 'Votre nom',
-                    icon: CupertinoIcons.person,
+                    icon: PhosphorIconsBold.user,
                   ),
                 PhoneField(controller: _phone),
                 GroupField(
                   controller: _password,
                   placeholder: 'Mot de passe',
-                  icon: CupertinoIcons.lock,
+                  icon: PhosphorIconsBold.lock,
                   obscure: true,
                 ),
               ],
@@ -212,7 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.two_wheeler, size: 20, color: p.secondaryLabel),
+                    Icon(PhosphorIconsFill.moped, size: 20, color: p.secondaryLabel),
                     const SizedBox(width: 6),
                     Text(
                       'Devenir livreur indépendant',

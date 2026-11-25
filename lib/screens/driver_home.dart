@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -436,7 +437,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     if (c == null) return null;
     final ago = DateTime.now().difference(c.$2).inSeconds;
     return GroupRow(
-      leading: IconBadge(CupertinoIcons.person_crop_circle_fill, color: p.blue),
+      leading: IconBadge(PhosphorIconsFill.userCircle, color: p.blue),
       title: 'Le client partage sa position',
       subtitle: [
         if (_me != null) 'à ${km(distanceKm(_me!, c.$1))}',
@@ -996,13 +997,13 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                   Row(
                     children: [
                       MapButton(
-                        CupertinoIcons.person_crop_circle,
+                        PhosphorIconsBold.userCircle,
                         onTap: () => showAccountSheet(
                           context,
                           items: [
                             if (api.isIndependent) ...[
                               (
-                                CupertinoIcons.creditcard_fill,
+                                PhosphorIconsFill.creditCard,
                                 p.green,
                                 'Mon solde',
                                 () => Navigator.push(
@@ -1014,7 +1015,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                                 ),
                               ),
                               (
-                                CupertinoIcons.doc_person_fill,
+                                PhosphorIconsFill.identificationCard,
                                 accent,
                                 'Mon dossier',
                                 () async {
@@ -1030,7 +1031,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                               ),
                             ],
                             (
-                              CupertinoIcons.clock_fill,
+                              PhosphorIconsFill.clock,
                               p.blue,
                               'Historique',
                               () => Navigator.push(
@@ -1051,7 +1052,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                       ),
                       const Spacer(),
                       MapButton(
-                        CupertinoIcons.location_fill,
+                        PhosphorIconsFill.navigationArrow,
                         onTap: () =>
                             _me != null ? _map.move(_me!, 15) : _goOnline(),
                       ),
@@ -1102,8 +1103,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                     : 'Mode navigation',
                 child: MapButton(
                   _navMode
-                      ? CupertinoIcons.location_north_fill
-                      : CupertinoIcons.location_north,
+                      ? PhosphorIconsFill.navigationArrow
+                      : PhosphorIconsBold.navigationArrow,
                   onTap: _toggleNav,
                 ),
               ),
@@ -1209,7 +1210,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: FilledButton.icon(
             onPressed: _goOnline,
-            icon: const Icon(CupertinoIcons.power),
+            icon: const Icon(PhosphorIconsBold.power),
             label: const Text('Passer en ligne'),
           ),
         ),
@@ -1375,7 +1376,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       return (
         title: 'Récupérer · ${d['pickupCommune'] ?? d['pickupAddress']}',
         subtitle: [if (sender.isNotEmpty) sender, price].join(' · '),
-        icon: CupertinoIcons.arrow_up_circle_fill,
+        icon: PhosphorIconsFill.arrowCircleUp,
         color: ink,
       );
     }
@@ -1383,7 +1384,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       return (
         title: 'Rapporter les colis · ${d['pickupCommune'] ?? ''}',
         subtitle: 'Retour à l’expéditeur · $price',
-        icon: CupertinoIcons.arrow_uturn_left_circle_fill,
+        icon: PhosphorIconsFill.arrowUDownLeft,
         color: p.yellow,
       );
     }
@@ -1397,7 +1398,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         stop['commune'] ?? stop['address'],
         price,
       ].whereType<String>().join(' · '),
-      icon: CupertinoIcons.cube_box_fill,
+      icon: PhosphorIconsFill.package,
       color: p.red,
     );
   }
@@ -1431,10 +1432,10 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             ? p.yellow
             : accent,
         icon: k.startsWith('P:')
-            ? CupertinoIcons.arrow_up
+            ? PhosphorIconsBold.arrowUp
             : k.startsWith('R:')
-            ? CupertinoIcons.arrow_uturn_left
-            : CupertinoIcons.cube_box_fill,
+            ? PhosphorIconsBold.arrowUDownLeft
+            : PhosphorIconsFill.package,
       ));
     }
     return out;
@@ -1483,7 +1484,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                   TextButton.icon(
                     key: const Key('plan-optimize'),
                     onPressed: _optimizePlan,
-                    icon: const Icon(CupertinoIcons.wand_stars, size: 18),
+                    icon: const Icon(PhosphorIconsBold.magicWand, size: 18),
                     label: Text('Optimiser (−${km(_planKm! - _planBestKm!)})'),
                   ),
               ],
@@ -1588,7 +1589,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                           PopupMenuButton<String>(
                             key: Key('plan-menu-$i'),
                             icon: Icon(
-                              CupertinoIcons.ellipsis,
+                              PhosphorIconsBold.dotsThree,
                               color: p.secondaryLabel,
                               size: 20,
                             ),
@@ -1615,7 +1616,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                                 vertical: 6,
                               ),
                               child: Icon(
-                                CupertinoIcons.line_horizontal_3,
+                                PhosphorIconsBold.list,
                                 color: p.tertiaryLabel,
                                 size: 20,
                               ),
@@ -1655,7 +1656,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: TintedButton(
             'Voir les courses',
-            icon: CupertinoIcons.list_bullet,
+            icon: PhosphorIconsBold.listBullets,
             onPressed: () => _setTab(0),
           ),
         ),
@@ -1701,7 +1702,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             if ((d['courierComment'] ?? '').toString().isNotEmpty)
               GroupRow(
                 leading: Icon(
-                  CupertinoIcons.chat_bubble_text,
+                  PhosphorIconsBold.chatText,
                   color: p.secondaryLabel,
                   size: 20,
                 ),
@@ -1760,7 +1761,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             for (final s in back)
               GroupRow(
                 leading: Icon(
-                  CupertinoIcons.cube_box,
+                  PhosphorIconsBold.package,
                   color: p.secondaryLabel,
                   size: 20,
                 ),
@@ -1825,7 +1826,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             if (cod > 0)
               GroupRow(
                 leading: const IconBadge(
-                  CupertinoIcons.creditcard_fill,
+                  PhosphorIconsFill.creditCard,
                   color: accentDeep,
                 ),
                 title: 'Encaisser ${formatMoney(cod, d['currency'])}',
@@ -1833,7 +1834,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               ),
             if (next['cancelRequestedAt'] != null)
               GroupRow(
-                leading: IconBadge(CupertinoIcons.hourglass, color: p.yellow),
+                leading: IconBadge(PhosphorIconsBold.hourglassMedium, color: p.yellow),
                 title: 'Annulation en attente',
                 subtitle:
                     'L’expéditeur doit confirmer · continuez vers les autres arrêts',
@@ -1842,8 +1843,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             GroupRow(
               leading: IconBadge(
                 left == null
-                    ? CupertinoIcons.location
-                    : CupertinoIcons.checkmark_seal_fill,
+                    ? PhosphorIconsBold.navigationArrow
+                    : PhosphorIconsFill.sealCheck,
                 color: left == null ? p.secondaryLabel : p.green,
               ),
               title: left == null
@@ -1876,7 +1877,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               const SizedBox(height: 10),
               TintedButton(
                 'Signaler un problème',
-                icon: CupertinoIcons.exclamationmark_triangle,
+                icon: PhosphorIconsBold.warning,
                 color: p.red,
                 onPressed: () => _reportProblem(d, next),
               ),
@@ -1884,7 +1885,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                 const SizedBox(height: 10),
                 TintedButton(
                   'Livrer plus tard',
-                  icon: CupertinoIcons.clock,
+                  icon: PhosphorIconsBold.clock,
                   onPressed: () => _later('S:${next['id']}'),
                 ),
               ],
@@ -1971,7 +1972,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
-            CupertinoIcons.location_north_fill,
+            PhosphorIconsFill.navigationArrow,
             size: 15,
             color: accent,
           ),
@@ -1991,7 +1992,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   Widget _phone(String? phone, Palette p) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(CupertinoIcons.phone_fill, size: 15, color: p.green),
+      Icon(PhosphorIconsFill.phone, size: 15, color: p.green),
       const SizedBox(width: 4),
       SelectableText(
         formatPhone(phone, compact: true),
@@ -2026,7 +2027,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         children: [
           GroupRow(
             leading: const IconBadge(
-              CupertinoIcons.tray_arrow_up_fill,
+              PhosphorIconsFill.tray,
               color: accent,
             ),
             title: 'Reste à verser',
@@ -2037,7 +2038,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           ),
           GroupRow(
             leading: IconBadge(
-              CupertinoIcons.checkmark_seal_fill,
+              PhosphorIconsFill.sealCheck,
               color: p.green,
             ),
             title: 'Déjà versé',
@@ -2045,7 +2046,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           ),
           GroupRow(
             leading: IconBadge(
-              CupertinoIcons.money_dollar_circle_fill,
+              PhosphorIconsFill.money,
               color: p.blue,
             ),
             title: 'Gagné ce mois',
@@ -2059,7 +2060,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
         child: FilledButton.icon(
           onPressed: toRemit - pending > 0 ? _declareRemittance : null,
-          icon: const Icon(CupertinoIcons.arrow_up_circle_fill),
+          icon: const Icon(PhosphorIconsFill.arrowCircleUp),
           label: const Text('Faire un versement'),
         ),
       ),
@@ -2071,10 +2072,10 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               GroupRow(
                 leading: IconBadge(
                   h['status'] == 'CONFIRMED'
-                      ? CupertinoIcons.checkmark_alt
+                      ? PhosphorIconsBold.check
                       : h['status'] == 'REJECTED'
-                      ? CupertinoIcons.xmark
-                      : CupertinoIcons.hourglass,
+                      ? PhosphorIconsBold.x
+                      : PhosphorIconsBold.hourglassMedium,
                   color: h['status'] == 'CONFIRMED'
                       ? p.green
                       : h['status'] == 'REJECTED'
@@ -2154,13 +2155,13 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       InsetGroup(
         children: [
           GroupRow(
-            leading: IconBadge(CupertinoIcons.calendar, color: p.blue),
+            leading: IconBadge(PhosphorIconsBold.calendarBlank, color: p.blue),
             title: 'Cette semaine',
             value: formatMoney(sum(weekList)),
           ),
           GroupRow(
             leading: const IconBadge(
-              CupertinoIcons.creditcard_fill,
+              PhosphorIconsFill.creditCard,
               color: accentDeep,
             ),
             title: 'Encaissé pour l’entreprise',
@@ -2376,14 +2377,14 @@ class _OrderCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 if (d['speed'] == 'EXPRESS')
-                  Pill('Express', color: p.red, icon: CupertinoIcons.bolt_fill),
+                  Pill('Express', color: p.red, icon: PhosphorIconsFill.lightning),
                 if (d['speed'] == 'SCHEDULED')
-                  Pill('Dans 2 h', color: p.blue, icon: CupertinoIcons.clock),
+                  Pill('Dans 2 h', color: p.blue, icon: PhosphorIconsBold.clock),
                 if (match?['kind'] == 'ROUTE')
                   Pill(
                     'Sur votre trajet',
                     color: p.blue,
-                    icon: CupertinoIcons.arrow_branch,
+                    icon: PhosphorIconsBold.arrowsSplit,
                   ),
                 const Spacer(),
                 Icon(vehicleIcons[d['vehicleType']], color: p.label, size: 26),
@@ -2395,7 +2396,7 @@ class _OrderCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: _Leg(
-                    icon: CupertinoIcons.cube_box_fill,
+                    icon: PhosphorIconsFill.package,
                     label: 'Récupération',
                     value: distance != null && distance!.isFinite
                         ? '${km(distance! * _roadFactor)} · ~${_etaMin(distance!)} min'
@@ -2406,7 +2407,7 @@ class _OrderCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _Leg(
-                    icon: CupertinoIcons.flag_fill,
+                    icon: PhosphorIconsFill.flag,
                     label: stops.length > 1
                         ? 'Livraison · ${stops.length} arrêts'
                         : 'Livraison',
@@ -2451,7 +2452,7 @@ class _OrderCard extends StatelessWidget {
               const Pill(
                 'Affectée par votre entreprise',
                 color: accent,
-                icon: CupertinoIcons.building_2_fill,
+                icon: PhosphorIconsFill.buildings,
               ),
             ],
             if (myOffer != null) ...[
@@ -2459,7 +2460,7 @@ class _OrderCard extends StatelessWidget {
               Pill(
                 'Votre proposition : ${formatMoney(myOffer!['price'], d['currency'])} · en attente',
                 color: accentDeep,
-                icon: CupertinoIcons.hourglass,
+                icon: PhosphorIconsBold.hourglassMedium,
               ),
             ],
           ],
@@ -2523,7 +2524,7 @@ class _BlockedBanner extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            CupertinoIcons.exclamationmark_triangle_fill,
+            PhosphorIconsFill.warning,
             color: p.red,
             size: 22,
           ),
@@ -2654,20 +2655,20 @@ class _RemittanceSheetState extends State<_RemittanceSheet> {
                 GroupField(
                   controller: _amount,
                   placeholder: 'Montant (${currencyLabel()})',
-                  icon: CupertinoIcons.money_dollar,
+                  icon: PhosphorIconsBold.money,
                   keyboardType: TextInputType.number,
                 ),
                 if (_method == 'MOBILE_MONEY') ...[
                   GroupField(
                     controller: _reference,
                     placeholder: 'Référence de la transaction',
-                    icon: CupertinoIcons.number,
+                    icon: PhosphorIconsBold.hash,
                   ),
                   GroupRow(
                     leading: _proof != null
                         ? AddressPhoto(_proof!, size: 40)
                         : Icon(
-                            CupertinoIcons.photo,
+                            PhosphorIconsBold.image,
                             color: p.secondaryLabel,
                             size: 20,
                           ),
@@ -2684,7 +2685,7 @@ class _RemittanceSheetState extends State<_RemittanceSheet> {
                 GroupField(
                   controller: _note,
                   placeholder: 'Note (facultatif)',
-                  icon: CupertinoIcons.text_bubble,
+                  icon: PhosphorIconsBold.chatTeardropText,
                 ),
               ],
             ),

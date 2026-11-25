@@ -238,7 +238,7 @@ class PhoneField extends StatelessWidget {
                               label,
                               const SizedBox(width: 3),
                               Icon(
-                                CupertinoIcons.chevron_down,
+                                PhosphorIconsBold.caretDown,
                                 size: 13,
                                 color: p.tertiaryLabel,
                               ),
@@ -339,7 +339,7 @@ class ContactButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  PhosphorIcons.addressBook(PhosphorIconsStyle.fill),
+                  PhosphorIconsFill.addressBook,
                   color: accent,
                   size: _iconSize,
                 ),
@@ -506,7 +506,7 @@ class _CountrySheetState extends State<_CountrySheet> {
                                           width: 28,
                                           child: selected
                                               ? const Icon(
-                                                  CupertinoIcons.checkmark_alt,
+                                                  PhosphorIconsBold.check,
                                                   size: 18,
                                                   color: accent,
                                                 )

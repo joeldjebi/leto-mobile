@@ -4,6 +4,7 @@
 //   --dart-define=DEV_PHONE=... --dart-define=DEV_PASSWORD=... --dart-define=DEV_LAT=5.36 --dart-define=DEV_LNG=-3.99
 // Chaque ligne « SHOT:nom » marque un écran à capturer.
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -96,7 +97,7 @@ void main() {
         await t.tap(find.text('Mon profil'));
         await wait(t, 1.5);
         await shot(t, 'client_profile');
-        await t.tap(find.byIcon(CupertinoIcons.back).first);
+        await t.tap(find.byIcon(PhosphorIconsBold.caretLeft).first);
         await wait(t, 1.5);
       }
 
@@ -182,7 +183,7 @@ void main() {
       await shot(t, 'client_accepted');
     } else if (flow == 'dispute') {
       // L'expéditeur voit l'échec (photo, GPS) et conteste
-      await t.tap(find.byIcon(CupertinoIcons.person_crop_circle));
+      await t.tap(find.byIcon(PhosphorIconsBold.userCircle));
       await wait(t, 1.5);
       await t.tap(find.text('Mes livraisons'));
       await wait(t, 3);

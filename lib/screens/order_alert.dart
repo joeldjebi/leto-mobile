@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -237,16 +238,16 @@ class _OrderAlertViewState extends State<_OrderAlertView>
     final fromMe = o['fromMeKm'] as num?;
 
     final (badge, badgeColor, badgeIcon) = switch (match?['kind']) {
-      'ROUTE' => ('Sur votre trajet', p.blue, CupertinoIcons.arrow_branch),
+      'ROUTE' => ('Sur votre trajet', p.blue, PhosphorIconsBold.arrowsSplit),
       'NEARBY' => (
         'À ${km(fromMe ?? match?['km'] ?? 0)} de vous',
         p.blue,
-        CupertinoIcons.location_fill,
+        PhosphorIconsFill.navigationArrow,
       ),
       _ => (
         fromMe == null ? 'Nouvelle course' : 'À ${km(fromMe)} de vous',
         accent,
-        CupertinoIcons.location_fill,
+        PhosphorIconsFill.navigationArrow,
       ),
     };
 
@@ -451,23 +452,23 @@ class _OrderAlertViewState extends State<_OrderAlertView>
                           children: [
                             if (o['distanceKm'] != null)
                               chip(
-                                CupertinoIcons.map,
+                                PhosphorIconsBold.mapTrifold,
                                 km(o['distanceKm'] as num),
                               ),
                             if (o['durationMin'] != null)
                               chip(
-                                CupertinoIcons.time,
+                                PhosphorIconsBold.clock,
                                 '${o['durationMin']} min',
                               ),
                             if (o['vehicleType'] != null)
                               chip(
-                                CupertinoIcons.cube_box,
+                                PhosphorIconsBold.package,
                                 vehicleLabels[o['vehicleType']] ??
                                     '${o['vehicleType']}',
                               ),
                             if (cod > 0)
                               chip(
-                                CupertinoIcons.money_dollar_circle,
+                                PhosphorIconsBold.money,
                                 'Encaisser ${formatMoney(cod, o['currency'] as String?)}',
                               ),
                           ],

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -336,7 +337,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
               children: [
                 _stat(
                   p,
-                  CupertinoIcons.calendar_today,
+                  PhosphorIconsBold.calendarCheck,
                   p.blue,
                   '${today.length}',
                   'Aujourd’hui',
@@ -344,7 +345,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
                 VerticalDivider(width: 1, thickness: 0.5, color: p.separator),
                 _stat(
                   p,
-                  CupertinoIcons.checkmark_seal_fill,
+                  PhosphorIconsFill.sealCheck,
                   p.green,
                   '${deliveredToday.length}',
                   'Livrées',
@@ -352,7 +353,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
                 VerticalDivider(width: 1, thickness: 0.5, color: p.separator),
                 _stat(
                   p,
-                  CupertinoIcons.money_dollar_circle_fill,
+                  PhosphorIconsFill.money,
                   accent,
                   formatMoney(amount),
                   'Montant',
@@ -365,7 +366,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
           child: FilledButton.icon(
             onPressed: _new,
-            icon: const Icon(CupertinoIcons.camera_fill, size: 20),
+            icon: const Icon(PhosphorIconsFill.camera, size: 20),
             label: const Text('Nouvelle livraison'),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(52),
@@ -382,7 +383,7 @@ class _DriverLogbookState extends State<DriverLogbook> {
             padding: const EdgeInsets.fromLTRB(32, 12, 32, 24),
             child: Column(
               children: [
-                Icon(CupertinoIcons.book, size: 40, color: p.tertiaryLabel),
+                Icon(PhosphorIconsBold.book, size: 40, color: p.tertiaryLabel),
                 const SizedBox(height: 8),
                 Text(
                   'Aucune livraison dans le carnet.\nPrenez le colis en photo, notez l’adresse, le numéro et le prix.',
@@ -526,13 +527,13 @@ class _DriverLogbookState extends State<DriverLogbook> {
             IconButton(
               onPressed: i == 0 ? null : () => _move(i, -1),
               tooltip: 'Monter',
-              icon: const Icon(CupertinoIcons.arrow_up, size: 20),
+              icon: const Icon(PhosphorIconsBold.arrowUp, size: 20),
               color: accent,
             ),
             IconButton(
               onPressed: i == n - 1 ? null : () => _move(i, 1),
               tooltip: 'Descendre',
-              icon: const Icon(CupertinoIcons.arrow_down, size: 20),
+              icon: const Icon(PhosphorIconsBold.arrowDown, size: 20),
               color: accent,
             ),
           ],
@@ -893,7 +894,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
                   children: [
                     GroupRow(
                       leading: Icon(
-                        CupertinoIcons.add_circled_solid,
+                        PhosphorIconsFill.plusCircle,
                         color: accent,
                         size: 22,
                       ),
@@ -915,7 +916,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
                     controller: _note,
                     placeholder:
                         'Ex. : colis fragile, payer à la livraison… (facultatif)',
-                    icon: CupertinoIcons.text_bubble_fill,
+                    icon: PhosphorIconsFill.chatTeardropText,
                     maxLines: 3,
                   ),
                 ],
@@ -943,7 +944,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
         placeholder: r.locating
             ? 'Localisation…'
             : 'Adresse : quartier, rue, repère…',
-        icon: CupertinoIcons.location_solid,
+        icon: PhosphorIconsFill.mapPin,
         maxLines: 2,
         validator: (v) =>
             (v ?? '').trim().isEmpty ? 'Adresse obligatoire' : null,
@@ -951,7 +952,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _iconButton(
-              CupertinoIcons.search,
+              PhosphorIconsBold.magnifyingGlass,
               'Rechercher l’adresse',
               () => _search(r),
             ),
@@ -961,7 +962,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
                     child: CupertinoActivityIndicator(),
                   )
                 : _iconButton(
-                    CupertinoIcons.location_fill,
+                    PhosphorIconsFill.navigationArrow,
                     'Ma position',
                     () => _locate(r),
                   ),
@@ -972,7 +973,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
         controller: r.phone,
         validate: true,
         trailing: _iconButton(
-          CupertinoIcons.person_crop_circle,
+          PhosphorIconsBold.userCircle,
           'Répertoire',
           () => _pickContact(r),
         ),
@@ -980,12 +981,12 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
       GroupField(
         controller: r.name,
         placeholder: 'Nom (facultatif)',
-        icon: CupertinoIcons.person_fill,
+        icon: PhosphorIconsFill.user,
       ),
       GroupField(
         controller: r.price,
         placeholder: 'Prix en ${currencyLabel()}',
-        icon: CupertinoIcons.money_dollar_circle_fill,
+        icon: PhosphorIconsFill.money,
         keyboardType: TextInputType.number,
         validator: (v) =>
             int.tryParse((v ?? '').replaceAll(RegExp(r'\D'), '')) == null
@@ -995,7 +996,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
       if (n > 1)
         GroupRow(
           leading: Icon(
-            CupertinoIcons.minus_circle_fill,
+            PhosphorIconsFill.minusCircle,
             color: p.red,
             size: 20,
           ),
@@ -1048,7 +1049,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
                             color: letoFill,
                           ),
                           child: const Icon(
-                            CupertinoIcons.camera_fill,
+                            PhosphorIconsFill.camera,
                             color: Colors.white,
                             size: 26,
                           ),
@@ -1098,7 +1099,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
               )
             else if (!has)
               Icon(
-                CupertinoIcons.chevron_right,
+                PhosphorIconsBold.caretRight,
                 size: 18,
                 color: p.tertiaryLabel,
               ),

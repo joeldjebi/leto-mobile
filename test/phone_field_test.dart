@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:leto/countries.dart';
 import 'package:leto/screens/widgets.dart';
 import 'package:leto/theme.dart';
@@ -212,7 +213,7 @@ void main() {
       await t.pumpWidget(app(PhoneField(controller: ctrl)));
       expect(find.text('+225'), findsOneWidget);
       expect(find.text('07 01 02 03 04'), findsOneWidget); // exemple
-      expect(find.byIcon(CupertinoIcons.chevron_down), findsNothing);
+      expect(find.byIcon(PhosphorIconsBold.caretDown), findsNothing);
       await t.tap(find.byKey(const ValueKey('phone-country')));
       await t.pumpAndSettle();
       expect(find.text('Indicatif du pays'), findsNothing);
@@ -226,7 +227,7 @@ void main() {
       await t.pumpWidget(
         app(PhoneField(controller: ctrl, onChanged: emitted.add)),
       );
-      expect(find.byIcon(CupertinoIcons.chevron_down), findsOneWidget);
+      expect(find.byIcon(PhosphorIconsBold.caretDown), findsOneWidget);
       await t.tap(find.byKey(const ValueKey('phone-country')));
       await t.pumpAndSettle();
       expect(find.text('Indicatif du pays'), findsOneWidget);

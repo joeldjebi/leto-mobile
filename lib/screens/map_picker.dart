@@ -102,12 +102,12 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                     child: Row(
                       children: [
                         MapButton(
-                          PhosphorIcons.arrowLeft(),
+                          PhosphorIconsBold.arrowLeft,
                           onTap: () => Navigator.pop(context),
                         ),
                         const Spacer(),
                         MapButton(
-                          PhosphorIcons.navigationArrow(),
+                          PhosphorIconsBold.navigationArrow,
                           onTap: _locateMe,
                         ),
                       ],

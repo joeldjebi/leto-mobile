@@ -1,5 +1,4 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 export 'countries.dart' show currencyLabel, formatMoney, formatPhone, telUri;
 
@@ -28,9 +27,9 @@ const failureLabels = {
 const vehicleLabels = {'MOTO': 'Moto', 'CAR': 'Voiture', 'CARGO': 'Cargo'};
 
 const vehicleIcons = {
-  'MOTO': Icons.two_wheeler,
-  'CAR': CupertinoIcons.car_detailed,
-  'CARGO': CupertinoIcons.cube_box_fill,
+  'MOTO': PhosphorIconsFill.moped,
+  'CAR': PhosphorIconsBold.car,
+  'CARGO': PhosphorIconsFill.package,
 };
 
 const speedLabels = {

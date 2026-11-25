@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -842,7 +843,7 @@ class _TrackingScreenState extends State<TrackingScreen>
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: MapButton(
-                  CupertinoIcons.chevron_back,
+                  PhosphorIconsBold.caretLeft,
                   onTap: () => Navigator.pop(context),
                 ),
               ),
@@ -866,8 +867,8 @@ class _TrackingScreenState extends State<TrackingScreen>
                       : 'Suivre le livreur',
                   child: MapButton(
                     _follow
-                        ? CupertinoIcons.location_fill
-                        : CupertinoIcons.location,
+                        ? PhosphorIconsFill.navigationArrow
+                        : PhosphorIconsBold.navigationArrow,
                     onTap: _toggleFollow,
                   ),
                 ),
@@ -1032,7 +1033,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           margin: EdgeInsets.zero,
           children: [
             GroupSwitch(
-              leading: IconBadge(CupertinoIcons.location_fill, color: p.blue),
+              leading: IconBadge(PhosphorIconsFill.navigationArrow, color: p.blue),
               title: 'Montrer au livreur où je me trouve',
               subtitle: _sharing
                   ? 'Le livreur voit votre position en direct'
@@ -1048,7 +1049,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       if (status == 'CANCELLED' && d['cancelledBy'] == 'Expiration')
         _notice(
           p,
-          icon: CupertinoIcons.clock_fill,
+          icon: PhosphorIconsFill.clock,
           color: p.yellow,
           title: 'Commande expirée',
           text:
@@ -1066,7 +1067,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             return waited >= 5
                 ? _notice(
                     p,
-                    icon: CupertinoIcons.clock_fill,
+                    icon: PhosphorIconsFill.clock,
                     color: p.yellow,
                     title: 'Pas encore de réponse de l’entreprise choisie',
                     text:
@@ -1075,7 +1076,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                   )
                 : _notice(
                     p,
-                    icon: CupertinoIcons.building_2_fill,
+                    icon: PhosphorIconsFill.buildings,
                     color: accent,
                     title: 'Envoyée à votre entreprise de livraison',
                     text:
@@ -1089,7 +1090,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       if (d['returnRequired'] == true && d['returnedAt'] == null) ...[
         _notice(
           p,
-          icon: CupertinoIcons.arrow_uturn_left_circle_fill,
+          icon: PhosphorIconsFill.arrowUDownLeft,
           color: accent,
           title: 'Colis en retour',
           text:
@@ -1104,7 +1105,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       if (d['returnedAt'] != null) ...[
         _notice(
           p,
-          icon: CupertinoIcons.checkmark_seal_fill,
+          icon: PhosphorIconsFill.sealCheck,
           color: p.green,
           title: 'Colis non livrés récupérés',
           text: 'Retour confirmé avec votre code.',
@@ -1116,7 +1117,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       )) ...[
         _notice(
           p,
-          icon: CupertinoIcons.exclamationmark_circle_fill,
+          icon: PhosphorIconsFill.warningCircle,
           color: p.yellow,
           title: '${s['recipientName']} annule ?',
           text:
@@ -1128,7 +1129,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       if (status == 'CANCELLED' && (d['cancellationFee'] ?? 0) > 0) ...[
         _notice(
           p,
-          icon: CupertinoIcons.money_dollar_circle_fill,
+          icon: PhosphorIconsFill.money,
           color: p.red,
           title:
               'Frais de déplacement : ${formatMoney(d['cancellationFee'], d['currency'])}',
@@ -1148,7 +1149,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         children: [
           GroupRow(
             leading: IconBadge(
-              CupertinoIcons.money_dollar_circle_fill,
+              PhosphorIconsFill.money,
               color: p.green,
             ),
             title: 'Espèces',
@@ -1159,7 +1160,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             ),
           ),
           GroupRow(
-            leading: IconBadge(CupertinoIcons.info, color: p.secondaryLabel),
+            leading: IconBadge(PhosphorIconsBold.info, color: p.secondaryLabel),
             title: 'Détails de la commande',
             subtitle: [
               vehicleLabels[d['vehicleType']],
@@ -1178,14 +1179,14 @@ class _TrackingScreenState extends State<TrackingScreen>
         margin: const EdgeInsets.only(bottom: 18),
         children: [
           GroupRow(
-            leading: IconBadge(CupertinoIcons.phone_fill, color: p.green),
+            leading: IconBadge(PhosphorIconsFill.phone, color: p.green),
             title: formatPhone(d['pickupPhone']),
             subtitle:
                 (d['pickupContactName'] ?? d['client']?['name']) as String?,
             onTap: () => callPhone(context, d['pickupPhone']),
           ),
           GroupRow(
-            leading: const IconBadge(CupertinoIcons.circle_fill, color: ink),
+            leading: const IconBadge(PhosphorIconsFill.circle, color: ink),
             title: d['pickupAddress'] ?? '',
             subtitle: [
               d['pickupCommune'],
@@ -1195,7 +1196,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           if ((d['courierComment'] ?? '').toString().isNotEmpty)
             GroupRow(
               leading: IconBadge(
-                CupertinoIcons.chat_bubble_text_fill,
+                PhosphorIconsFill.chatText,
                 color: p.blue,
               ),
               title: d['courierComment'],
@@ -1260,7 +1261,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         const SizedBox(height: 22),
         Center(
           child: RoundAction(
-            icon: RoundIcon(CupertinoIcons.xmark, color: p.red),
+            icon: RoundIcon(PhosphorIconsBold.x, color: p.red),
             label: status == 'PENDING'
                 ? 'Annuler la demande'
                 : 'Annuler la livraison',
@@ -1314,7 +1315,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           if (trailing != null) ...[const SizedBox(width: 10), trailing],
           if (onTap != null)
             Icon(
-              CupertinoIcons.chevron_right,
+              PhosphorIconsBold.caretRight,
               color: p.tertiaryLabel,
               size: 16,
             ),
@@ -1451,7 +1452,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                 Row(
                   children: [
                     Icon(
-                      CupertinoIcons.antenna_radiowaves_left_right,
+                      PhosphorIconsBold.broadcast,
                       size: 15,
                       color: p.yellow,
                     ),
@@ -1492,26 +1493,26 @@ class _TrackingScreenState extends State<TrackingScreen>
         ),
       if (driver != null && (active || d['status'] == 'DELIVERED'))
         RoundAction(
-          icon: const RoundIcon(CupertinoIcons.phone_fill),
+          icon: const RoundIcon(PhosphorIconsFill.phone),
           label: 'Appeler le livreur',
           onTap: () => callPhone(context, driver['phone']),
         ),
       if (trackingUrl(d) != null && !_finished)
         Builder(
           builder: (ctx) => RoundAction(
-            icon: const RoundIcon(CupertinoIcons.arrowshape_turn_up_right_fill),
+            icon: const RoundIcon(PhosphorIconsFill.shareFat),
             label: 'Partager le suivi',
             onTap: () => _shareTracking(ctx, d),
           ),
         ),
       RoundAction(
-        icon: const RoundIcon(CupertinoIcons.info),
+        icon: const RoundIcon(PhosphorIconsBold.info),
         label: 'Détails',
         onTap: () => showOrderDetails(context, d),
       ),
       if (_finished)
         RoundAction(
-          icon: const RoundIcon(CupertinoIcons.arrow_clockwise, color: accent),
+          icon: const RoundIcon(PhosphorIconsBold.arrowClockwise, color: accent),
           label: 'Répéter',
           onTap: () => _repeat(d),
         ),
@@ -1582,19 +1583,19 @@ class _StopTile extends StatelessWidget {
                 ),
                 child: status == 'DELIVERED'
                     ? const Icon(
-                        CupertinoIcons.checkmark_alt,
+                        PhosphorIconsBold.check,
                         color: Colors.white,
                         size: 16,
                       )
                     : status == 'CANCELLED'
                     ? const Icon(
-                        CupertinoIcons.minus,
+                        PhosphorIconsBold.minus,
                         color: Colors.white,
                         size: 14,
                       )
                     : status == 'FAILED'
                     ? const Icon(
-                        CupertinoIcons.xmark,
+                        PhosphorIconsBold.x,
                         color: Colors.white,
                         size: 14,
                       )
@@ -1644,7 +1645,7 @@ class _StopTile extends StatelessWidget {
                     padding: const EdgeInsets.only(left: 8),
                     minimumSize: Size.zero,
                     onPressed: () => shareToWhatsApp(ctx, d, stop),
-                    child: Icon(CupertinoIcons.share, size: 20, color: p.blue),
+                    child: Icon(PhosphorIconsBold.shareNetwork, size: 20, color: p.blue),
                   ),
                 ),
                 if (onCancel != null)
@@ -1653,7 +1654,7 @@ class _StopTile extends StatelessWidget {
                     minimumSize: Size.zero,
                     onPressed: onCancel,
                     child: Icon(
-                      CupertinoIcons.xmark_circle_fill,
+                      PhosphorIconsFill.xCircle,
                       size: 22,
                       color: p.tertiaryLabel,
                     ),
@@ -1711,7 +1712,7 @@ class _StopTile extends StatelessWidget {
                     ? '${formatMoney(cod, d['currency'])} encaissé'
                     : 'Encaisser ${formatMoney(cod, d['currency'])}',
                 color: stop['codRemittedAt'] != null ? p.green : accentDeep,
-                icon: CupertinoIcons.creditcard,
+                icon: PhosphorIconsBold.creditCard,
               ),
             ),
           // ----- Preuves d'échec + contestation -----
@@ -1747,7 +1748,7 @@ class _StopTile extends StatelessWidget {
                             ? Pill(
                                 'Contestation envoyée',
                                 color: p.blue,
-                                icon: CupertinoIcons.flag,
+                                icon: PhosphorIconsBold.flag,
                               )
                             : CupertinoButton(
                                 padding: EdgeInsets.zero,

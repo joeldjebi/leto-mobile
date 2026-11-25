@@ -2,6 +2,7 @@
 // flutter test integration_test/tracking_shots_test.dart -d <simulateur> --dart-define=API_URL=local
 //   --dart-define=DEV_PHONE=… --dart-define=DEV_PASSWORD=… --dart-define=ACCEPTED=<id> --dart-define=DELIVERED=<id>
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -52,7 +53,7 @@ void main() {
     await wait(t, 2);
     await t.drag(find.byType(ListView).last, const Offset(0, -250));
     await wait(t, 1.5);
-    await t.tap(find.byIcon(CupertinoIcons.star).last);
+    await t.tap(find.byIcon(PhosphorIconsBold.star).last);
     await wait(t, 1.5);
     shot('rating');
     await wait(t, 2);

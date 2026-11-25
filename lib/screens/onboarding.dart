@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -416,7 +417,7 @@ class _OrderArt extends StatelessWidget {
             child: Transform.translate(
               offset: Offset(0, -6 * _wave(float).abs()),
               child: const Icon(
-                CupertinoIcons.location_solid,
+                PhosphorIconsFill.mapPin,
                 size: 88,
                 color: accent,
               ),
@@ -429,7 +430,7 @@ class _OrderArt extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(
-                    CupertinoIcons.cube_box_fill,
+                    PhosphorIconsFill.package,
                     color: accent,
                     size: 18,
                   ),
@@ -582,7 +583,7 @@ class _RoutePainter extends CustomPainter {
     );
     canvas.drawCircle(m, r, Paint()..color = Colors.white);
     canvas.drawCircle(m, r - 3, Paint()..color = accent);
-    final icon = Icons.two_wheeler;
+    final icon = PhosphorIconsFill.moped;
     final tp = TextPainter(
       text: TextSpan(
         text: String.fromCharCode(icon.codePoint),
@@ -661,16 +662,16 @@ class _DeliveredArt extends StatelessWidget {
           ),
           Align(
             alignment: Alignment(0.62, -0.62 + 0.03 * _wave(float, 0.3)),
-            child: _Badge(CupertinoIcons.checkmark_alt, color: p.green),
+            child: _Badge(PhosphorIconsBold.check, color: p.green),
           ),
           Align(
             alignment: Alignment(-0.7, 0.66 + 0.03 * _wave(float, 0.7)),
-            child: const _Badge(CupertinoIcons.camera_fill, size: 52),
+            child: const _Badge(PhosphorIconsFill.camera, size: 52),
           ),
           Align(
             alignment: Alignment(0.55, 0.78 + 0.03 * _wave(float, 0.5)),
             child: const _Badge(
-              CupertinoIcons.location_fill,
+              PhosphorIconsFill.navigationArrow,
               size: 46,
               color: accentDeep,
             ),

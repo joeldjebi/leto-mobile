@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -336,7 +337,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                   Row(
                     children: [
                       Icon(
-                        CupertinoIcons.chat_bubble_text,
+                        PhosphorIconsBold.chatText,
                         size: 18,
                         color: p.secondaryLabel,
                       ),
@@ -357,7 +358,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                   const Pill(
                     'Affectée par votre entreprise',
                     color: accent,
-                    icon: CupertinoIcons.building_2_fill,
+                    icon: PhosphorIconsFill.buildings,
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -388,7 +389,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                       child: Pill(
                         'Votre proposition : ${formatMoney(widget.myOffer!['price'], d['currency'])} · en attente du client',
                         color: accentDeep,
-                        icon: CupertinoIcons.hourglass,
+                        icon: PhosphorIconsBold.hourglassMedium,
                       ),
                     ),
                   Text(
@@ -418,7 +419,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                       ],
                       Expanded(
                         child: _PriceChip(
-                          icon: CupertinoIcons.pencil,
+                          icon: PhosphorIconsBold.pencilSimple,
                           onTap: _busy ? null : _customPrice,
                         ),
                       ),

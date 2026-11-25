@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -127,19 +128,19 @@ class _IndependentSignupScreenState extends State<IndependentSignupScreen> {
           header: 'Ce qu’il vous faut',
           children: [
             need(
-              CupertinoIcons.person_crop_square_fill,
+              PhosphorIconsFill.identificationBadge,
               'Une pièce d’identité valide',
             ),
             need(
-              CupertinoIcons.doc_text_fill,
+              PhosphorIconsFill.fileText,
               'Permis, carte grise et assurance de votre engin',
             ),
             need(
-              CupertinoIcons.camera_fill,
+              PhosphorIconsFill.camera,
               'Un selfie et une photo avec vos documents en main',
             ),
             need(
-              CupertinoIcons.creditcard_fill,
+              PhosphorIconsFill.creditCard,
               'Un solde prépayé : la commission LETO est prélevée à chaque course',
             ),
           ],
@@ -154,7 +155,7 @@ class _IndependentSignupScreenState extends State<IndependentSignupScreen> {
               GroupField(
                 controller: _name,
                 placeholder: 'Nom et prénoms (comme sur la pièce)',
-                icon: CupertinoIcons.person,
+                icon: PhosphorIconsBold.user,
                 validator: (v) => (v ?? '').trim().length < 3
                     ? 'Nom complet obligatoire'
                     : null,
@@ -163,7 +164,7 @@ class _IndependentSignupScreenState extends State<IndependentSignupScreen> {
               GroupField(
                 controller: _password,
                 placeholder: 'Mot de passe (6 caractères minimum)',
-                icon: CupertinoIcons.lock,
+                icon: PhosphorIconsBold.lock,
                 obscure: true,
                 validator: (v) =>
                     (v ?? '').length < 6 ? '6 caractères minimum' : null,
@@ -551,7 +552,7 @@ class _DossierScreenState extends State<DossierScreen> {
                 children: [
                   GroupRow(
                     leading: Icon(
-                      CupertinoIcons.calendar,
+                      PhosphorIconsBold.calendarBlank,
                       color: p.secondaryLabel,
                       size: 20,
                     ),
@@ -564,7 +565,7 @@ class _DossierScreenState extends State<DossierScreen> {
                   ),
                   GroupRow(
                     leading: Icon(
-                      CupertinoIcons.map_pin_ellipse,
+                      PhosphorIconsBold.mapPinArea,
                       color: p.secondaryLabel,
                       size: 20,
                     ),
@@ -580,12 +581,12 @@ class _DossierScreenState extends State<DossierScreen> {
                   _field(
                     _address,
                     'Quartier, repère',
-                    CupertinoIcons.house_fill,
+                    PhosphorIconsFill.house,
                     required: true,
                   ),
                   GroupRow(
                     leading: Icon(
-                      CupertinoIcons.person_crop_square,
+                      PhosphorIconsBold.identificationBadge,
                       color: p.secondaryLabel,
                       size: 20,
                     ),
@@ -603,7 +604,7 @@ class _DossierScreenState extends State<DossierScreen> {
                   _field(
                     _idNumber,
                     'Numéro de la pièce',
-                    CupertinoIcons.number,
+                    PhosphorIconsBold.hash,
                     required: true,
                   ),
                 ],
@@ -631,19 +632,19 @@ class _DossierScreenState extends State<DossierScreen> {
                   _field(
                     _brand,
                     'Marque et modèle (ex. Haojue 125)',
-                    CupertinoIcons.car_detailed,
+                    PhosphorIconsBold.car,
                     required: true,
                   ),
                   _field(
                     _plate,
                     'Immatriculation',
-                    CupertinoIcons.textformat_abc,
+                    PhosphorIconsBold.textAa,
                     required: true,
                   ),
                   _field(
                     _license,
                     'Numéro du permis (facultatif)',
-                    CupertinoIcons.doc_text,
+                    PhosphorIconsBold.fileText,
                   ),
                 ],
               ),
@@ -655,7 +656,7 @@ class _DossierScreenState extends State<DossierScreen> {
               InsetGroup(
                 header: 'Contact d’urgence (facultatif)',
                 children: [
-                  _field(_emergencyName, 'Nom', CupertinoIcons.person_2_fill),
+                  _field(_emergencyName, 'Nom', PhosphorIconsFill.users),
                   PhoneField(
                     controller: _emergencyPhone,
                     validate: true,
@@ -691,31 +692,31 @@ class _DossierScreenState extends State<DossierScreen> {
       String text,
     ) = switch (_status) {
       'PENDING' => (
-        CupertinoIcons.hourglass,
+        PhosphorIconsBold.hourglassMedium,
         p.blue,
         'Dossier en cours de vérification',
         'LETO vérifie votre identité et votre engin. Vous serez prévenu ici dès que c’est fait.',
       ),
       'REJECTED' => (
-        CupertinoIcons.xmark_octagon_fill,
+        PhosphorIconsFill.prohibit,
         p.red,
         'Dossier à corriger',
         _d['reviewNote'] ?? 'Corrigez votre dossier puis renvoyez-le.',
       ),
       'SUSPENDED' => (
-        CupertinoIcons.pause_circle_fill,
+        PhosphorIconsFill.pauseCircle,
         p.red,
         'Compte suspendu',
         _d['reviewNote'] ?? 'Contactez LETO.',
       ),
       'APPROVED' => (
-        CupertinoIcons.checkmark_seal_fill,
+        PhosphorIconsFill.sealCheck,
         p.green,
         'Dossier validé',
         'Vous pouvez prendre des courses de livreur indépendant.',
       ),
       _ => (
-        CupertinoIcons.doc_on_clipboard_fill,
+        PhosphorIconsFill.clipboardText,
         accent,
         'Complétez votre dossier',
         '$done/$total éléments · toutes les photos se prennent avec l’appareil photo.',
@@ -755,7 +756,7 @@ class _DossierScreenState extends State<DossierScreen> {
                     padding: const EdgeInsets.only(top: 6),
                     child: TintedButton(
                       'Actualiser',
-                      icon: CupertinoIcons.refresh,
+                      icon: PhosphorIconsBold.arrowsClockwise,
                       onPressed: _reload,
                     ),
                   ),
@@ -872,8 +873,8 @@ class _DossierScreenState extends State<DossierScreen> {
                       color: p.fill,
                       child: Icon(
                         front
-                            ? CupertinoIcons.person_crop_circle
-                            : CupertinoIcons.camera_fill,
+                            ? PhosphorIconsBold.userCircle
+                            : PhosphorIconsFill.camera,
                         color: accent,
                         size: 30,
                       ),
@@ -890,7 +891,7 @@ class _DossierScreenState extends State<DossierScreen> {
                       right: 6,
                       top: 6,
                       child: Icon(
-                        CupertinoIcons.checkmark_circle_fill,
+                        PhosphorIconsFill.checkCircle,
                         color: Colors.white,
                         size: 22,
                       ),
@@ -975,7 +976,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
       bottomBar: GlassBottomBar(
         child: FilledButton.icon(
           onPressed: b == null ? null : _topup,
-          icon: const Icon(CupertinoIcons.plus_circle_fill, size: 20),
+          icon: const Icon(PhosphorIconsFill.plusCircle, size: 20),
           label: const Text('Recharger mon solde'),
         ),
       ),
@@ -1023,7 +1024,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
                 for (final x in pending)
                   GroupRow(
                     leading: Icon(
-                      CupertinoIcons.hourglass,
+                      PhosphorIconsBold.hourglassMedium,
                       color: p.blue,
                       size: 20,
                     ),
@@ -1176,7 +1177,7 @@ class _TopupScreenState extends State<_TopupScreen> {
                   for (final a in accounts)
                     GroupRow(
                       leading: Icon(
-                        CupertinoIcons.money_dollar_circle_fill,
+                        PhosphorIconsFill.money,
                         color: accent,
                         size: 20,
                       ),
@@ -1206,7 +1207,7 @@ class _TopupScreenState extends State<_TopupScreen> {
               GroupField(
                 controller: _amount,
                 placeholder: 'Montant (${currencyLabel()})',
-                icon: CupertinoIcons.money_dollar,
+                icon: PhosphorIconsBold.money,
                 keyboardType: TextInputType.number,
                 validator: (v) =>
                     (int.tryParse((v ?? '').replaceAll(RegExp(r'\D'), '')) ??
@@ -1223,7 +1224,7 @@ class _TopupScreenState extends State<_TopupScreen> {
               GroupField(
                 controller: _reference,
                 placeholder: 'Référence de la transaction (facultatif)',
-                icon: CupertinoIcons.number,
+                icon: PhosphorIconsBold.hash,
               ),
               GroupRow(
                 leading: _proofFile != null
@@ -1236,7 +1237,7 @@ class _TopupScreenState extends State<_TopupScreen> {
                           fit: BoxFit.cover,
                         ),
                       )
-                    : Icon(CupertinoIcons.photo_fill, color: accent, size: 20),
+                    : Icon(PhosphorIconsFill.image, color: accent, size: 20),
                 title: _proof != null
                     ? 'Preuve ajoutée'
                     : _proofFile != null

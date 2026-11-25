@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -75,7 +76,7 @@ class _AddressBookScreenState extends State<AddressBookScreen> {
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: 20),
                     child: const Icon(
-                      CupertinoIcons.delete,
+                      PhosphorIconsBold.trash,
                       color: Colors.white,
                     ),
                   ),

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -140,7 +141,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         border: Border.all(color: p.background, width: 3),
                       ),
                       child: const Icon(
-                        CupertinoIcons.camera_fill,
+                        PhosphorIconsFill.camera,
                         color: Colors.white,
                         size: 16,
                       ),
@@ -199,7 +200,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             GroupField(
               controller: _name,
               placeholder: shop ? 'Nom de la boutique' : 'Votre nom',
-              icon: shop ? CupertinoIcons.bag : CupertinoIcons.person,
+              icon: shop ? PhosphorIconsBold.bag : PhosphorIconsBold.user,
               onChanged: (_) => setState(() {}),
             ),
             PhoneField(controller: _phone, onChanged: (_) => setState(() {})),
@@ -214,7 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               GroupField(
                 controller: _plate,
                 placeholder: 'Immatriculation (ex. AA 551 KR 01)',
-                icon: CupertinoIcons.number,
+                icon: PhosphorIconsBold.hash,
                 capitalization: TextCapitalization.characters,
               ),
             ],
@@ -228,7 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             GroupField(
               controller: _newPassword,
               placeholder: 'Nouveau mot de passe',
-              icon: CupertinoIcons.lock,
+              icon: PhosphorIconsBold.lock,
               obscure: true,
               onChanged: (_) => setState(() {}),
             ),
@@ -236,7 +237,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               GroupField(
                 controller: _current,
                 placeholder: 'Mot de passe actuel',
-                icon: CupertinoIcons.lock_shield,
+                icon: PhosphorIconsBold.shieldCheck,
                 obscure: true,
               ),
           ],

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -84,7 +85,7 @@ Future<void> showShareCodes(BuildContext context, Map<String, dynamic> d) {
             const SizedBox(height: 8),
             const Grabber(),
             const SizedBox(height: 16),
-            Icon(CupertinoIcons.checkmark_seal_fill, color: p.green, size: 52),
+            Icon(PhosphorIconsFill.sealCheck, color: p.green, size: 52),
             const SizedBox(height: 8),
             Text(
               'Commande envoyée',
@@ -167,7 +168,7 @@ class _ShareRow extends StatelessWidget {
             ),
           ),
           _CircleAction(
-            icon: CupertinoIcons.chat_bubble_fill,
+            icon: PhosphorIconsFill.chatCircle,
             color: const Color(0xFF25D366),
             tooltip: 'WhatsApp',
             onTap: () => shareToWhatsApp(context, d, stop),
@@ -175,7 +176,7 @@ class _ShareRow extends StatelessWidget {
           const SizedBox(width: 8),
           Builder(
             builder: (ctx) => _CircleAction(
-              icon: CupertinoIcons.share,
+              icon: PhosphorIconsBold.shareNetwork,
               color: p.blue,
               tooltip: 'Partager',
               onTap: () => shareCode(ctx, d, stop),

@@ -33,11 +33,11 @@ class DeliveryProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final steps = <(IconData, String)>[
-      (CupertinoIcons.checkmark_alt, 'Commandée'),
+      (PhosphorIconsBold.check, 'Commandée'),
       (vehicleIcon(vehicle), 'Livreur en route'),
-      (PhosphorIcons.package(PhosphorIconsStyle.fill), 'Colis récupéré'),
+      (PhosphorIconsFill.package, 'Colis récupéré'),
       (vehicleIcon(vehicle), 'En livraison'),
-      (PhosphorIcons.flagCheckered(PhosphorIconsStyle.fill), 'Livré'),
+      (PhosphorIconsFill.flagCheckered, 'Livré'),
     ];
     final reached = _reached;
     return Semantics(
@@ -162,7 +162,7 @@ class DriverPhoto extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(CupertinoIcons.star_fill, size: 11, color: p.yellow),
+                  Icon(PhosphorIconsFill.star, size: 11, color: p.yellow),
                   const SizedBox(width: 2),
                   Text(
                     rating.toStringAsFixed(1),
@@ -229,16 +229,16 @@ class VehiclePlate extends StatelessWidget {
 
 /// Compliments (4–5 étoiles) et points à améliorer (1–3 étoiles), codes identiques à l'API
 const _praise = [
-  ('FAST', 'Très rapide', CupertinoIcons.bolt_fill),
-  ('POLITE', 'Livreur poli', CupertinoIcons.hand_thumbsup_fill),
-  ('CAREFUL', 'Colis soigné', CupertinoIcons.cube_box_fill),
-  ('ABOVE', 'Au-delà des attentes', CupertinoIcons.sparkles),
+  ('FAST', 'Très rapide', PhosphorIconsFill.lightning),
+  ('POLITE', 'Livreur poli', PhosphorIconsFill.thumbsUp),
+  ('CAREFUL', 'Colis soigné', PhosphorIconsFill.package),
+  ('ABOVE', 'Au-delà des attentes', PhosphorIconsBold.sparkle),
 ];
 const _issues = [
-  ('LATE', 'En retard', CupertinoIcons.clock_fill),
-  ('RUDE', 'Peu aimable', CupertinoIcons.hand_thumbsdown_fill),
-  ('DAMAGED', 'Colis abîmé', CupertinoIcons.cube_box),
-  ('UNREACHABLE', 'Injoignable', CupertinoIcons.phone_down_fill),
+  ('LATE', 'En retard', PhosphorIconsFill.clock),
+  ('RUDE', 'Peu aimable', PhosphorIconsFill.thumbsDown),
+  ('DAMAGED', 'Colis abîmé', PhosphorIconsBold.package),
+  ('UNREACHABLE', 'Injoignable', PhosphorIconsFill.phoneSlash),
 ];
 
 String ratingTagLabel(String code) =>
@@ -333,8 +333,8 @@ class _RatingCardState extends State<RatingCard> {
                         duration: Motion.fast,
                         child: Icon(
                           (given ?? _stars) >= i
-                              ? CupertinoIcons.star_fill
-                              : CupertinoIcons.star,
+                              ? PhosphorIconsFill.star
+                              : PhosphorIconsBold.star,
                           size: 40,
                           color: (given ?? _stars) >= i
                               ? p.yellow

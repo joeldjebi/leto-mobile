@@ -341,7 +341,7 @@ class _OrderScreenState extends State<OrderScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      PhosphorIcons.plus(PhosphorIconsStyle.bold),
+                      PhosphorIconsBold.plus,
                       size: 14,
                       color: accent,
                     ),
@@ -584,7 +584,7 @@ class _OrderScreenState extends State<OrderScreen> {
                   minimumSize: const Size(32, 32),
                   onPressed: () => _removeStop(d),
                   child: Icon(
-                    PhosphorIcons.minusCircle(PhosphorIconsStyle.fill),
+                    PhosphorIconsFill.minusCircle,
                     color: p.red,
                     size: 24,
                   ),
@@ -594,7 +594,7 @@ class _OrderScreenState extends State<OrderScreen> {
         GroupField(
           controller: f.name,
           placeholder: 'Nom du destinataire',
-          icon: CupertinoIcons.person,
+          icon: PhosphorIconsBold.user,
         ),
         PhoneField(
           controller: f.phone,
@@ -612,7 +612,7 @@ class _OrderScreenState extends State<OrderScreen> {
             GroupField(
               controller: f.cod,
               placeholder: 'Montant à encaisser',
-              icon: CupertinoIcons.creditcard,
+              icon: PhosphorIconsBold.creditCard,
               keyboardType: TextInputType.number,
               validator: _amount,
             ),

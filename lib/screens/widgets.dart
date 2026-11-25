@@ -233,9 +233,9 @@ class _Dot extends StatelessWidget {
 /// Livreur (moto)
 /// Icône de l'engin du livreur (MOTO, CAR, CARGO)
 IconData vehicleIcon(String? vehicle) => switch (vehicle) {
-  'CAR' => PhosphorIcons.carProfile(PhosphorIconsStyle.fill),
-  'CARGO' => PhosphorIcons.truck(PhosphorIconsStyle.fill),
-  _ => PhosphorIcons.motorcycle(PhosphorIconsStyle.fill),
+  'CAR' => PhosphorIconsFill.carProfile,
+  'CARGO' => PhosphorIconsFill.truck,
+  _ => PhosphorIconsFill.motorcycle,
 };
 
 /// Livreur de la course suivie : l'icône de son engin dans une pastille
@@ -351,7 +351,7 @@ Marker clientMarker(LatLng p) => Marker(
         ],
       ),
       child: const Icon(
-        CupertinoIcons.person_fill,
+        PhosphorIconsFill.user,
         color: Colors.white,
         size: 20,
       ),
@@ -957,7 +957,7 @@ class GroupRow extends StatelessWidget {
               if (chevron) ...[
                 const SizedBox(width: 6),
                 Icon(
-                  CupertinoIcons.chevron_forward,
+                  PhosphorIconsBold.caretRight,
                   size: 17,
                   color: p.tertiaryLabel,
                 ),
@@ -1123,7 +1123,7 @@ class CashPill extends StatelessWidget {
   Widget build(BuildContext context) => Pill(
     'Espèces',
     color: Palette.of(context).green,
-    icon: CupertinoIcons.money_dollar_circle,
+    icon: PhosphorIconsBold.money,
   );
 }
 
@@ -1138,7 +1138,7 @@ class CodBadge extends StatelessWidget {
   Widget build(BuildContext context) => Pill(
     'Encaisser ${formatMoney(amount, currency)}',
     color: accentDeep,
-    icon: CupertinoIcons.creditcard,
+    icon: PhosphorIconsBold.creditCard,
   );
 }
 
@@ -1307,7 +1307,7 @@ class DeliveryCard extends StatelessWidget {
                   Pill(
                     '${stops.length} arrêts',
                     color: p.blue,
-                    icon: CupertinoIcons.map_pin_ellipse,
+                    icon: PhosphorIconsBold.mapPinArea,
                   ),
                 const Spacer(),
                 Text(
@@ -1546,7 +1546,7 @@ class LargeTitlePage extends StatelessWidget {
             padding: EdgeInsets.zero,
             minimumSize: const Size(44, 44),
             onPressed: () => Navigator.maybePop(context),
-            child: Icon(CupertinoIcons.back, color: accent, size: 28),
+            child: Icon(PhosphorIconsBold.caretLeft, color: accent, size: 28),
           )
         : null;
     return Scaffold(
@@ -1712,7 +1712,7 @@ class IndependentBadge extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
-          CupertinoIcons.person_badge_minus_fill,
+          PhosphorIconsFill.userMinus,
           size: large ? 15 : 12,
           color: const Color(0xFF1F1300),
         ),
@@ -1807,7 +1807,7 @@ Future<void> showAccountSheet(
               children: [
                 GroupRow(
                   leading: IconBadge(
-                    CupertinoIcons.person_crop_circle_fill,
+                    PhosphorIconsFill.userCircle,
                     color: accent,
                   ),
                   title: 'Mon profil',

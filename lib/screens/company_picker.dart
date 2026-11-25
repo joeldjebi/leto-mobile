@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -125,7 +126,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
           _tile(
             p,
             selected: widget.current == null,
-            icon: CupertinoIcons.bolt_fill,
+            icon: PhosphorIconsFill.lightning,
             title: 'Toutes les entreprises',
             subtitle: 'Le livreur disponible le plus proche · grille LETO',
             onTap: () => Navigator.pop(context, ('all', null)),
@@ -202,7 +203,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
                 ),
               ),
               child: const Icon(
-                Icons.two_wheeler,
+                PhosphorIconsFill.moped,
                 color: Color(0xFF1F1300),
                 size: 24,
               ),
@@ -228,7 +229,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
               ),
             ),
             if (selected)
-              const Icon(CupertinoIcons.checkmark_circle_fill, color: accent),
+              const Icon(PhosphorIconsFill.checkCircle, color: accent),
           ],
         ),
       ),
@@ -286,7 +287,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
             ),
           ),
           if (selected)
-            const Icon(CupertinoIcons.checkmark_circle_fill, color: accent),
+            const Icon(PhosphorIconsFill.checkCircle, color: accent),
         ],
       ),
     ),
@@ -365,7 +366,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
                           : 'Entreprise favorite',
                       onPressed: () => _toggleFavorite(c),
                       icon: Icon(
-                        fav ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                        fav ? PhosphorIconsFill.star : PhosphorIconsBold.star,
                         color: fav ? p.yellow : p.tertiaryLabel,
                       ),
                     ),

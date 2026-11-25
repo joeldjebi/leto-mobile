@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
@@ -112,7 +113,7 @@ class _SearchingHeaderState extends State<SearchingHeader>
                         color: letoFill,
                       ),
                       child: const Icon(
-                        CupertinoIcons.search,
+                        PhosphorIconsBold.magnifyingGlass,
                         size: 18,
                         color: Colors.white,
                       ),
@@ -149,7 +150,7 @@ class _SearchingHeaderState extends State<SearchingHeader>
           runSpacing: 8,
           children: [
             _Chip(
-              icon: Icons.two_wheeler,
+              icon: PhosphorIconsFill.moped,
               text: n == 0
                   ? 'Aucun livreur autour'
                   : '$n livreur${n > 1 ? 's' : ''} à proximité',
@@ -157,12 +158,12 @@ class _SearchingHeaderState extends State<SearchingHeader>
             ),
             if (left != null && left > Duration.zero)
               _Chip(
-                icon: CupertinoIcons.timer,
+                icon: PhosphorIconsBold.timer,
                 text: 'Expire dans ${left.inMinutes + 1} min',
                 color: accent,
               ),
             _Chip(
-              icon: CupertinoIcons.tag_fill,
+              icon: PhosphorIconsFill.tag,
               text: widget.price,
               color: accent,
             ),
