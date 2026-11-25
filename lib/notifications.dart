@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
     hide NotificationVisibility;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -14,6 +15,7 @@ import 'api.dart';
 import 'countries.dart';
 import 'live_activity.dart';
 import 'realtime.dart';
+import 'screens/order_alert.dart';
 
 /// Les 3 sons LETO intégrés à l'app (assets/sounds/ID.wav)
 const builtinSounds = ['leto_course', 'leto_affectation', 'leto_alerte'];
@@ -78,6 +80,20 @@ class LetoNotifier {
           >()
           ?.createNotificationChannel(_channel);
       if (Platform.isIOS) await _installBuiltinSoundsIOS();
+      // iPhone : sons de l'app joués même en mode silencieux et par-dessus la musique (sinon iOS les coupe)
+      await AudioPlayer.global.setAudioContext(
+        AudioContext(
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: const {AVAudioSessionOptions.duckOthers},
+          ),
+          android: const AudioContextAndroid(
+            usageType: AndroidUsageType.notificationRingtone,
+            contentType: AndroidContentType.sonification,
+            audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+          ),
+        ),
+      );
       if (Platform.isAndroid) {
         FlutterForegroundTask.initCommunicationPort();
         FlutterForegroundTask.init(
@@ -156,6 +172,7 @@ class LetoNotifier {
   void detach() {
     _detach?.call();
     _detach = null;
+    OrderAlert.instance.reset();
     stopKeepAlive();
   }
 
@@ -204,7 +221,17 @@ class LetoNotifier {
     }
   }
 
-  /// Joue un son LETO (aperçu ou notification sur Android)
+  Future<void> stopSound() async {
+    try {
+      await _player.stop();
+    } catch (_) {}
+  }
+
+  /// App au premier plan (l'alerte de commande remplace alors la notification système)
+  bool get _foreground =>
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+
+  /// Joue un son LETO (aperçu, alerte de commande, notification sur Android)
   Future<void> play(String soundId) async {
     try {
       await _player.stop();
@@ -228,6 +255,11 @@ class LetoNotifier {
     final id = (p['id'] ?? '${p['type']}${p['deliveryId']}') as String;
     if (!_seen.add(id)) return; // déjà affichée (reconnexion)
     final soundId = (p['sound']?['id'] as String?) ?? builtinSounds.first;
+    // Livreur : nouvelle commande en alerte plein écran (affichée au retour dans l'app si elle arrive en arrière-plan)
+    if (p['type'] == 'NEW_ORDER' && Api.instance.role == 'DRIVER') {
+      OrderAlert.instance.add(p);
+      if (_foreground) return;
+    }
     final iosSound =
         _custom.containsKey(soundId) || builtinSounds.contains(soundId)
         ? '$soundId.wav'

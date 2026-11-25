@@ -23,6 +23,7 @@ import 'driver_course_sheet.dart';
 import 'independent_screens.dart';
 import 'logbook_screen.dart';
 import 'cancel_reasons.dart';
+import 'order_alert.dart';
 import 'widgets.dart';
 
 /// Dev / tests : photo déjà envoyée utilisée à la place de l'appareil photo (--dart-define=DEV_PHOTO=/uploads/x.jpg)
@@ -73,7 +74,17 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   List<Map<String, dynamic>> get _active => _mine
       .where((d) => ['ACCEPTED', 'PICKED_UP'].contains(d['status']))
       .toList();
-  Map<String, dynamic>? get _current => _active.isEmpty ? null : _active.first;
+
+  /// Course affichée dans « En cours » (choisie parmi les courses en cours, sinon la première)
+  String? _selectedId;
+  Map<String, dynamic>? get _current => _active.isEmpty
+      ? null
+      : _active.where((d) => d['id'] == _selectedId).firstOrNull ??
+            _active.first;
+
+  /// Règles de répartition (Tarifs et règles) : courses en même temps, rayon du livreur occupé
+  int _maxActive = 3;
+  num _busyRadiusKm = 2;
 
   List<Map<String, dynamic>> _stopsOf(Map d) =>
       ((d['stops'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -107,10 +118,12 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     _load();
     api
         .grid()
-        .then(
-          (g) => _absenceWaitMin = (g['absenceWaitMin'] as num?)?.ceil() ?? 5,
-        )
-        .catchError((_) => 5);
+        .then((g) {
+          _absenceWaitMin = (g['absenceWaitMin'] as num?)?.ceil() ?? 5;
+          _maxActive = (g['maxActiveCourses'] as num?)?.toInt() ?? 3;
+          _busyRadiusKm = (g['busyRadiusKm'] as num?) ?? 2;
+        })
+        .catchError((_) {});
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _load());
     // Rafraîchit les compteurs (« il y a X sec. », attente sur place)
     _clock = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -128,6 +141,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.on('delivery:assigned', _onAssigned);
     s.on('delivery:reordered', _onReordered);
     s.on('client:location', _onClientLocation);
+    OrderAlert.instance.accepted.addListener(_onAlertAccepted);
+    OrderAlert.instance.open.addListener(_onAlertOpen);
     SharedPreferences.getInstance().then((p) {
       if (p.getBool('driver_online') == true) _goOnline();
     });
@@ -152,10 +167,46 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.off('remittance:updated', _onRemittance);
     s.off('delivery:assigned', _onAssigned);
     s.off('delivery:reordered', _onReordered);
+    OrderAlert.instance.accepted.removeListener(_onAlertAccepted);
+    OrderAlert.instance.open.removeListener(_onAlertOpen);
     super.dispose();
   }
 
   void _onChanged(dynamic _) => _load();
+
+  /// Course acceptée depuis l'alerte plein écran : elle s'ouvre dans « En cours »
+  Future<void> _onAlertAccepted() async {
+    final id = OrderAlert.instance.accepted.value;
+    if (id == null) return;
+    _selectedId = id;
+    await _load();
+    if (!mounted) return;
+    _setTab(1);
+    showInfo(
+      context,
+      _active.length > 1
+          ? 'Course acceptée · ${_active.length} courses en cours'
+          : 'Course acceptée — direction le départ',
+    );
+  }
+
+  /// « Voir le détail » depuis l'alerte : fiche de la course (proposer un prix…)
+  Future<void> _onAlertOpen() async {
+    final id = OrderAlert.instance.open.value;
+    if (id == null) return;
+    var d = _available.where((x) => x['id'] == id).firstOrNull;
+    if (d == null) {
+      await _load();
+      d = _available.where((x) => x['id'] == id).firstOrNull;
+    }
+    if (!mounted) return;
+    if (d == null) {
+      showError(context, 'Cette course n’est plus disponible');
+      return;
+    }
+    _setTab(0);
+    _openCourse(d);
+  }
 
   /// L'entreprise a changé l'ordre de passage des arrêts
   Future<void> _onReordered(dynamic _) async {
@@ -395,6 +446,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         _blocked = billing['ok'] == false ? billing['reason'] as String? : null;
         _available = r[0].cast<Map<String, dynamic>>();
         _mine = r[1].cast<Map<String, dynamic>>();
+        // Alerte d'une course prise entre-temps par un autre livreur : retirée
+        OrderAlert.instance.keepOnly(_available.map((d) => d['id'] as String));
         _myOffers = {
           for (final o in r[2].cast<Map<String, dynamic>>())
             o['deliveryId'] as String: o,
@@ -619,6 +672,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     await _load();
     if (!mounted) return;
     if (result == 'accepted') {
+      _selectedId = d['id'] as String?;
       _setTab(1);
       showInfo(context, 'Course acceptée — direction le départ');
     } else if (result == 'offered') {
@@ -1078,7 +1132,11 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       _title(
         'Courses disponibles',
         p,
-        subtitle: _available.isEmpty
+        subtitle: _active.length >= _maxActive
+            ? 'Vous avez $_maxActive courses en cours (le maximum) : terminez-en une pour en accepter d’autres.'
+            : _active.isNotEmpty
+            ? 'Pendant votre course : celles sur votre trajet ou à moins de ${km(_busyRadiusKm)} de vous.'
+            : _available.isEmpty
             ? 'Aucune course pour le moment. Elles arrivent en temps réel.'
             : 'En temps réel · les plus proches d’abord',
       ),
@@ -1087,13 +1145,110 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           d: d,
           distance: _me == null ? null : _distanceTo(d),
           myOffer: _myOffers[d['id']],
+          match: d['match'] as Map?,
           onTap: () => _openCourse(d),
         ),
     ];
   }
 
   // ----- En cours -----
-  List<Widget> _activeTab(Palette p) {
+  /// Toutes les courses en cours : sélecteur au-dessus du détail de la course choisie
+  List<Widget> _activeTab(Palette p) => [
+    if (_active.length > 1) _courseSwitcher(p),
+    ..._activeDetail(p),
+  ];
+
+  Widget _courseSwitcher(Palette p) {
+    final cur = _current?['id'];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+            child: Text(
+              '${_active.length} courses en cours',
+              style: TextStyles.headline.copyWith(color: p.label),
+            ),
+          ),
+          SizedBox(
+            height: 84,
+            child: ListView.separated(
+              key: const Key('active-switcher'),
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _active.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                final d = _active[i];
+                final on = d['id'] == cur;
+                final picked = d['status'] == 'PICKED_UP';
+                final stop = picked ? _nextStop(d) : null;
+                final where = picked
+                    ? (stop?['commune'] ?? stop?['recipientName'] ?? 'Livraison')
+                    : (d['pickupCommune'] ?? 'Départ');
+                final accent = Theme.of(context).colorScheme.primary;
+                return GestureDetector(
+                  onTap: () {
+                    hapticTap();
+                    setState(() => _selectedId = d['id'] as String);
+                    _refreshActiveRoute();
+                    DeliveryLive.instance.sync(_current, driver: true, etaMin: _nav.etaMin);
+                  },
+                  child: AnimatedContainer(
+                    duration: Motion.fast,
+                    width: 172,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: on ? accent.withValues(alpha: 0.12) : p.card,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: on ? accent : p.separator, width: on ? 2 : 1),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              picked ? CupertinoIcons.cube_box_fill : CupertinoIcons.arrow_up_circle_fill,
+                              size: 15,
+                              color: picked ? p.red : p.green,
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                picked ? 'À livrer' : 'À récupérer',
+                                style: TextStyles.footnote.copyWith(color: p.secondaryLabel, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            Text(
+                              formatMoney(d['price'], d['currency']),
+                              style: TextStyles.footnote.copyWith(color: p.label, fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$where',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyles.headline.copyWith(color: p.label),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _activeDetail(Palette p) {
     final d = _current;
     if (d == null) {
       return [
@@ -1781,12 +1936,14 @@ class _OrderCard extends StatelessWidget {
   final Map<String, dynamic> d;
   final double? distance;
   final Map<String, dynamic>? myOffer;
+  final Map? match;
   final VoidCallback onTap;
   const _OrderCard({
     required this.d,
     required this.distance,
     required this.myOffer,
     required this.onTap,
+    this.match,
   });
 
   @override
@@ -1822,6 +1979,8 @@ class _OrderCard extends StatelessWidget {
                   Pill('Express', color: p.red, icon: CupertinoIcons.bolt_fill),
                 if (d['speed'] == 'SCHEDULED')
                   Pill('Dans 2 h', color: p.blue, icon: CupertinoIcons.clock),
+                if (match?['kind'] == 'ROUTE')
+                  Pill('Sur votre trajet', color: p.green, icon: CupertinoIcons.arrow_branch),
                 const Spacer(),
                 Icon(vehicleIcons[d['vehicleType']], color: p.label, size: 26),
               ],

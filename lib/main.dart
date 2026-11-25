@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'countries.dart';
 import 'notifications.dart';
+import 'screens/order_alert.dart';
 import 'screens/client_home.dart';
 import 'screens/driver_home.dart';
 import 'screens/independent_screens.dart';
@@ -53,6 +54,8 @@ class LetoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'LETO',
+      // Alerte « nouvelle commande » du livreur : au-dessus de tous les écrans
+      navigatorKey: rootNavigatorKey,
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
