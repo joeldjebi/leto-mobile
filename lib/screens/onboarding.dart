@@ -61,12 +61,12 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final reduce = MediaQuery.of(context).disableAnimations;
-    // Identique au splash natif : même violet uni, même symbole blanc à la même taille et à la
+    // Identique au splash natif : même fond noir, même soleil à la même taille et à la
     // même place (aucune tuile, aucun texte). Seul un léger « battement » du symbole s'ajoute.
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: accent,
+        backgroundColor: ink,
         body: Center(
           child: AnimatedBuilder(
             animation: _c,
@@ -86,8 +86,8 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 /// Taille du symbole du splash (dp) : celle du splash natif (assets/brand/splash_logo.png,
-/// symbole de 440 px sur 1152 px affichés à 288 dp)
-const splashMarkSize = 110.0;
+/// soleil de 800 unités dans une image de 1160 unités affichée à 288 dp)
+const splashMarkSize = 199.0;
 
 class _Page {
   final String title;

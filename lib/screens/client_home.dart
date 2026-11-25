@@ -542,7 +542,10 @@ class _ClientHomeState extends State<ClientHome> {
                   ),
                 const SizedBox(height: 10),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: ink),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: ink,
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: () => Navigator.pop(ctx),
                   child: const Text('Terminé'),
                 ),

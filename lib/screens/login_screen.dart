@@ -88,30 +88,32 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: 92,
                 height: 92,
                 decoration: ShapeDecoration(
-                  gradient: const LinearGradient(
-                    colors: [accentLight, accent],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  // Tuile de l'icône de l'app : soleil sur fond noir
+                  color: ink,
                   shape: RoundedSuperellipseBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),
                   shadows: const [
                     BoxShadow(
-                      color: Color(0x406D28D9),
+                      color: Color(0x40000000),
                       blurRadius: 24,
                       offset: Offset(0, 10),
                     ),
                   ],
                 ),
-                child: const Center(child: LetoMark.onAccent(size: 56)),
+                child: const Center(child: LetoMark.onAccent(size: 80)),
               ),
             ),
             const SizedBox(height: 20),
             Text(
               'LETO',
               textAlign: TextAlign.center,
-              style: TextStyles.largeTitle.copyWith(color: p.label),
+              style: TextStyles.largeTitle.copyWith(
+                color: p.label,
+                fontFamily: 'Unbounded',
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1,
+              ),
             ),
             const SizedBox(height: 4),
             Text(

@@ -60,7 +60,8 @@ class LetoNotifier {
     try {
       await _plugin.initialize(
         settings: const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          // Petite icône de notification : soleil en silhouette blanche (Android exige une icône monochrome)
+          android: AndroidInitializationSettings('@drawable/ic_notification'),
           iOS: DarwinInitializationSettings(
             requestAlertPermission: false,
             requestBadgePermission: false,
@@ -280,6 +281,8 @@ class LetoNotifier {
             priority: Priority.high,
             playSound: false,
             category: AndroidNotificationCategory.message,
+            // Petite icône teintée à l'orange de la charte
+            color: const Color(0xFFE86A17),
             visibility: NotificationVisibility.public,
           ),
           iOS: DarwinNotificationDetails(

@@ -15,7 +15,7 @@ extension LiveActivitiesAppAttributes {
 
 /// Même groupe que l'app (Xcode › Signing & Capabilities › App Groups)
 let letoDefaults = UserDefaults(suiteName: "group.ci.leto.leto")!
-let letoViolet = Color(red: 0.427, green: 0.157, blue: 0.851)
+let letoViolet = Color(red: 0.910, green: 0.416, blue: 0.090) // orange vif de la charte (#E86A17)
 
 /// Valeurs lues pour une Live Activity
 struct LetoLiveValues {

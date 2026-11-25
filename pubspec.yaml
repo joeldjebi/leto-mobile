@@ -89,6 +89,11 @@ flutter:
           weight: 600
         - asset: assets/fonts/Inter-Bold.ttf
           weight: 700
+    # Mot « LETO » et grands titres de marque (charte)
+    - family: Unbounded
+      fonts:
+        - asset: assets/fonts/Unbounded-Bold.ttf
+          weight: 700
     - family: BarlowCondensed
       fonts:
         - asset: assets/fonts/BarlowCondensed-SemiBold.ttf
@@ -134,21 +139,21 @@ flutter:
 
 # Écran de démarrage natif (flutter pub run flutter_native_splash:create)
 flutter_native_splash:
-  color: "#6D28D9"
+  color: "#1A1A1A"
   image: assets/brand/splash_logo.png
   android_12:
-    color: "#6D28D9"
-    icon_background_color: "#6D28D9"
+    color: "#1A1A1A"
+    icon_background_color: "#1A1A1A"
     image: assets/brand/splash_logo.png
   fullscreen: false
   web: false
 
-# Icône de l'app (dart run flutter_launcher_icons) : symbole LETO « Le code »
+# Icône de l'app (dart run flutter_launcher_icons) : soleil LETO sur fond noir (brand/sun-icon.svg)
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: assets/brand/app_icon.png
   remove_alpha_ios: true
-  adaptive_icon_background: "#6D28D9"
+  adaptive_icon_background: "#1A1A1A"
   adaptive_icon_foreground: assets/brand/app_icon_fg.png
   min_sdk_android: 21

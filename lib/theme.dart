@@ -2,26 +2,38 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 // ============================================================================
-// Identité LETO : violet (accent), noir (texte, éléments forts), gris (surfaces)
+// Identité LETO « soleil » : jaune soleil, orange, orange vif, noir, blanc
+// (charte : #FBC02D · #F28C1A · #E86A17 · #1A1A1A · #FFFFFF)
 // ============================================================================
 
-/// Violet LETO : boutons principaux, sélection, liens
-const accent = Color(0xFF6D28D9);
+/// Couleurs de la charte
+const sunYellow = Color(0xFFFBC02D);
+const sunOrange = Color(0xFFF28C1A);
+const sunOrangeVif = Color(0xFFE86A17);
 
-/// Violet clair (dégradés, mode sombre)
-const accentLight = Color(0xFF8B5CF6);
+/// Accent : liens, sélection, icônes actives, textes mis en avant.
+/// Orange foncé dérivé de la charte : le jaune et l'orange sont trop clairs pour du texte sur blanc.
+const accent = Color(0xFFC2410C);
 
-/// Violet profond (textes sur fond violet pâle)
-const accentDeep = Color(0xFF4C1D95);
+/// Accent clair (dégradés, mode sombre)
+const accentLight = sunOrange;
 
-/// Noir LETO (titres, icônes fortes)
-const ink = Color(0xFF121214);
+/// Accent profond (textes sur fond jaune pâle)
+const accentDeep = Color(0xFF9A3412);
+
+/// Noir LETO (titres, icônes fortes, texte sur les boutons jaunes)
+const ink = Color(0xFF1A1A1A);
+
+/// Bouton principal : jaune soleil, texte noir
+const primaryButton = sunYellow;
+const onPrimaryButton = ink;
 
 /// Ancien nom conservé pour compatibilité
 const letoOrange = accent;
 
+/// Dégradé des rayons du soleil (jaune → orange vif)
 const letoGradient = LinearGradient(
-  colors: [accentLight, accent],
+  colors: [sunYellow, sunOrangeVif],
   begin: Alignment.topLeft,
   end: Alignment.bottomRight,
 );
@@ -71,7 +83,7 @@ class Palette extends ThemeExtension<Palette> {
     separator: Color(0xFFE6E6EB),
     fill: Color(0xFFF0F0F3),
     glass: Color(0xFAFFFFFF),
-    accentSoft: Color(0xFFF1EBFE),
+    accentSoft: Color(0xFFFFF4D6),
     green: Color(0xFF16A34A),
     red: Color(0xFFE11D48),
     blue: Color(0xFF2563EB),
@@ -88,7 +100,7 @@ class Palette extends ThemeExtension<Palette> {
     separator: Color(0xFF2A2A2F),
     fill: Color(0xFF232327),
     glass: Color(0xF518181B),
-    accentSoft: Color(0xFF2A1D4A),
+    accentSoft: Color(0xFF3A2A0E),
     green: Color(0xFF22C55E),
     red: Color(0xFFFB7185),
     blue: Color(0xFF60A5FA),
@@ -313,10 +325,11 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: accent,
-        foregroundColor: Colors.white,
-        disabledBackgroundColor: accent.withValues(alpha: 0.35),
-        disabledForegroundColor: Colors.white,
+        // Bouton principal : jaune soleil, texte noir (contraste élevé, couleur de la charte)
+        backgroundColor: primaryButton,
+        foregroundColor: onPrimaryButton,
+        disabledBackgroundColor: primaryButton.withValues(alpha: 0.4),
+        disabledForegroundColor: onPrimaryButton.withValues(alpha: 0.5),
         minimumSize: const Size.fromHeight(50),
         shape: pill,
         textStyle: TextStyles.headline.copyWith(fontSize: 16),

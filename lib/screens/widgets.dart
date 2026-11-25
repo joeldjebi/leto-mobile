@@ -302,7 +302,7 @@ class _HeadingPainter extends CustomPainter {
         ..strokeWidth = 3
         ..strokeJoin = StrokeJoin.round,
     );
-    canvas.drawPath(path, Paint()..color = const Color(0xFF6D28D9));
+    canvas.drawPath(path, Paint()..color = accent);
   }
 
   @override

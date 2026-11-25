@@ -512,6 +512,7 @@ class _OrderAlertViewState extends State<_OrderAlertView>
                                       : _accept,
                                   style: FilledButton.styleFrom(
                                     backgroundColor: p.green,
+                                    foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),

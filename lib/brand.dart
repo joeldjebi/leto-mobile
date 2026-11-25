@@ -1,65 +1,138 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
-/// Symbole LETO « Le code » : quatre points en L, le dernier validé (code de livraison).
-/// Dessiné en vectoriel (même géométrie que brand/leto-mark.svg), centré dans [size].
+/// Symbole LETO : le soleil (8 rayons aux couleurs de la charte, 8 rayons fins, disque jaune, colis).
+/// Dessiné en vectoriel, même géométrie que brand/sun.svg (repère de 800 unités centré).
 class LetoMark extends StatelessWidget {
   final double size;
-  final Color dots;
-  final Color accent;
+
+  /// Couleur des rayons fins : noir sur fond clair, blanc sur fond sombre
+  final Color ink;
   const LetoMark({
     super.key,
     this.size = 48,
-    this.dots = const Color(0xFF6D28D9),
-    this.accent = const Color(0xFF22C55E),
+    this.ink = const Color(0xFF1A1A1A),
   });
 
-  /// Version blanche (sur fond violet)
-  const LetoMark.onAccent({super.key, this.size = 48})
-    : dots = Colors.white,
-      accent = const Color(0xFF4ADE80);
+  /// Version pour fond sombre (rayons fins blancs)
+  const LetoMark.onAccent({super.key, this.size = 48}) : ink = Colors.white;
 
   @override
   Widget build(BuildContext context) => Semantics(
     label: 'LETO',
-    child: CustomPaint(
-      size: Size.square(size),
-      painter: _MarkPainter(dots, accent),
-    ),
+    child: CustomPaint(size: Size.square(size), painter: _SunPainter(ink)),
   );
 }
 
-class _MarkPainter extends CustomPainter {
-  final Color dots, accent;
-  _MarkPainter(this.dots, this.accent);
+class _SunPainter extends CustomPainter {
+  final Color ink;
+  _SunPainter(this.ink);
+
+  static const _rays = [
+    Color(0xFFFBC02D),
+    Color(0xFFF9A825),
+    Color(0xFFF28C1A),
+    Color(0xFFE86A17),
+    Color(0xFFE86A17),
+    Color(0xFFF28C1A),
+    Color(0xFFF9A825),
+    Color(0xFFFBC02D),
+  ];
 
   @override
   void paint(Canvas canvas, Size s) {
-    // Contenu du dessin : x 19 → 95.5, y 11 → 89 (repère 100) ; centré dans la zone
-    final k = s.width / 80;
-    canvas.translate(s.width / 2 - 57.25 * k, s.height / 2 - 50 * k);
+    final k = s.width / 800;
+    canvas.translate(s.width / 2, s.height / 2);
     canvas.scale(k);
-    final d = Paint()..color = dots;
-    final a = Paint()..color = accent;
-    canvas.drawCircle(const Offset(30, 22), 11, d);
-    canvas.drawCircle(const Offset(30, 50), 11, d);
-    canvas.drawCircle(const Offset(30, 78), 11, d);
-    canvas.drawCircle(const Offset(60, 78), 11, a);
-    final check = Path()
-      ..moveTo(74, 46)
-      ..lineTo(80, 52)
-      ..lineTo(92, 38);
+    // Rayons colorés (effilés vers le centre, bout arrondi)
+    final ray = Path()
+      ..moveTo(-24, -192)
+      ..quadraticBezierTo(0, -186, 24, -192)
+      ..lineTo(35, -311)
+      ..arcToPoint(
+        const Offset(-35, -311),
+        radius: const Radius.circular(35),
+        clockwise: false,
+      )
+      ..close();
+    for (var i = 0; i < 8; i++) {
+      canvas.save();
+      canvas.rotate(i * math.pi / 4);
+      canvas.drawPath(ray, Paint()..color = _rays[i]);
+      canvas.restore();
+    }
+    // Rayons fins, alternativement longs et courts
+    final thin = Paint()..color = ink;
+    for (var i = 0; i < 8; i++) {
+      final r2 = i.isEven ? 384.0 : 344.0;
+      canvas.save();
+      canvas.rotate(math.pi / 8 + i * math.pi / 4);
+      canvas.drawRRect(
+        RRect.fromLTRBR(-11, -r2, 11, -202, const Radius.circular(11)),
+        thin,
+      );
+      canvas.restore();
+    }
+    canvas.drawCircle(
+      Offset.zero,
+      155,
+      Paint()..color = const Color(0xFFFBC02D),
+    );
+    // Colis isométrique
+    final k1 = Paint()..color = const Color(0xFF1A1A1A);
+    final yellow = Paint()..color = const Color(0xFFFBC02D);
     canvas.drawPath(
-      check,
-      Paint()
-        ..color = accent
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 7
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
+      Path()
+        ..moveTo(0, -89)
+        ..lineTo(80, -43)
+        ..lineTo(80, 47)
+        ..lineTo(0, 93)
+        ..lineTo(-80, 47)
+        ..lineTo(-80, -43)
+        ..close(),
+      k1,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(4, 3)
+        ..lineTo(72, -36)
+        ..lineTo(72, 43)
+        ..lineTo(4, 82)
+        ..close(),
+      Paint()..color = const Color(0xFFF28C1A),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(-72, -40)
+        ..lineTo(-68, -42)
+        ..lineTo(2, -2)
+        ..lineTo(2, 82)
+        ..lineTo(-2, 82)
+        ..lineTo(-2, 2)
+        ..close(),
+      yellow,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(2, -2)
+        ..lineTo(70, -41)
+        ..lineTo(72, -37)
+        ..lineTo(4, 2)
+        ..close(),
+      yellow,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(-44, -60)
+        ..lineTo(26, -20)
+        ..lineTo(46, -32)
+        ..lineTo(-24, -72)
+        ..close(),
+      yellow,
     );
   }
 
   @override
-  bool shouldRepaint(_MarkPainter old) =>
-      old.dots != dots || old.accent != accent;
+  bool shouldRepaint(_SunPainter old) => old.ink != ink;
 }

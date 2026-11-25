@@ -1862,7 +1862,10 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           child: Column(
             children: [
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: p.green),
+                style: FilledButton.styleFrom(
+                  backgroundColor: p.green,
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: () => _deliver(d, next),
                 child: Text(
                   api.deliveryCodeEnabled
