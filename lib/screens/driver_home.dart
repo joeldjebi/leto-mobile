@@ -50,6 +50,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   Timer? _timer;
   Timer? _heartbeat;
   Timer? _clock;
+
   /// Surveille la connexion temps réel (iPhone : coupée en arrière-plan, parfois sans le signaler)
   Timer? _watchdog;
   DateTime? _pausedAt;
@@ -513,12 +514,15 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   /// Retour au premier plan (après Google Maps, un appel…) : connexion et GPS relancés
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
       _pausedAt ??= DateTime.now();
       return;
     }
     if (state != AppLifecycleState.resumed) return;
-    final away = _pausedAt == null ? Duration.zero : DateTime.now().difference(_pausedAt!);
+    final away = _pausedAt == null
+        ? Duration.zero
+        : DateTime.now().difference(_pausedAt!);
     _pausedAt = null;
     final s = Realtime.instance.socket;
     // iPhone : après quelques secondes en arrière-plan, la connexion peut paraître ouverte alors
@@ -883,13 +887,27 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   }
 
   Future<void> _deliver(Map d, Map stop) async {
+    // Marchandise payée en ligne (PI-SPI…) : remise seulement après confirmation du vendeur
+    if (stop['paymentRequired'] == true && stop['paymentConfirmedAt'] == null) {
+      showError(
+        context,
+        'Paiement de la marchandise pas encore confirmé par le vendeur : patientez avant de remettre le colis',
+      );
+      return;
+    }
     final cod = (stop['codAmount'] ?? 0) as num;
-    if (cod > 0 &&
+    final fee = (stop['feeDue'] ?? 0) as num;
+    final total = cod + fee;
+    if (total > 0 &&
         !await confirm(
           context,
           'Encaissement',
           message:
-              'Avez-vous encaissé ${formatMoney(cod, d['currency'])} auprès de ${stop['recipientName']} ?',
+              'Avez-vous encaissé ${formatMoney(total, d['currency'])} auprès de ${stop['recipientName']} ?${fee > 0 && cod > 0
+                  ? ' (livraison ${formatMoney(fee, d['currency'])} + marchandise ${formatMoney(cod, d['currency'])})'
+                  : fee > 0
+                  ? ' (prix de la livraison)'
+                  : ''}',
           ok: 'Oui, encaissé',
         )) {
       return;
@@ -2010,6 +2028,19 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               trailing: _phone(d['pickupPhone'], p, () => _call(d, null)),
             ),
             ?_clientRow(d, p),
+            if (d['feePaidBy'] == 'RECIPIENT' &&
+                back.fold<num>(0, (t, s) => t + ((s['feeDue'] ?? 0) as num)) >
+                    0)
+              GroupRow(
+                leading: const IconBadge(
+                  PhosphorIconsFill.creditCard,
+                  color: accentDeep,
+                ),
+                title:
+                    'Encaisser ${formatMoney(back.fold<num>(0, (t, s) => t + ((s['feeDue'] ?? 0) as num)), d['currency'])} auprès de l’expéditeur',
+                subtitle:
+                    'Livraison non payée par les destinataires de ces colis',
+              ),
             for (final s in back)
               GroupRow(
                 leading: Icon(
@@ -2107,14 +2138,37 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                 leading: AddressPhoto(next['photoUrl'], size: 44),
                 title: 'Photo du lieu',
               ),
-            if (cod > 0)
+            if (cod > 0 || ((next['feeDue'] ?? 0) as num) > 0)
               GroupRow(
                 leading: const IconBadge(
                   PhosphorIconsFill.creditCard,
                   color: accentDeep,
                 ),
-                title: 'Encaisser ${formatMoney(cod, d['currency'])}',
-                subtitle: 'Avant de remettre le colis',
+                title:
+                    'Encaisser ${formatMoney(cod + ((next['feeDue'] ?? 0) as num), d['currency'])}',
+                subtitle: [
+                  if (((next['feeDue'] ?? 0) as num) > 0)
+                    'livraison ${formatMoney(next['feeDue'], d['currency'])} (payée par le destinataire)',
+                  if (cod > 0) 'marchandise ${formatMoney(cod, d['currency'])}',
+                  'avant de remettre le colis',
+                ].join(' · '),
+              ),
+            if (next['paymentRequired'] == true)
+              GroupRow(
+                leading: IconBadge(
+                  next['paymentConfirmedAt'] != null
+                      ? PhosphorIconsFill.sealCheck
+                      : PhosphorIconsBold.hourglassMedium,
+                  color: next['paymentConfirmedAt'] != null
+                      ? p.green
+                      : p.yellow,
+                ),
+                title: next['paymentConfirmedAt'] != null
+                    ? 'Marchandise payée'
+                    : 'Paiement de la marchandise en attente',
+                subtitle: next['paymentConfirmedAt'] != null
+                    ? 'Vous pouvez remettre le colis'
+                    : 'Le vendeur confirme le paiement en ligne : ne remettez pas le colis avant',
               ),
             if ((next['attempt'] ?? 1) > 1)
               GroupRow(
@@ -2376,7 +2430,11 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     final toRemit = (b['toRemit'] ?? 0) as num;
     final pending = (b['pending'] ?? 0) as num;
     final pct = (b['sharePercent'] ?? 0) as num;
-    const methods = {'CASH': 'Espèces', 'MOBILE_MONEY': 'Mobile Money', 'PAYROLL': 'Déduit de la paie'};
+    const methods = {
+      'CASH': 'Espèces',
+      'MOBILE_MONEY': 'Mobile Money',
+      'PAYROLL': 'Déduit de la paie',
+    };
     const statuses = {
       'PENDING': 'À confirmer',
       'CONFIRMED': 'Confirmé',

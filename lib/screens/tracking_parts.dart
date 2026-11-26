@@ -546,7 +546,12 @@ Future<void> showOrderDetails(BuildContext context, Map<String, dynamic> d) {
                     title: 'Prix',
                     value: formatMoney(d['price'], d['currency']),
                   ),
-                  const GroupRow(title: 'Paiement', value: 'Espèces'),
+                  GroupRow(
+                    title: 'Paiement de la livraison',
+                    value: d['feePaidBy'] == 'RECIPIENT'
+                        ? 'Destinataire, en espèces'
+                        : 'Espèces, au départ',
+                  ),
                   if (d['deliveredAt'] != null)
                     GroupRow(
                       title: 'Livrée le',

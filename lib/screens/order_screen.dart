@@ -63,6 +63,10 @@ class _OrderScreenState extends State<OrderScreen> {
   late String _vehicle = widget.vehicle;
   String _speed = 'STANDARD';
   bool _sending = false;
+
+  /// Boutique : qui paie la livraison (elle au départ, ou le destinataire à la remise)
+  String _feePaidBy = 'SENDER';
+  bool get _isShop => api.user?['accountType'] == 'SHOP';
   bool _quoting = false;
 
   /// Numéro que le livreur appellera au départ (celui du profil par défaut)
@@ -268,6 +272,7 @@ class _OrderScreenState extends State<OrderScreen> {
         'pickupAddress': _pickup.label,
         'pickupContactName': ?optStr(api.user?['name']),
         'pickupPhone': _pickupPhone.e164,
+        if (_isShop) 'feePaidBy': _feePaidBy,
         'stops': [
           for (final s in _stops)
             {
@@ -340,11 +345,7 @@ class _OrderScreenState extends State<OrderScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      PhosphorIconsBold.plus,
-                      size: 14,
-                      color: accent,
-                    ),
+                    Icon(PhosphorIconsBold.plus, size: 14, color: accent),
                     const SizedBox(width: 6),
                     Text(
                       'Arrêt',
@@ -457,6 +458,36 @@ class _OrderScreenState extends State<OrderScreen> {
             PhoneField(controller: _pickupPhone),
           ],
         ),
+        if (_isShop)
+          InsetGroup(
+            header: 'Qui paie la livraison ?',
+            footer: _feePaidBy == 'RECIPIENT'
+                ? (n > 1
+                      ? 'Chaque destinataire paie sa part du prix au livreur, en espèces, à la remise. S’il n’est pas livré, la part vous revient au retour du colis.'
+                      : 'Le destinataire paie le prix de la livraison au livreur, en espèces, à la remise. S’il n’est pas livré, vous la payez au retour du colis.')
+                : 'Vous payez la livraison au livreur, en espèces, quand il récupère les colis.',
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: CupertinoSlidingSegmentedControl<String>(
+                  groupValue: _feePaidBy,
+                  onValueChanged: (v) {
+                    if (v != null) setState(() => _feePaidBy = v);
+                  },
+                  children: const {
+                    'SENDER': Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Ma boutique'),
+                    ),
+                    'RECIPIENT': Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Le destinataire'),
+                    ),
+                  },
+                ),
+              ),
+            ],
+          ),
         // ----- Destinataires -----
         for (var i = 0; i < n; i++) _stopSection(i, p),
         const SizedBox(height: 8),
