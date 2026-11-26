@@ -497,6 +497,11 @@ Future<void> showOrderDetails(BuildContext context, Map<String, dynamic> d) {
   final driver = d['driver'] as Map?;
   final company = d['company'] as Map?;
   final independent = company?['independent'] == true;
+  // LI : entreprise de rattachement, responsable du livreur
+  final affiliate = d['affiliateCompany'] as Map?;
+  final responsible = independent ? affiliate : company;
+  final active = ['ACCEPTED', 'PICKED_UP'].contains(d['status']);
+  final companyPhone = responsible?['phone'] as String?;
   return showModalBottomSheet(
     context: context,
     useSafeArea: true,
@@ -571,11 +576,29 @@ Future<void> showOrderDetails(BuildContext context, Map<String, dynamic> d) {
                     if (company != null)
                       GroupRow(
                         title: independent
-                            ? 'Livreur indépendant'
+                            ? affiliate != null
+                                  ? 'Livreur indépendant · ${affiliate['name']}'
+                                  : 'Livreur indépendant'
                             : company['name'] ?? '',
                         subtitle: independent
-                            ? 'Vérifié par LETO'
+                            ? affiliate != null
+                                  ? 'Vérifié par LETO · ${affiliate['name']} en est responsable'
+                                  : 'Vérifié par LETO'
                             : 'Entreprise de livraison',
+                        // Problème avec le livreur : appeler son entreprise pendant la course
+                        trailing: active && (companyPhone ?? '').isNotEmpty
+                            ? CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                onPressed: () => callPhone(ctx, companyPhone),
+                                child: Icon(
+                                  PhosphorIconsFill.phone,
+                                  color: p.green,
+                                  size: 22,
+                                  semanticLabel: 'Appeler l’entreprise',
+                                ),
+                              )
+                            : null,
                       ),
                   ],
                 ),
