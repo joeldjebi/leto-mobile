@@ -468,12 +468,84 @@ class Api {
 
   /// Confirmation de livraison par le code du destinataire (réglage de l'admin)
   bool deliveryCodeEnabled = true;
+  /// Retour des colis confirmé par le code de l'expéditeur (sinon : au point de départ)
+  bool returnCodeEnabled = false;
+  /// Le livreur doit appeler chaque destinataire avant de partir avec les colis
+  bool preCallRequired = true;
+  /// Échecs : retour facturé (% du prix de l'arrêt), nouvelle tentative (%), délai de choix (min)
+  num returnFeePct = 50;
+  num retryFeePct = 70;
+  num followUpAutoMin = 10;
   Future<void> loadDeliverySettings() async {
     try {
       final g = await grid();
       deliveryCodeEnabled = g['deliveryCodeEnabled'] != false;
+      returnCodeEnabled = g['returnCodeEnabled'] == true;
+      preCallRequired = g['preCallRequired'] != false;
+      returnFeePct = (g['returnFeePct'] as num?) ?? 50;
+      retryFeePct = (g['retryFeePct'] as num?) ?? 70;
+      followUpAutoMin = (g['followUpAutoMin'] as num?) ?? 10;
     } catch (_) {}
   }
+
+  /// Frais d'un arrêt (part du prix × [pct] %, arrondie aux 50 F supérieurs), comme le serveur
+  int stopFee(Map d, num pct) {
+    if (pct <= 0) return 0;
+    final picked = DateTime.tryParse(d['pickedUpAt'] ?? '');
+    final stops = ((d['stops'] as List?) ?? []).where((s) {
+      if (s['status'] != 'CANCELLED') return true;
+      final c = DateTime.tryParse(s['cancelledAt'] ?? '');
+      return picked != null && c != null && !c.isBefore(picked);
+    }).length;
+    final share = (d['price'] as num) / (stops < 1 ? 1 : stops);
+    return ((share * pct / 100) / 50).ceil() * 50;
+  }
+
+  /// Appel passé depuis l'app (enregistré) : à l'expéditeur si [stopId] est vide
+  Future<void> logCall(String id, [String? stopId]) async {
+    try {
+      await _request(
+        'POST',
+        stopId == null ? '/deliveries/$id/call' : '/deliveries/$id/stops/$stopId/call',
+      );
+    } catch (_) {}
+  }
+
+  /// Sur place, destinataire injoignable : demander à l'expéditeur quoi faire
+  Future<dynamic> requestHelp(String id, String stopId, {String? note}) =>
+      _request('POST', '/deliveries/$id/stops/$stopId/help', {'note': ?note});
+
+  /// Réponse de l'expéditeur : WAIT, UPDATE (numéro / indications) ou CANCEL
+  Future<dynamic> answerHelp(
+    String id,
+    String stopId,
+    String action, {
+    String? recipientPhone,
+    String? details,
+  }) => _request('POST', '/deliveries/$id/stops/$stopId/help/answer', {
+    'action': action,
+    'recipientPhone': ?recipientPhone,
+    'details': ?details,
+  });
+
+  /// Après un échec : RETRY (même adresse ou [place] proche) ou RETURN
+  Future<dynamic> chooseFollowUp(
+    String id,
+    String stopId,
+    String action, {
+    String? recipientPhone,
+    String? details,
+    Place? place,
+  }) => _request('POST', '/deliveries/$id/stops/$stopId/follow-up', {
+    'action': action,
+    'recipientPhone': ?recipientPhone,
+    'details': ?details,
+    if (place != null) ...{
+      'lat': place.point.latitude,
+      'lng': place.point.longitude,
+      'address': place.label,
+    },
+  });
 
   Future<dynamic> failStop(
     String id,
@@ -592,8 +664,8 @@ class Api {
   );
 
   /// Colis non livrés rapportés à l'expéditeur (code de retour)
-  Future<dynamic> confirmReturn(String id, String code) =>
-      _request('POST', '/deliveries/$id/return', {'code': code});
+  Future<dynamic> confirmReturn(String id, [String? code]) =>
+      _request('POST', '/deliveries/$id/return', {'code': ?code});
 
   // ---------- Proposez votre prix ----------
   Future<dynamic> proposePrice(String deliveryId, int price) =>
@@ -607,13 +679,17 @@ class Api {
   Future<dynamic> declineOffer(String offerId) =>
       _request('POST', '/offers/$offerId/decline');
 
+  /// Version de l'app envoyée au serveur : les nouvelles règles ne s'appliquent qu'aux apps qui les gèrent
+  static const appVersion = '1.1.4';
+
   Future<dynamic> _request(
     String method,
     String path, [
     Map<String, dynamic>? body,
   ]) async {
     final req = http.Request(method, Uri.parse('$apiUrl$path'))
-      ..headers['Content-Type'] = 'application/json';
+      ..headers['Content-Type'] = 'application/json'
+      ..headers['X-App-Version'] = appVersion;
     if (_token != null) req.headers['Authorization'] = 'Bearer $_token';
     if (body != null) req.body = jsonEncode(body);
 

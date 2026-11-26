@@ -152,6 +152,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.on('stop:arrived', _onArrived);
     s.on('stop:cancelled', _onStopCancelled);
     s.on('stop:cancel-refused', _onCancelRefused);
+    s.on('stop:help-answer', _onHelpAnswer);
+    s.on('stop:retry', _onRetry);
+    s.on('stop:return', _onStopReturn);
     s.on('delivery:cancelled', _onDeliveryCancelled);
     s.on('remittance:updated', _onRemittance);
     s.on('delivery:assigned', _onAssigned);
@@ -180,6 +183,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.off('stop:cancelled', _onStopCancelled);
     s.off('client:location', _onClientLocation);
     s.off('stop:cancel-refused', _onCancelRefused);
+    s.off('stop:help-answer', _onHelpAnswer);
+    s.off('stop:retry', _onRetry);
+    s.off('stop:return', _onStopReturn);
     s.off('delivery:cancelled', _onDeliveryCancelled);
     s.off('remittance:updated', _onRemittance);
     s.off('delivery:assigned', _onAssigned);
@@ -281,6 +287,68 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     }
   }
 
+  /// Réponse de l'expéditeur au livreur sur place (attendre, nouveau numéro…)
+  void _onHelpAnswer(dynamic e) {
+    _load();
+    if (mounted && e is Map) {
+      hapticTap();
+      showInfo(context, 'Expéditeur · ${e['recipientName']} : ${e['answer']}');
+    }
+  }
+
+  /// L'expéditeur demande une nouvelle tentative après un échec
+  void _onRetry(dynamic e) {
+    _load();
+    if (mounted && e is Map) {
+      hapticTap();
+      showInfo(
+        context,
+        'Nouvelle tentative chez ${e['recipientName']} : appelez-le avant d’y retourner',
+      );
+    }
+  }
+
+  void _onStopReturn(dynamic e) {
+    _load();
+    if (mounted && e is Map) {
+      showInfo(context, 'Colis de ${e['recipientName']} à rapporter à l’expéditeur');
+    }
+  }
+
+  /// Appel depuis l'app : enregistré (preuve d'appel), puis composé
+  Future<void> _call(Map d, Map? stop) async {
+    final phone = (stop == null ? d['pickupPhone'] : stop['recipientPhone']) as String?;
+    if (phone == null || phone.isEmpty) return;
+    hapticTap();
+    unawaited(
+      api.logCall(d['id'], stop?['id']).then((_) => _load()),
+    );
+    if (!await launchUrl(telUri(phone)) && mounted) {
+      showError(context, 'Impossible de lancer l’appel. Numéro : ${formatPhone(phone)}');
+    }
+  }
+
+  /// Destinataire injoignable sur place : l'expéditeur choisit (attendre, autre numéro, annuler)
+  Future<void> _askSender(Map d, Map stop) async {
+    if ((stop['callCount'] ?? 0) == 0) {
+      showError(context, 'Appelez d’abord ${stop['recipientName']} depuis l’app.');
+      return;
+    }
+    final note = await prompt(
+      context,
+      'Prévenir l’expéditeur',
+      message:
+          '${stop['recipientName']} ne répond pas. L’expéditeur va vous dire quoi faire (attendre, autre numéro, annuler).',
+      placeholder: 'Facultatif · ex. : portail fermé, 3 appels',
+      ok: 'Envoyer',
+    );
+    if (note == null) return;
+    await _run(
+      () => api.requestHelp(d['id'], stop['id'], note: note.isEmpty ? null : note),
+      'Expéditeur prévenu · patientez sa réponse',
+    );
+  }
+
   void _onDeliveryCancelled(dynamic e) {
     _load();
     if (mounted && e is Map) {
@@ -363,8 +431,19 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     );
   }
 
-  /// Retour des colis non livrés : l'expéditeur donne son code
+  /// Retour des colis non livrés : code de l'expéditeur si l'admin l'exige, sinon au point de départ
   Future<void> _confirmReturn(Map d) async {
+    if (!api.returnCodeEnabled) {
+      final ok = await showActions<bool>(
+        context,
+        title: 'Colis rendus à l’expéditeur ?',
+        message: 'Confirmez une fois les colis remis en main propre au point de départ.',
+        actions: [('J’ai rendu les colis', true, false)],
+      );
+      if (ok != true) return;
+      await _run(() => api.confirmReturn(d['id']), 'Colis rendus — tournée terminée');
+      return;
+    }
     final code = await prompt(
       context,
       'Code de retour',
@@ -797,6 +876,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
 
   /// Échec : sur place, attente (absence), photo obligatoire. L'expéditeur est prévenu.
   Future<void> _reportProblem(Map d, Map stop) async {
+    final cod = ((stop['codAmount'] ?? 0) as num) > 0;
     final reason = await showActions<String>(
       context,
       title: 'Problème avec ${stop['recipientName']}',
@@ -804,13 +884,32 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           'Appelez d’abord le destinataire : ${formatPhone(stop['recipientPhone'])}',
       actions: [
         ('Destinataire absent ou injoignable', 'ABSENT', false),
+        ('Adresse introuvable', 'WRONG_ADDRESS', false),
         ('Le destinataire refuse le colis', 'REFUSED', true),
+        if (cod) ('Il n’a pas l’argent pour payer', 'NO_MONEY', false),
+        ('Colis abîmé', 'DAMAGED', false),
+        ('Lieu dangereux ou inaccessible', 'UNSAFE', false),
         if (stop['cancelRequestedAt'] == null)
           ('Le destinataire annule (il a appelé)', 'CANCEL', false),
       ],
     );
     if (reason == null || !mounted) return;
     if (reason == 'CANCEL') return _requestCancel(d, stop);
+    if ((reason == 'ABSENT' || reason == 'WRONG_ADDRESS') &&
+        (stop['callCount'] ?? 0) == 0) {
+      showError(context, 'Appelez d’abord ${stop['recipientName']} depuis l’app.');
+      return;
+    }
+    final waitUntil = DateTime.tryParse(stop['waitUntil'] ?? '');
+    if (reason == 'ABSENT' &&
+        waitUntil != null &&
+        waitUntil.isAfter(DateTime.now())) {
+      showError(
+        context,
+        'L’expéditeur vous demande de patienter encore ${_fmt(waitUntil.difference(DateTime.now()).inSeconds)}.',
+      );
+      return;
+    }
     if (reason == 'ABSENT') {
       final left = _waitLeft(stop);
       if (left == null) {
@@ -873,8 +972,20 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         photoUrl: photo,
         note: note.isEmpty ? null : note,
       ),
-      'Échec signalé — l’expéditeur est prévenu',
+      (stop['attempt'] ?? 1) > 1 || reason == 'DAMAGED'
+          ? 'Échec signalé · rapportez le colis à l’expéditeur'
+          : 'Échec signalé · l’expéditeur choisit : nouvelle tentative ou retour',
     );
+  }
+
+  /// Délai restant à l'expéditeur pour choisir (sinon retour automatique)
+  String _deadlineText(Map s) {
+    final end = DateTime.tryParse(s['followUpDeadline'] ?? '');
+    if (end == null) return followUpLabels['DECIDING']!;
+    final left = end.difference(DateTime.now()).inSeconds;
+    return left > 0
+        ? 'Choix de l’expéditeur · retour automatique dans ${_fmt(left)}'
+        : 'Retour automatique imminent';
   }
 
   String _fmt(int s) => '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
@@ -1691,7 +1802,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               leading: Avatar(sender, radius: 15),
               title: sender,
               subtitle: 'Expéditeur',
-              trailing: _phone(d['pickupPhone'], p),
+              trailing: _phone(d['pickupPhone'], p, () => _call(d, null)),
             ),
             ?_clientRow(d, p),
             if (d['pickupPhotoUrl'] != null)
@@ -1710,19 +1821,57 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               ),
           ],
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: FilledButton(
-            onPressed: () => _run(
-              () => api.pickup(d['id']),
-              n > 1
-                  ? 'Colis récupérés — début de la tournée'
-                  : 'Colis récupéré',
+        // Avant de prendre la route : appeler l'expéditeur et chaque destinataire
+        InsetGroup(
+          header: 'Avant de prendre la route',
+          footer: api.preCallRequired
+              ? 'Appelez chaque destinataire pour confirmer qu’il est disponible et lui donner l’heure de passage. Obligatoire avant de partir avec les colis.'
+              : 'Appelez chaque destinataire pour confirmer qu’il est disponible et lui donner l’heure de passage.',
+          children: [
+            GroupRow(
+              leading: _calledBadge(d['pickupCalledAt'] != null, p),
+              title: 'Expéditeur · colis prêt ?',
+              subtitle: sender,
+              trailing: _phone(d['pickupPhone'], p, () => _call(d, null)),
             ),
-            child: Text(
-              n > 1 ? 'J’ai récupéré les $n colis' : 'J’ai récupéré le colis',
-            ),
-          ),
+            for (final s in stops.where((s) => s['status'] == 'PENDING'))
+              GroupRow(
+                leading: _calledBadge(s['calledAt'] != null, p),
+                title: s['recipientName'],
+                subtitle: '${s['address']} (${s['commune']})',
+                trailing: _phone(s['recipientPhone'], p, () => _call(d, s)),
+              ),
+          ],
+        ),
+        Builder(
+          builder: (_) {
+            final missing = stops
+                .where((s) => s['status'] == 'PENDING' && s['calledAt'] == null)
+                .length;
+            final blocked = api.preCallRequired && missing > 0;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FilledButton(
+                onPressed: blocked
+                    ? null
+                    : () => _run(
+                        () => api.pickup(d['id']),
+                        n > 1
+                            ? 'Colis récupérés — début de la tournée'
+                            : 'Colis récupéré',
+                      ),
+                child: Text(
+                  blocked
+                      ? (missing == 1
+                            ? 'Appelez le destinataire pour continuer'
+                            : 'Appelez les $missing destinataires pour continuer')
+                      : n > 1
+                      ? 'J’ai récupéré les $n colis'
+                      : 'J’ai récupéré le colis',
+                ),
+              ),
+            );
+          },
         ),
       ];
     }
@@ -1743,8 +1892,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           subtitle: ['${back.length} colis à rendre', ?routeInfo].join(' · '),
         ),
         InsetGroup(
-          footer:
-              'Remettez les colis à l’expéditeur : il vous donne son code de retour pour terminer la tournée.',
+          footer: api.returnCodeEnabled
+              ? 'Remettez les colis à l’expéditeur : il vous donne son code de retour pour terminer la tournée.'
+              : 'Remettez les colis à l’expéditeur au point de départ, puis confirmez pour terminer la tournée.',
           children: [
             GroupRow(
               leading: _dot('A', ink),
@@ -1755,7 +1905,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               leading: Avatar(sender, radius: 15),
               title: sender,
               subtitle: 'Expéditeur',
-              trailing: _phone(d['pickupPhone'], p),
+              trailing: _phone(d['pickupPhone'], p, () => _call(d, null)),
             ),
             ?_clientRow(d, p),
             for (final s in back)
@@ -1776,7 +1926,11 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: FilledButton(
             onPressed: () => _confirmReturn(d),
-            child: const Text('Saisir le code de retour'),
+            child: Text(
+              api.returnCodeEnabled
+                  ? 'Saisir le code de retour'
+                  : 'J’ai rendu les colis',
+            ),
           ),
         ),
       ];
@@ -1784,13 +1938,18 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
 
     // Étape 2 : tournée, arrêt par arrêt
     final next = _nextStop(d);
+    final deciding = stops
+        .where((s) => s['status'] == 'FAILED' && s['followUp'] == 'DECIDING')
+        .toList();
     final list = <Widget>[
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: StatusSteps(d['status']),
       ),
       _title(
-        next == null
+        next == null && deciding.isNotEmpty
+            ? 'En attente de l’expéditeur'
+            : next == null
             ? 'Tournée terminée'
             : (n > 1
                   ? 'Arrêt ${next['position'] + 1} sur $n'
@@ -1799,9 +1958,29 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         subtitle: [if (n > 1) '$done/$n traités', ?routeInfo].join(' · '),
       ),
     ];
+    if (next == null && deciding.isNotEmpty) {
+      list.add(
+        InsetGroup(
+          footer:
+              'L’expéditeur choisit entre une nouvelle tentative et le retour du colis. Sans réponse, le colis est à rapporter.',
+          children: [
+            for (final s in deciding)
+              GroupRow(
+                leading: IconBadge(PhosphorIconsBold.hourglassMedium, color: p.yellow),
+                title: s['recipientName'],
+                subtitle: _deadlineText(s),
+              ),
+          ],
+        ),
+      );
+    }
     if (next != null) {
       final cod = (next['codAmount'] ?? 0) as num;
       final left = _waitLeft(next);
+      final arrived = next['arrivedAt'] != null;
+      final helpPending =
+          next['helpRequestedAt'] != null && next['helpAnswer'] == null;
+      final waitUntil = DateTime.tryParse(next['waitUntil'] ?? '');
       list.addAll([
         InsetGroup(
           children: [
@@ -1815,7 +1994,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               leading: Avatar(next['recipientName'] ?? '', radius: 15),
               title: next['recipientName'],
               subtitle: next['packageDescription'] ?? 'Destinataire',
-              trailing: _phone(next['recipientPhone'], p),
+              trailing: _phone(next['recipientPhone'], p, () => _call(d, next)),
             ),
             ?_clientRow(d, p),
             if (next['photoUrl'] != null)
@@ -1831,6 +2010,28 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                 ),
                 title: 'Encaisser ${formatMoney(cod, d['currency'])}',
                 subtitle: 'Avant de remettre le colis',
+              ),
+            if ((next['attempt'] ?? 1) > 1)
+              GroupRow(
+                leading: IconBadge(PhosphorIconsBold.arrowClockwise, color: accent),
+                title: '2e passage · nouvelle tentative',
+                subtitle: 'Demandée par l’expéditeur. Appelez le destinataire avant d’y aller.',
+              ),
+            if (helpPending)
+              GroupRow(
+                leading: IconBadge(PhosphorIconsBold.hourglassMedium, color: p.yellow),
+                title: 'Expéditeur prévenu',
+                subtitle: 'En attente de sa réponse · restez sur place',
+              ),
+            if (next['helpAnswer'] != null)
+              GroupRow(
+                leading: IconBadge(PhosphorIconsFill.chatText, color: accent),
+                title: 'Réponse de l’expéditeur',
+                subtitle: [
+                  next['helpAnswer'],
+                  if (waitUntil != null && waitUntil.isAfter(DateTime.now()))
+                    'attendre encore ${_fmt(waitUntil.difference(DateTime.now()).inSeconds)}',
+                ].join(' · '),
               ),
             if (next['cancelRequestedAt'] != null)
               GroupRow(
@@ -1874,6 +2075,14 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                       : 'Marquer comme livré',
                 ),
               ),
+              if (arrived && !helpPending && next['cancelRequestedAt'] == null) ...[
+                const SizedBox(height: 10),
+                TintedButton(
+                  'Injoignable · prévenir l’expéditeur',
+                  icon: PhosphorIconsBold.chatText,
+                  onPressed: () => _askSender(d, next),
+                ),
+              ],
               const SizedBox(height: 10),
               TintedButton(
                 'Signaler un problème',
@@ -1920,7 +2129,11 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                   ),
                 ),
                 title: s['recipientName'],
-                subtitle: s['address'],
+                subtitle: s['status'] == 'FAILED' && s['followUp'] != null
+                    ? followUpLabels[s['followUp']]
+                    : (s['attempt'] ?? 1) > 1 && s['status'] == 'PENDING'
+                    ? '2e passage · ${s['address']}'
+                    : s['address'],
                 value: s['status'] == 'FAILED'
                     ? failureLabels[s['failureReason']]
                     : stopStatusLabels[s['status']],
@@ -1989,19 +2202,40 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     ),
   );
 
-  Widget _phone(String? phone, Palette p) => Row(
+  /// Numéro + bouton d'appel (l'appel passé depuis l'app est enregistré)
+  Widget _phone(String? phone, Palette p, VoidCallback onCall) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(PhosphorIconsFill.phone, size: 15, color: p.green),
-      const SizedBox(width: 4),
-      SelectableText(
+      Text(
         formatPhone(phone, compact: true),
         style: TextStyles.subheadline.copyWith(
           color: p.label,
           fontWeight: FontWeight.w600,
         ),
       ),
+      const SizedBox(width: 8),
+      Semantics(
+        button: true,
+        label: 'Appeler',
+        child: GestureDetector(
+          onTap: onCall,
+          child: Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: p.green, shape: BoxShape.circle),
+            child: const Icon(PhosphorIconsFill.phone, size: 17, color: Colors.white),
+          ),
+        ),
+      ),
     ],
+  );
+
+  /// Appelé (coche) ou à appeler, pour la liste « Avant de prendre la route »
+  Widget _calledBadge(bool called, Palette p) => Icon(
+    called ? PhosphorIconsFill.checkCircle : PhosphorIconsBold.circle,
+    size: 20,
+    color: called ? p.green : p.tertiaryLabel,
   );
 
   /// Reste à verser à l'entreprise, bouton de versement, historique

@@ -22,6 +22,17 @@ const stopStatusLabels = {
 const failureLabels = {
   'ABSENT': 'Destinataire absent',
   'REFUSED': 'Colis refusé',
+  'WRONG_ADDRESS': 'Adresse introuvable',
+  'NO_MONEY': 'Pas l’argent pour payer',
+  'DAMAGED': 'Colis abîmé',
+  'UNSAFE': 'Lieu dangereux ou inaccessible',
+};
+
+/// Suite d'un échec
+const followUpLabels = {
+  'DECIDING': 'En attente du choix de l’expéditeur',
+  'RETRY': 'Nouvelle tentative',
+  'RETURN': 'À rapporter à l’expéditeur',
 };
 
 const vehicleLabels = {'MOTO': 'Moto', 'CAR': 'Voiture', 'CARGO': 'Cargo'};

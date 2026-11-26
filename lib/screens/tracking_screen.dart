@@ -17,6 +17,7 @@ import '../live_route.dart';
 import '../main.dart';
 import '../realtime.dart';
 import 'cancel_reasons.dart';
+import 'map_picker.dart';
 import 'searching_header.dart';
 import 'share_codes.dart';
 import 'tracking_parts.dart';
@@ -119,6 +120,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     s.on('stop:cancel-request', _onCancelRequest);
     s.on('stop:cancelled', _onStopCancelled);
     s.on('delivery:return', _onReturn);
+    s.on('stop:help', _onHelp);
     _unsubscribe = Realtime.instance.onConnected(
       () => s.emit('delivery:watch', widget.id),
     );
@@ -145,6 +147,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     s.off('stop:cancel-request', _onCancelRequest);
     s.off('stop:cancelled', _onStopCancelled);
     s.off('delivery:return', _onReturn);
+    s.off('stop:help', _onHelp);
     s.emit('delivery:unwatch', widget.id);
     _unsubscribe?.call();
     super.dispose();
@@ -391,13 +394,177 @@ class _TrackingScreenState extends State<TrackingScreen>
     _load();
   }
 
-  void _onStopFailed(dynamic e) {
+  /// Échec : l'expéditeur choisit tout de suite (nouvelle tentative ou retour), sinon le colis lui est rapporté
+  Future<void> _onStopFailed(dynamic e) async {
     if (e is! Map || e['deliveryId'] != widget.id || !mounted) return;
-    showError(
+    await _load();
+    if (!mounted) return;
+    final stop = _stops.where((s) => s['id'] == e['stopId']).firstOrNull;
+    if (e['deciding'] == true && stop != null) {
+      _chooseFollowUp(stop);
+    } else {
+      showInfo(
+        context,
+        'Livraison impossible chez ${e['recipientName']} : le colis vous est rapporté',
+      );
+    }
+  }
+
+  /// Le livreur est sur place et le destinataire ne répond pas
+  Future<void> _onHelp(dynamic e) async {
+    if (e is! Map || e['deliveryId'] != widget.id || !mounted) return;
+    await _load();
+    final stop = _stops.where((s) => s['id'] == e['stopId']).firstOrNull;
+    if (stop != null && mounted) _answerHelp(stop);
+  }
+
+  /// Réponse au livreur : attendre, autre numéro / indications, ou annuler ce colis
+  Future<void> _answerHelp(Map<String, dynamic> stop) async {
+    final d = _d;
+    if (d == null) return;
+    final fee = api.stopFee(d, api.returnFeePct);
+    final choice = await showActions<String>(
       context,
-      'Livraison impossible chez ${e['recipientName']} : voir la photo du livreur',
+      title: '${stop['recipientName']} ne répond pas',
+      message:
+          'Le livreur est sur place et a appelé sans réponse. Que doit-il faire ?',
+      actions: [
+        ('Attendre 5 min de plus', 'WAIT', false),
+        ('Donner un autre numéro ou des indications', 'UPDATE', false),
+        (
+          fee > 0
+              ? 'Annuler ce colis (retour : ${formatMoney(fee, d['currency'])})'
+              : 'Annuler ce colis (il vous est rapporté)',
+          'CANCEL',
+          true,
+        ),
+      ],
     );
-    _load();
+    if (choice == null || !mounted) return;
+    String? phone, details;
+    if (choice == 'UPDATE') {
+      final contact = await _askContact();
+      if (contact == null) return;
+      (phone, details) = contact;
+    }
+    try {
+      await api.answerHelp(
+        widget.id,
+        stop['id'],
+        choice,
+        recipientPhone: phone,
+        details: details,
+      );
+      if (mounted) showInfo(context, 'Réponse envoyée au livreur');
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  /// Nouveau numéro et/ou indications (au moins l'un des deux)
+  Future<(String?, String?)?> _askContact() async {
+    final phone = await prompt(
+      context,
+      'Autre numéro du destinataire',
+      message: 'Facultatif · laissez vide pour garder le même',
+      placeholder: '07 00 00 00 00',
+      keyboard: TextInputType.phone,
+      ok: 'Suivant',
+    );
+    if (phone == null || !mounted) return null;
+    final details = await prompt(
+      context,
+      'Indications pour le livreur',
+      message: 'Facultatif · ex. : sonner au portail bleu, demander Awa',
+      placeholder: 'Indications',
+      ok: 'Envoyer',
+    );
+    if (details == null) return null;
+    final ph = phone.trim(), de = details.trim();
+    if (ph.isEmpty && de.isEmpty) {
+      if (mounted) showError(context, 'Indiquez un autre numéro ou des indications');
+      return null;
+    }
+    return (ph.isEmpty ? null : ph, de.isEmpty ? null : de);
+  }
+
+  /// Après un échec : nouvelle tentative (prix réduit) ou retour du colis (facturé)
+  Future<void> _chooseFollowUp(Map<String, dynamic> stop) async {
+    final d = _d;
+    if (d == null) return;
+    final cur = d['currency'];
+    final retry = api.stopFee(d, api.retryFeePct);
+    final back = api.stopFee(d, api.returnFeePct);
+    final choice = await showActions<String>(
+      context,
+      title: 'Livraison impossible chez ${stop['recipientName']}',
+      message: [
+        '${failureLabels[stop['failureReason']] ?? 'Échec'}${(stop['failureNote'] ?? '').toString().isNotEmpty ? ' · « ${stop['failureNote']} »' : ''}',
+        'Sans réponse dans ${api.followUpAutoMin} min, le colis vous est rapporté.',
+      ].join('\n'),
+      actions: [
+        ('Nouvelle tentative · même adresse (${formatMoney(retry, cur)})', 'RETRY', false),
+        ('Nouvelle tentative · autre numéro ou adresse', 'EDIT', false),
+        ('Me rapporter le colis (${formatMoney(back, cur)})', 'RETURN', false),
+      ],
+      cancelLabel: 'Décider plus tard',
+    );
+    if (choice == null || !mounted) return;
+    String? phone, details;
+    Place? place;
+    if (choice == 'EDIT') {
+      final what = await showActions<String>(
+        context,
+        title: 'Nouvelle tentative (${formatMoney(retry, cur)})',
+        message: 'Nouvelle adresse : à moins de 5 km de la première.',
+        actions: [
+          ('Autre numéro ou indications', 'CONTACT', false),
+          ('Autre adresse', 'PLACE', false),
+        ],
+      );
+      if (what == null || !mounted) return;
+      if (what == 'CONTACT') {
+        final contact = await _askContact();
+        if (contact == null) return;
+        (phone, details) = contact;
+      } else {
+        place = await Navigator.push<Place>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MapPickerScreen(
+              title: 'Nouvelle adresse',
+              initial: LatLng(
+                (stop['lat'] as num).toDouble(),
+                (stop['lng'] as num).toDouble(),
+              ),
+            ),
+          ),
+        );
+        if (place == null) return;
+      }
+    }
+    try {
+      await api.chooseFollowUp(
+        widget.id,
+        stop['id'],
+        choice == 'RETURN' ? 'RETURN' : 'RETRY',
+        recipientPhone: phone,
+        details: details,
+        place: place,
+      );
+      if (mounted) {
+        showInfo(
+          context,
+          choice == 'RETURN'
+              ? 'Le livreur vous rapporte le colis'
+              : 'Nouvelle tentative demandée au livreur',
+        );
+      }
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
   }
 
   /// Le livreur indique que le destinataire annule : l'expéditeur confirme ou refuse
@@ -418,7 +585,9 @@ class _TrackingScreenState extends State<TrackingScreen>
     if (e is! Map || e['deliveryId'] != widget.id || !mounted) return;
     showInfo(
       context,
-      'Le livreur vous rapporte ${e['parcels']} colis : donnez-lui votre code de retour',
+      api.returnCodeEnabled
+          ? 'Le livreur vous rapporte ${e['parcels']} colis : donnez-lui votre code de retour'
+          : 'Le livreur vous rapporte ${e['parcels']} colis',
     );
     _load();
   }
@@ -1093,12 +1262,15 @@ class _TrackingScreenState extends State<TrackingScreen>
           icon: PhosphorIconsFill.arrowUDownLeft,
           color: accent,
           title: 'Colis en retour',
-          text:
-              'Le livreur vous rapporte les colis non livrés. Donnez-lui ce code en les récupérant.',
-          trailing: Text(
-            d['returnCode'] ?? '',
-            style: TextStyles.title2.copyWith(color: p.label, letterSpacing: 4),
-          ),
+          text: api.returnCodeEnabled
+              ? 'Le livreur vous rapporte les colis non livrés. Donnez-lui ce code en les récupérant.'
+              : 'Le livreur vous rapporte les colis non livrés au point de départ.',
+          trailing: api.returnCodeEnabled
+              ? Text(
+                  d['returnCode'] ?? '',
+                  style: TextStyles.title2.copyWith(color: p.label, letterSpacing: 4),
+                )
+              : null,
         ),
         const SizedBox(height: 12),
       ],
@@ -1108,7 +1280,39 @@ class _TrackingScreenState extends State<TrackingScreen>
           icon: PhosphorIconsFill.sealCheck,
           color: p.green,
           title: 'Colis non livrés récupérés',
-          text: 'Retour confirmé avec votre code.',
+          text: 'Le livreur vous a rendu les colis.',
+        ),
+        const SizedBox(height: 12),
+      ],
+      // Livreur sur place, destinataire injoignable : il attend la réponse
+      for (final s in _stops.where(
+        (s) =>
+            s['status'] == 'PENDING' &&
+            s['helpRequestedAt'] != null &&
+            s['helpAnswer'] == null,
+      )) ...[
+        _notice(
+          p,
+          icon: PhosphorIconsFill.phone,
+          color: p.yellow,
+          title: '${s['recipientName']} ne répond pas',
+          text: 'Le livreur est sur place. Dites-lui quoi faire.',
+          onTap: () => _answerHelp(s),
+        ),
+        const SizedBox(height: 12),
+      ],
+      // Échec : nouvelle tentative ou retour ?
+      for (final s in _stops.where(
+        (s) => s['status'] == 'FAILED' && s['followUp'] == 'DECIDING',
+      )) ...[
+        _notice(
+          p,
+          icon: PhosphorIconsFill.warningCircle,
+          color: p.yellow,
+          title: 'Livraison impossible chez ${s['recipientName']}',
+          text:
+              'Choisissez une nouvelle tentative ou le retour du colis. Sans réponse, il vous est rapporté.',
+          onTap: () => _chooseFollowUp(s),
         ),
         const SizedBox(height: 12),
       ],
@@ -1153,9 +1357,14 @@ class _TrackingScreenState extends State<TrackingScreen>
               color: p.green,
             ),
             title: 'Espèces',
-            subtitle: 'Paiement au livreur',
+            subtitle: ((d['extraFees'] ?? 0) as num) > 0
+                ? 'Paiement au livreur · dont ${formatMoney(d['extraFees'], d['currency'])} de retour ou nouvelle tentative'
+                : 'Paiement au livreur',
             trailing: Text(
-              formatMoney(d['price'], d['currency']),
+              formatMoney(
+                (d['price'] as num) + ((d['extraFees'] ?? 0) as num),
+                d['currency'],
+              ),
               style: TextStyles.headline.copyWith(color: p.label),
             ),
           ),
@@ -1558,14 +1767,18 @@ class _StopTile extends StatelessWidget {
     final subtitle = switch (status) {
       'DELIVERED' => 'Livré à ${_time(stop['deliveredAt'])}',
       'FAILED' =>
-        '${failureLabels[stop['failureReason']]} · ${_time(stop['failedAt'])}',
+        '${failureLabels[stop['failureReason']]} · ${_time(stop['failedAt'])}${stop['followUp'] == 'RETURN' ? ' · colis rapporté' : ''}',
       'CANCELLED' =>
         'Annulé · ${_time(stop['cancelledAt'])}${stop['cancelReason'] != null ? ' · ${stop['cancelReason']}' : ''}',
       _ =>
         stop['arrivedAt'] != null
             ? 'Le livreur est sur place'
+            : (stop['attempt'] ?? 1) > 1
+            ? 'Nouvelle tentative'
             : stop['address'],
     };
+    final fees = ((stop['returnFee'] ?? 0) as num) + ((stop['retryFee'] ?? 0) as num);
+    final past = ((stop['pastAttempts'] as List?) ?? []);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
@@ -1713,6 +1926,35 @@ class _StopTile extends StatelessWidget {
                     : 'Encaisser ${formatMoney(cod, d['currency'])}',
                 color: stop['codRemittedAt'] != null ? p.green : accentDeep,
                 icon: PhosphorIconsBold.creditCard,
+              ),
+            ),
+          // ----- Tentative précédente et frais -----
+          if (past.isNotEmpty || fees > 0)
+            Padding(
+              padding: const EdgeInsets.only(left: 40, top: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final a in past)
+                    Pill(
+                      '1er passage : ${failureLabels[a['reason']] ?? 'échec'}',
+                      color: p.secondaryLabel,
+                      icon: PhosphorIconsBold.clock,
+                    ),
+                  if ((stop['retryFee'] ?? 0) > 0)
+                    Pill(
+                      'Nouvelle tentative ${formatMoney(stop['retryFee'], d['currency'])}',
+                      color: accentDeep,
+                      icon: PhosphorIconsBold.arrowClockwise,
+                    ),
+                  if ((stop['returnFee'] ?? 0) > 0)
+                    Pill(
+                      'Retour ${formatMoney(stop['returnFee'], d['currency'])}',
+                      color: accentDeep,
+                      icon: PhosphorIconsBold.arrowUDownLeft,
+                    ),
+                ],
               ),
             ),
           // ----- Preuves d'échec + contestation -----
