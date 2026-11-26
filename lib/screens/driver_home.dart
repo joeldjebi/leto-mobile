@@ -21,6 +21,7 @@ import '../main.dart';
 import '../notifications.dart';
 import '../realtime.dart';
 import 'driver_course_sheet.dart';
+import 'documents_screen.dart';
 import 'independent_screens.dart';
 import 'logbook_screen.dart';
 import 'cancel_reasons.dart';
@@ -1142,6 +1143,17 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                                 ),
                               ),
                               (
+                                PhosphorIconsFill.files,
+                                accent,
+                                'Mes documents',
+                                () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) => const DocumentsScreen(),
+                                  ),
+                                ),
+                              ),
+                              (
                                 PhosphorIconsFill.identificationCard,
                                 accent,
                                 'Mon dossier',
@@ -1193,13 +1205,15 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                             key: ValueKey(_blocked),
                             padding: const EdgeInsets.only(top: 10),
                             child: GestureDetector(
-                              // Indépendant : le bandeau mène à « Mon entreprise » (rattachement) ou au solde (recharge)
+                              // Indépendant : le bandeau mène à « Mes documents » (expiré), « Mon entreprise » (rattachement) ou au solde (recharge)
                               onTap: api.isIndependent
                                   ? () => Navigator.push(
                                       context,
                                       CupertinoPageRoute(
                                         builder: (_) =>
-                                            _blocked!.contains('Rattachez')
+                                            _blocked!.contains('Mes documents')
+                                            ? const DocumentsScreen()
+                                            : _blocked!.contains('Rattachez')
                                             ? const AffiliationScreen()
                                             : const IndependentBalanceScreen(),
                                       ),

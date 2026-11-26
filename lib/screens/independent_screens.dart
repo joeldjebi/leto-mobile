@@ -10,6 +10,7 @@ import '../api.dart';
 import '../labels.dart';
 import '../main.dart';
 import '../realtime.dart';
+import 'documents_screen.dart';
 import 'driver_home.dart';
 import 'widgets.dart';
 
@@ -274,6 +275,8 @@ class _DossierScreenState extends State<DossierScreen> {
   late final _plate = TextEditingController(text: _d['vehiclePlate']);
   late final _license = TextEditingController(text: _d['licenseNumber']);
   late String? _birthDate = _d['birthDate'];
+  late String? _licenseExp = _d['licenseExpiresOn'];
+  late String? _insuranceExp = _d['insuranceExpiresOn'];
   late String? _commune = _d['commune'];
   late String _idType = _d['idType'] ?? 'CNI';
   late String _vehicle = _d['vehicleType'] ?? 'MOTO';
@@ -332,6 +335,8 @@ class _DossierScreenState extends State<DossierScreen> {
     'vehicleBrand': _brand.text.trim(),
     'vehiclePlate': _plate.text.trim(),
     'licenseNumber': _license.text.trim(),
+    'licenseExpiresOn': ?_licenseExp,
+    'insuranceExpiresOn': ?_insuranceExp,
     if (_consent) 'consent': true,
   };
 
@@ -460,6 +465,16 @@ class _DossierScreenState extends State<DossierScreen> {
       () => _birthDate =
           '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}',
     );
+  }
+
+  Future<void> _pickExpiry(bool license) async {
+    final d = await pickExpiryDate(
+      context,
+      license ? 'Fin de validité du permis' : 'Fin de validité de l’assurance',
+      license ? _licenseExp : _insuranceExp,
+    );
+    if (d == null || !mounted) return;
+    setState(() => license ? _licenseExp = d : _insuranceExp = d);
   }
 
   Future<void> _choose<T>(
@@ -655,6 +670,39 @@ class _DossierScreenState extends State<DossierScreen> {
                 _photos[6],
               ]),
               InsetGroup(
+                header: 'Validité des documents',
+                footer:
+                    'Lisez la date sur le document. Vous serez prévenu 30 jours avant ; une fois la date passée, vous ne recevez plus de courses tant que le nouveau document n’est pas validé.',
+                children: [
+                  GroupRow(
+                    leading: Icon(
+                      PhosphorIconsBold.calendarCheck,
+                      color: p.secondaryLabel,
+                      size: 20,
+                    ),
+                    title: 'Permis valable jusqu’au',
+                    value: _licenseExp == null
+                        ? 'Choisir'
+                        : _dateLabel(_licenseExp!),
+                    chevron: e,
+                    onTap: e ? () => _pickExpiry(true) : null,
+                  ),
+                  GroupRow(
+                    leading: Icon(
+                      PhosphorIconsBold.calendarCheck,
+                      color: p.secondaryLabel,
+                      size: 20,
+                    ),
+                    title: 'Assurance valable jusqu’au',
+                    value: _insuranceExp == null
+                        ? 'Choisir'
+                        : _dateLabel(_insuranceExp!),
+                    chevron: e,
+                    onTap: e ? () => _pickExpiry(false) : null,
+                  ),
+                ],
+              ),
+              InsetGroup(
                 header: 'Contact d’urgence (facultatif)',
                 children: [
                   _field(_emergencyName, 'Nom', PhosphorIconsFill.users),
@@ -667,7 +715,7 @@ class _DossierScreenState extends State<DossierScreen> {
               ),
               InsetGroup(
                 footer:
-                    'Vos documents ne sont visibles que par l’équipe LETO, pour vérifier votre identité. Ils sont supprimés si votre compte est fermé.',
+                    'Vos documents sont vérifiés par l’équipe LETO. Si vous acceptez l’invitation d’une entreprise de livraison, votre dossier lui est aussi partagé, tant que vous y êtes rattaché. Ils sont supprimés si votre compte est fermé.',
                 children: [
                   GroupSwitch(
                     title: 'J’accepte que LETO vérifie mes documents',
@@ -1321,7 +1369,7 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
       context,
       title: join ? 'Rejoindre ${inv['companyName']} ?' : 'Accepter la nouvelle commission ?',
       message: join
-          ? 'L’entreprise devient responsable de vous et prélève ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde, en plus de la commission LETO. Vous pourrez la quitter quand vous voulez (hors course en cours).'
+          ? 'L’entreprise devient responsable de vous et prélève ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde, en plus de la commission LETO.\n\nEn rejoignant ${inv['companyName']}, vous lui partagez votre dossier complet : téléphone, pièce d’identité, permis, carte grise, assurance et photos. Le partage s’arrête si vous la quittez (possible à tout moment, hors course en cours).'
           : '${inv['companyName']} prélèvera ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde.',
       actions: [(join ? 'Rejoindre' : 'Accepter', true, false)],
     );
@@ -1425,6 +1473,7 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
                   if ((inv['drivers'] ?? 0) > 0) '${inv['drivers']} livreurs',
                   if ((inv['message'] ?? '').toString().isNotEmpty) '« ${inv['message']} »',
                 ].join(' · '),
+                note: 'En rejoignant cette entreprise, vous lui partagez votre dossier complet (pièce d’identité, permis, carte grise, assurance, photos).',
                 busy: _busy,
                 acceptLabel: 'Rejoindre',
                 declineLabel: 'Refuser',
@@ -1459,7 +1508,9 @@ class _InviteCard extends StatelessWidget {
   final String declineLabel;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
+  final String? note;
   const _InviteCard({
+    this.note,
     required this.title,
     required this.subtitle,
     required this.busy,
@@ -1491,6 +1542,17 @@ class _InviteCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(subtitle, style: TextStyles.subheadline.copyWith(color: p.secondaryLabel)),
+          if (note != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(PhosphorIconsBold.shieldCheck, size: 16, color: p.secondaryLabel),
+                const SizedBox(width: 6),
+                Expanded(child: Text(note!, style: TextStyles.footnote.copyWith(color: p.secondaryLabel))),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [

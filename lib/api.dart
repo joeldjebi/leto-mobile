@@ -604,6 +604,18 @@ class Api {
       (await _request('GET', '/independents/me')) as Map<String, dynamic>;
   Future<Map<String, dynamic>> saveDossier(Map<String, dynamic> body) async =>
       (await _request('PUT', '/independents/me', body)) as Map<String, dynamic>;
+  /// Document renouvelé (nouvelle photo et/ou nouvelle date), vérifié par LETO
+  Future<Map<String, dynamic>> submitRenewal(
+    String field, {
+    String? url,
+    String? expiresOn,
+  }) async =>
+      (await _request('POST', '/independents/me/renewals', {
+            'field': field,
+            'url': ?url,
+            'expiresOn': ?expiresOn,
+          }))
+          as Map<String, dynamic>;
   Future<Map<String, dynamic>> submitDossier() async =>
       (await _request('POST', '/independents/me/submit'))
           as Map<String, dynamic>;
@@ -690,7 +702,7 @@ class Api {
       _request('POST', '/offers/$offerId/decline');
 
   /// Version de l'app envoyée au serveur : les nouvelles règles ne s'appliquent qu'aux apps qui les gèrent
-  static const appVersion = '1.1.5';
+  static const appVersion = '1.1.6';
 
   Future<dynamic> _request(
     String method,
