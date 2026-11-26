@@ -23,11 +23,15 @@ extension ChosenCompanyX on ChosenCompany? {
 
 const _favKey = 'favorite_company';
 
+/// Les livreurs indépendants sont rattachés aux entreprises : le choix séparé est masqué
+const _showIndependentTile = false;
+
 /// Entreprise favorite mémorisée (présélectionnée à chaque commande)
 Future<ChosenCompany?> loadFavoriteCompany() async {
   final p = await SharedPreferences.getInstance();
   final v = p.getStringList(_favKey);
-  return v == null || v.length != 2 ? null : (id: v[0], name: v[1]);
+  // Ancien choix « Livreurs indépendants » : n'existe plus
+  return v == null || v.length != 2 || v[0] == kIndependentId ? null : (id: v[0], name: v[1]);
 }
 
 Future<void> _saveFavorite(ChosenCompany? c) async {
@@ -131,7 +135,8 @@ class _CompanyPickerState extends State<_CompanyPicker> {
             subtitle: 'Le livreur disponible le plus proche · grille LETO',
             onTap: () => Navigator.pop(context, ('all', null)),
           ),
-          if (_independents?['enabled'] == true) ...[
+          // Plus de choix « Livreurs indépendants » : ils sont rattachés aux entreprises
+          if (_showIndependentTile && _independents?['enabled'] == true) ...[
             const SizedBox(height: 10),
             _independentTile(p),
           ],

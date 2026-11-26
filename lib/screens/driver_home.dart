@@ -153,6 +153,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.on('stop:cancelled', _onStopCancelled);
     s.on('stop:cancel-refused', _onCancelRefused);
     s.on('stop:help-answer', _onHelpAnswer);
+    s.on('affiliation:changed', _onAffiliation);
     s.on('stop:retry', _onRetry);
     s.on('stop:return', _onStopReturn);
     s.on('delivery:cancelled', _onDeliveryCancelled);
@@ -184,6 +185,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.off('client:location', _onClientLocation);
     s.off('stop:cancel-refused', _onCancelRefused);
     s.off('stop:help-answer', _onHelpAnswer);
+    s.off('affiliation:changed', _onAffiliation);
     s.off('stop:retry', _onRetry);
     s.off('stop:return', _onStopReturn);
     s.off('delivery:cancelled', _onDeliveryCancelled);
@@ -295,6 +297,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       showInfo(context, 'Expéditeur · ${e['recipientName']} : ${e['answer']}');
     }
   }
+
+  /// Invitation d'une entreprise, rattachement accepté ou terminé : statut rechargé
+  void _onAffiliation(dynamic _) => _load();
 
   /// L'expéditeur demande une nouvelle tentative après un échec
   void _onRetry(dynamic e) {
@@ -1126,6 +1131,17 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                                 ),
                               ),
                               (
+                                PhosphorIconsFill.buildings,
+                                accent,
+                                'Mon entreprise',
+                                () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) => const AffiliationScreen(),
+                                  ),
+                                ),
+                              ),
+                              (
                                 PhosphorIconsFill.identificationCard,
                                 accent,
                                 'Mon dossier',
@@ -1177,13 +1193,15 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                             key: ValueKey(_blocked),
                             padding: const EdgeInsets.only(top: 10),
                             child: GestureDetector(
-                              // Indépendant : le bandeau mène au solde (recharge)
+                              // Indépendant : le bandeau mène à « Mon entreprise » (rattachement) ou au solde (recharge)
                               onTap: api.isIndependent
                                   ? () => Navigator.push(
                                       context,
                                       CupertinoPageRoute(
                                         builder: (_) =>
-                                            const IndependentBalanceScreen(),
+                                            _blocked!.contains('Rattachez')
+                                            ? const AffiliationScreen()
+                                            : const IndependentBalanceScreen(),
                                       ),
                                     )
                                   : null,

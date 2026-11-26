@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api.dart';
 import '../labels.dart';
@@ -1036,7 +1037,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
           InsetGroup(
             header: 'Mouvements',
             footer:
-                'La commission est réservée quand vous acceptez une course et prélevée à la fin de la tournée.',
+                'Les commissions (LETO et votre entreprise) sont réservées quand vous acceptez une course et prélevées à la fin de la tournée.',
             children: tx.isEmpty
                 ? [const GroupRow(title: 'Aucun mouvement pour le moment')]
                 : [
@@ -1046,6 +1047,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
                           'TOPUP' => 'Recharge',
                           'COMMISSION' => 'Commission',
                           'REFUND' => 'Remboursement (litige)',
+                          'AFFILIATE_COMMISSION' => 'Commission de votre entreprise',
                           _ => 'Correction LETO',
                         },
                         subtitle: [
@@ -1250,6 +1252,261 @@ class _TopupScreenState extends State<_TopupScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ======================================================================
+// Rattachement à une entreprise de livraison
+// ======================================================================
+
+/// « Mon entreprise » : entreprise de rattachement, invitations reçues, nouveau taux à accepter
+class AffiliationScreen extends StatefulWidget {
+  const AffiliationScreen({super.key});
+  @override
+  State<AffiliationScreen> createState() => _AffiliationScreenState();
+}
+
+class _AffiliationScreenState extends State<AffiliationScreen> {
+  final api = Api.instance;
+  Map<String, dynamic>? _a;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    Realtime.instance.socket.on('affiliation:changed', _onChanged);
+  }
+
+  @override
+  void dispose() {
+    Realtime.instance.socket.off('affiliation:changed', _onChanged);
+    super.dispose();
+  }
+
+  void _onChanged(dynamic _) => _load();
+
+  Future<void> _load() async {
+    try {
+      final a = await api.myAffiliation();
+      if (mounted) setState(() => _a = a);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  String _rate(dynamic type, dynamic value) =>
+      type == 'PERCENT' ? '${value is num && value == value.roundToDouble() ? value.toInt() : value} %' : formatMoney(value ?? 0);
+
+  Future<void> _act(Future<Map<String, dynamic>> Function() action, String done) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final a = await action();
+      if (!mounted) return;
+      hapticSuccess();
+      setState(() => _a = a);
+      showInfo(context, done);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _accept(Map inv) async {
+    final join = inv['kind'] == 'JOIN';
+    final ok = await showActions<bool>(
+      context,
+      title: join ? 'Rejoindre ${inv['companyName']} ?' : 'Accepter la nouvelle commission ?',
+      message: join
+          ? 'L’entreprise devient responsable de vous et prélève ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde, en plus de la commission LETO. Vous pourrez la quitter quand vous voulez (hors course en cours).'
+          : '${inv['companyName']} prélèvera ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde.',
+      actions: [(join ? 'Rejoindre' : 'Accepter', true, false)],
+    );
+    if (ok != true) return;
+    await _act(
+      () => api.acceptInvite(inv['id']),
+      join ? 'Vous êtes rattaché à ${inv['companyName']}' : 'Nouvelle commission acceptée',
+    );
+  }
+
+  Future<void> _decline(Map inv) => _act(
+    () => api.declineInvite(inv['id']),
+    inv['kind'] == 'JOIN' ? 'Invitation refusée' : 'Vous gardez l’ancienne commission',
+  );
+
+  Future<void> _leave(Map aff) async {
+    final reason = await prompt(
+      context,
+      'Quitter ${aff['companyName']} ?',
+      message: 'Vous ne recevrez plus de courses tant qu’une autre entreprise ne vous aura pas rattaché.',
+      placeholder: 'Motif (facultatif)',
+      ok: 'Quitter',
+    );
+    if (reason == null) return;
+    await _act(
+      () => api.leaveCompany(reason: reason.trim().isEmpty ? null : reason.trim()),
+      'Vous avez quitté ${aff['companyName']}',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final a = _a;
+    final aff = a?['affiliation'] as Map?;
+    final invites = ((a?['invites'] as List?) ?? []).cast<Map>();
+    final joins = invites.where((i) => i['kind'] == 'JOIN').toList();
+    final rates = invites.where((i) => i['kind'] == 'RATE').toList();
+    final legacy = DateTime.tryParse(a?['legacyUntil'] ?? '')?.toLocal();
+    final platform = a?['platformRate'] as Map?;
+    return LargeTitlePage(
+      title: 'Mon entreprise',
+      onRefresh: _load,
+      children: [
+        if (a == null)
+          const Padding(padding: EdgeInsets.all(32), child: CupertinoActivityIndicator())
+        else ...[
+          if (aff == null)
+            InsetGroup(
+              footer: legacy != null && legacy.isAfter(DateTime.now())
+                  ? 'Vous pouvez encore travailler seul jusqu’au ${legacy.day.toString().padLeft(2, '0')}/${legacy.month.toString().padLeft(2, '0')}/${legacy.year}. Après cette date, il faudra être rattaché à une entreprise pour recevoir des courses.'
+                  : 'Pour recevoir des courses, rattachez-vous à une entreprise de livraison : les entreprises voient votre profil validé par LETO et peuvent vous inviter.',
+              children: [
+                GroupRow(
+                  leading: IconBadge(PhosphorIconsFill.buildings, color: p.yellow),
+                  title: 'Aucune entreprise',
+                  subtitle: joins.isEmpty ? 'En attente d’une invitation' : '${joins.length} invitation(s) reçue(s)',
+                ),
+              ],
+            )
+          else
+            InsetGroup(
+              header: 'Rattaché à',
+              footer:
+                  'Votre entreprise est responsable de vous. Sa commission et celle de LETO${platform == null ? '' : ' (${_rate(platform['type'], platform['value'])})'} sont prélevées sur votre solde à la fin de chaque course.',
+              children: [
+                GroupRow(
+                  leading: const IconBadge(PhosphorIconsFill.buildings, color: accent),
+                  title: aff['companyName'] ?? '',
+                  subtitle: aff['since'] == null ? null : 'Depuis le ${_date(aff['since'])}',
+                  trailing: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    onPressed: () => launchUrl(telUri(aff['companyPhone'])),
+                    child: Icon(PhosphorIconsFill.phone, color: p.green, size: 22),
+                  ),
+                ),
+                GroupRow(
+                  leading: Icon(PhosphorIconsBold.tag, color: p.secondaryLabel, size: 20),
+                  title: 'Commission de l’entreprise',
+                  value: '${_rate(aff['rateType'], aff['rateValue'])} par course',
+                ),
+              ],
+            ),
+          for (final inv in rates)
+            _InviteCard(
+              title: 'Nouvelle commission proposée',
+              subtitle: '${inv['companyName']} propose ${_rate(inv['commissionType'], inv['commissionValue'])} par course. En attendant votre réponse, l’ancienne commission s’applique.',
+              busy: _busy,
+              acceptLabel: 'Accepter',
+              declineLabel: 'Garder l’ancienne',
+              onAccept: () => _accept(inv),
+              onDecline: () => _decline(inv),
+            ),
+          if (aff == null)
+            for (final inv in joins)
+              _InviteCard(
+                title: inv['companyName'] ?? '',
+                subtitle: [
+                  'Commission : ${_rate(inv['commissionType'], inv['commissionValue'])} par course',
+                  if ((inv['drivers'] ?? 0) > 0) '${inv['drivers']} livreurs',
+                  if ((inv['message'] ?? '').toString().isNotEmpty) '« ${inv['message']} »',
+                ].join(' · '),
+                busy: _busy,
+                acceptLabel: 'Rejoindre',
+                declineLabel: 'Refuser',
+                onAccept: () => _accept(inv),
+                onDecline: () => _decline(inv),
+              ),
+          if (aff != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              child: TintedButton(
+                'Quitter cette entreprise',
+                icon: PhosphorIconsBold.signOut,
+                onPressed: _busy ? null : () => _leave(aff),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  String _date(String iso) {
+    final d = DateTime.parse(iso).toLocal();
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+}
+
+class _InviteCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool busy;
+  final String acceptLabel;
+  final String declineLabel;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+  const _InviteCard({
+    required this.title,
+    required this.subtitle,
+    required this.busy,
+    required this.acceptLabel,
+    required this.declineLabel,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      padding: const EdgeInsets.all(14),
+      decoration: ShapeDecoration(
+        color: p.card,
+        shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const IconBadge(PhosphorIconsFill.envelopeSimple, color: accent),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: TextStyles.headline.copyWith(color: p.label))),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(subtitle, style: TextStyles.subheadline.copyWith(color: p.secondaryLabel)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: TintedButton(declineLabel, onPressed: busy ? null : onDecline)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: primaryButton, foregroundColor: onPrimaryButton),
+                  onPressed: busy ? null : onAccept,
+                  child: Text(acceptLabel),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
