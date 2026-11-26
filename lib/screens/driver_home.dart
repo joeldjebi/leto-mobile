@@ -50,6 +50,10 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   Timer? _timer;
   Timer? _heartbeat;
   Timer? _clock;
+  /// Surveille la connexion temps réel (iPhone : coupée en arrière-plan, parfois sans le signaler)
+  Timer? _watchdog;
+  DateTime? _pausedAt;
+  void Function()? _offConnect;
   StreamSubscription<Position>? _gps;
   int _absenceWaitMin = 5;
 
@@ -169,6 +173,22 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     SharedPreferences.getInstance().then((p) {
       if (p.getBool('driver_online') == true) _goOnline();
     });
+    // À chaque (re)connexion : les alertes envoyées pendant la coupure sont redemandées
+    _offConnect = Realtime.instance.onConnected(_replayAlerts);
+    _watchdog = Timer.periodic(const Duration(seconds: 15), (_) {
+      final s = Realtime.instance.socket;
+      if (!s.connected) s.connect();
+    });
+  }
+
+  /// Nouvelles courses envoyées pendant une coupure (app en arrière-plan, réseau) : alerte + son
+  Future<void> _replayAlerts() async {
+    if (!_online || api.token == null) return;
+    try {
+      for (final p in await api.driverAlerts()) {
+        if (p is Map) OrderAlert.instance.add(Map<String, dynamic>.from(p));
+      }
+    } catch (_) {}
   }
 
   @override
@@ -177,6 +197,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     _sheetExtent.dispose();
     _timer?.cancel();
     _clock?.cancel();
+    _watchdog?.cancel();
+    _offConnect?.call();
     _stopGps();
     final s = Realtime.instance.socket;
     s.off('deliveries:changed', _onChanged);
@@ -491,9 +513,23 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   /// Retour au premier plan (après Google Maps, un appel…) : connexion et GPS relancés
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      _pausedAt ??= DateTime.now();
+      return;
+    }
     if (state != AppLifecycleState.resumed) return;
+    final away = _pausedAt == null ? Duration.zero : DateTime.now().difference(_pausedAt!);
+    _pausedAt = null;
     final s = Realtime.instance.socket;
-    if (!s.connected) s.connect();
+    // iPhone : après quelques secondes en arrière-plan, la connexion peut paraître ouverte alors
+    // qu'elle est morte (aucun événement n'arrive) : on la refait à neuf
+    if (away.inSeconds >= 10) {
+      s.disconnect();
+      s.connect();
+    } else if (!s.connected) {
+      s.connect();
+    }
+    _replayAlerts();
     if (_online && devPosition == null) {
       _gps?.cancel();
       _gps = _positionStream().listen(_onGps, onError: (_) {});
@@ -550,6 +586,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   }
 
   Future<void> _load() async {
+    // Filet de sécurité si le temps réel est coupé sans le dire : l'alerte arrive à la prochaine actualisation
+    _replayAlerts();
     try {
       final r = await Future.wait([
         api.available(),

@@ -430,6 +430,9 @@ class Api {
   // ---------- Livreur ----------
   /// L'entreprise peut-elle travailler ? (abonnement actif, crédit disponible)
   Future<dynamic> billingStatus() => _request('GET', '/billing/driver-status');
+  /// Alertes de nouvelle course encore valables (renvoyées si l'app était déconnectée)
+  Future<List<dynamic>> driverAlerts() async =>
+      (await _request('GET', '/deliveries/alerts')) as List<dynamic>;
   Future<List<dynamic>> available() async =>
       await _request('GET', '/deliveries/available');
   Future<List<dynamic>> driverDeliveries() async =>
@@ -712,7 +715,7 @@ class Api {
       _request('POST', '/offers/$offerId/decline');
 
   /// Version de l'app envoyée au serveur : les nouvelles règles ne s'appliquent qu'aux apps qui les gèrent
-  static const appVersion = '1.1.9';
+  static const appVersion = '1.2.0';
 
   Future<dynamic> _request(
     String method,
