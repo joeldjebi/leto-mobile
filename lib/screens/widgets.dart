@@ -109,14 +109,14 @@ class LetoMap extends StatelessWidget {
   }
 
   Widget _map(BuildContext context, MapStyle style) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final url = dark && style.dark != null ? style.dark! : style.light;
+    // Carte toujours en couleur, même en mode sombre (lisibilité des rues et repères)
+    final url = style.light;
     return FlutterMap(
       mapController: controller,
       options: MapOptions(
         initialCenter: center,
         initialZoom: zoom,
-        backgroundColor: Palette.of(context).background,
+        backgroundColor: const Color(0xFFF2EFE9), // teinte des tuiles claires pendant le chargement
         onPositionChanged: onMove,
         onMapEvent: onMoveEnd == null
             ? null
@@ -139,8 +139,6 @@ class LetoMap extends StatelessWidget {
           subdomains: style.subdomains,
           maxNativeZoom: style.maxZoom.round(),
           userAgentPackageName: 'ci.leto.leto',
-          // Pas de variante sombre chez ce fournisseur : on assombrit les tuiles claires
-          tileBuilder: dark && style.dark == null ? darkModeTileBuilder : null,
           tileDisplay: const TileDisplay.fadeIn(
             duration: Duration(milliseconds: 220),
           ),
@@ -155,9 +153,7 @@ class LetoMap extends StatelessWidget {
                 style.attribution,
                 style: TextStyle(
                   fontSize: 9,
-                  color: (dark ? Colors.white : Colors.black).withValues(
-                    alpha: 0.45,
-                  ),
+                  color: Colors.black.withValues(alpha: 0.45), // carte claire
                 ),
               ),
             ),

@@ -317,27 +317,35 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   void _onStopReturn(dynamic e) {
     _load();
     if (mounted && e is Map) {
-      showInfo(context, 'Colis de ${e['recipientName']} à rapporter à l’expéditeur');
+      showInfo(
+        context,
+        'Colis de ${e['recipientName']} à rapporter à l’expéditeur',
+      );
     }
   }
 
   /// Appel depuis l'app : enregistré (preuve d'appel), puis composé
   Future<void> _call(Map d, Map? stop) async {
-    final phone = (stop == null ? d['pickupPhone'] : stop['recipientPhone']) as String?;
+    final phone =
+        (stop == null ? d['pickupPhone'] : stop['recipientPhone']) as String?;
     if (phone == null || phone.isEmpty) return;
     hapticTap();
-    unawaited(
-      api.logCall(d['id'], stop?['id']).then((_) => _load()),
-    );
+    unawaited(api.logCall(d['id'], stop?['id']).then((_) => _load()));
     if (!await launchUrl(telUri(phone)) && mounted) {
-      showError(context, 'Impossible de lancer l’appel. Numéro : ${formatPhone(phone)}');
+      showError(
+        context,
+        'Impossible de lancer l’appel. Numéro : ${formatPhone(phone)}',
+      );
     }
   }
 
   /// Destinataire injoignable sur place : l'expéditeur choisit (attendre, autre numéro, annuler)
   Future<void> _askSender(Map d, Map stop) async {
     if ((stop['callCount'] ?? 0) == 0) {
-      showError(context, 'Appelez d’abord ${stop['recipientName']} depuis l’app.');
+      showError(
+        context,
+        'Appelez d’abord ${stop['recipientName']} depuis l’app.',
+      );
       return;
     }
     final note = await prompt(
@@ -350,7 +358,11 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     );
     if (note == null) return;
     await _run(
-      () => api.requestHelp(d['id'], stop['id'], note: note.isEmpty ? null : note),
+      () => api.requestHelp(
+        d['id'],
+        stop['id'],
+        note: note.isEmpty ? null : note,
+      ),
       'Expéditeur prévenu · patientez sa réponse',
     );
   }
@@ -443,11 +455,15 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       final ok = await showActions<bool>(
         context,
         title: 'Colis rendus à l’expéditeur ?',
-        message: 'Confirmez une fois les colis remis en main propre au point de départ.',
+        message:
+            'Confirmez une fois les colis remis en main propre au point de départ.',
         actions: [('J’ai rendu les colis', true, false)],
       );
       if (ok != true) return;
-      await _run(() => api.confirmReturn(d['id']), 'Colis rendus — tournée terminée');
+      await _run(
+        () => api.confirmReturn(d['id']),
+        'Colis rendus — tournée terminée',
+      );
       return;
     }
     final code = await prompt(
@@ -903,7 +919,10 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     if (reason == 'CANCEL') return _requestCancel(d, stop);
     if ((reason == 'ABSENT' || reason == 'WRONG_ADDRESS') &&
         (stop['callCount'] ?? 0) == 0) {
-      showError(context, 'Appelez d’abord ${stop['recipientName']} depuis l’app.');
+      showError(
+        context,
+        'Appelez d’abord ${stop['recipientName']} depuis l’app.',
+      );
       return;
     }
     final waitUntil = DateTime.tryParse(stop['waitUntil'] ?? '');
@@ -1998,7 +2017,10 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           children: [
             for (final s in deciding)
               GroupRow(
-                leading: IconBadge(PhosphorIconsBold.hourglassMedium, color: p.yellow),
+                leading: IconBadge(
+                  PhosphorIconsBold.hourglassMedium,
+                  color: p.yellow,
+                ),
                 title: s['recipientName'],
                 subtitle: _deadlineText(s),
               ),
@@ -2045,13 +2067,20 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               ),
             if ((next['attempt'] ?? 1) > 1)
               GroupRow(
-                leading: IconBadge(PhosphorIconsBold.arrowClockwise, color: accent),
+                leading: IconBadge(
+                  PhosphorIconsBold.arrowClockwise,
+                  color: accent,
+                ),
                 title: '2e passage · nouvelle tentative',
-                subtitle: 'Demandée par l’expéditeur. Appelez le destinataire avant d’y aller.',
+                subtitle:
+                    'Demandée par l’expéditeur. Appelez le destinataire avant d’y aller.',
               ),
             if (helpPending)
               GroupRow(
-                leading: IconBadge(PhosphorIconsBold.hourglassMedium, color: p.yellow),
+                leading: IconBadge(
+                  PhosphorIconsBold.hourglassMedium,
+                  color: p.yellow,
+                ),
                 title: 'Expéditeur prévenu',
                 subtitle: 'En attente de sa réponse · restez sur place',
               ),
@@ -2067,7 +2096,10 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               ),
             if (next['cancelRequestedAt'] != null)
               GroupRow(
-                leading: IconBadge(PhosphorIconsBold.hourglassMedium, color: p.yellow),
+                leading: IconBadge(
+                  PhosphorIconsBold.hourglassMedium,
+                  color: p.yellow,
+                ),
                 title: 'Annulation en attente',
                 subtitle:
                     'L’expéditeur doit confirmer · continuez vers les autres arrêts',
@@ -2107,7 +2139,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                       : 'Marquer comme livré',
                 ),
               ),
-              if (arrived && !helpPending && next['cancelRequestedAt'] == null) ...[
+              if (arrived &&
+                  !helpPending &&
+                  next['cancelRequestedAt'] == null) ...[
                 const SizedBox(height: 10),
                 TintedButton(
                   'Injoignable · prévenir l’expéditeur',
@@ -2256,7 +2290,11 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             height: 34,
             alignment: Alignment.center,
             decoration: BoxDecoration(color: p.green, shape: BoxShape.circle),
-            child: const Icon(PhosphorIconsFill.phone, size: 17, color: Colors.white),
+            child: const Icon(
+              PhosphorIconsFill.phone,
+              size: 17,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -2272,9 +2310,18 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
 
   /// Reste à verser à l'entreprise, bouton de versement, historique
   List<Widget> _cashSection(Palette p) {
+    final independent = _cash!['independent'] == true;
     final b = (_cash!['balance'] ?? {}) as Map;
     final history = ((_cash!['history'] as List?) ?? [])
         .cast<Map<String, dynamic>>();
+    // Livreur indépendant : seulement s'il encaisse à la livraison pour son entreprise
+    if (independent &&
+        (_cash!['balance'] == null ||
+            (_cash!['codAllowed'] != true &&
+                ((b['cod'] ?? 0) as num) == 0 &&
+                history.isEmpty))) {
+      return const [];
+    }
     final toRemit = (b['toRemit'] ?? 0) as num;
     final pending = (b['pending'] ?? 0) as num;
     final pct = (b['sharePercent'] ?? 0) as num;
@@ -2286,16 +2333,17 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     };
     return [
       InsetGroup(
-        header: 'À verser à mon entreprise',
-        footer: pct > 0
+        header: independent
+            ? 'Encaissements à verser · ${_cash!['companyName'] ?? 'mon entreprise'}'
+            : 'À verser à mon entreprise',
+        footer: independent
+            ? 'Vous gardez le prix de vos courses. Les montants encaissés à la livraison reviennent à votre entreprise, qui les reverse aux clients.'
+            : pct > 0
             ? 'Vous gardez $pct % du prix de vos courses (${formatMoney(b['share'] ?? 0)} au total). Le reste, avec les paiements encaissés à la livraison, revient à votre entreprise.'
             : 'Le prix des courses et les paiements encaissés à la livraison reviennent à votre entreprise.',
         children: [
           GroupRow(
-            leading: const IconBadge(
-              PhosphorIconsFill.tray,
-              color: accent,
-            ),
+            leading: const IconBadge(PhosphorIconsFill.tray, color: accent),
             title: 'Reste à verser',
             subtitle: pending > 0
                 ? '${formatMoney(pending)} en attente de confirmation'
@@ -2303,23 +2351,24 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             value: formatMoney(toRemit),
           ),
           GroupRow(
-            leading: IconBadge(
-              PhosphorIconsFill.sealCheck,
-              color: p.green,
-            ),
+            leading: IconBadge(PhosphorIconsFill.sealCheck, color: p.green),
             title: 'Déjà versé',
             value: formatMoney(b['confirmed'] ?? 0),
           ),
-          GroupRow(
-            leading: IconBadge(
-              PhosphorIconsFill.money,
-              color: p.blue,
+          if (independent)
+            GroupRow(
+              leading: IconBadge(PhosphorIconsFill.money, color: p.blue),
+              title: 'Encaissé à la livraison',
+              value: formatMoney(b['cod'] ?? 0),
             ),
-            title: 'Gagné ce mois',
-            subtitle:
-                '${b['deliveries'] ?? 0} course(s) au total · ${formatMoney(b['earned'] ?? 0)}',
-            value: formatMoney(b['month'] ?? 0),
-          ),
+          if (!independent)
+            GroupRow(
+              leading: IconBadge(PhosphorIconsFill.money, color: p.blue),
+              title: 'Gagné ce mois',
+              subtitle:
+                  '${b['deliveries'] ?? 0} course(s) au total · ${formatMoney(b['earned'] ?? 0)}',
+              value: formatMoney(b['month'] ?? 0),
+            ),
         ],
       ),
       Padding(
@@ -2643,9 +2692,17 @@ class _OrderCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 if (d['speed'] == 'EXPRESS')
-                  Pill('Express', color: p.red, icon: PhosphorIconsFill.lightning),
+                  Pill(
+                    'Express',
+                    color: p.red,
+                    icon: PhosphorIconsFill.lightning,
+                  ),
                 if (d['speed'] == 'SCHEDULED')
-                  Pill('Dans 2 h', color: p.blue, icon: PhosphorIconsBold.clock),
+                  Pill(
+                    'Dans 2 h',
+                    color: p.blue,
+                    icon: PhosphorIconsBold.clock,
+                  ),
                 if (match?['kind'] == 'ROUTE')
                   Pill(
                     'Sur votre trajet',
@@ -2789,11 +2846,7 @@ class _BlockedBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            PhosphorIconsFill.warning,
-            color: p.red,
-            size: 22,
-          ),
+          Icon(PhosphorIconsFill.warning, color: p.red, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

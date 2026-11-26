@@ -1452,6 +1452,12 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
                   title: 'Commission de l’entreprise',
                   value: '${_rate(aff['rateType'], aff['rateValue'])} par course',
                 ),
+                GroupRow(
+                  leading: Icon(PhosphorIconsBold.handCoins, color: p.secondaryLabel, size: 20),
+                  title: 'Paiement à la livraison',
+                  subtitle: aff['codAllowed'] == true ? 'Versez les montants encaissés à votre entreprise' : null,
+                  value: aff['codAllowed'] == true ? 'Autorisé' : 'Non autorisé',
+                ),
               ],
             ),
           for (final inv in rates)

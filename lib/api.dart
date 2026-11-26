@@ -702,7 +702,7 @@ class Api {
       _request('POST', '/offers/$offerId/decline');
 
   /// Version de l'app envoyée au serveur : les nouvelles règles ne s'appliquent qu'aux apps qui les gèrent
-  static const appVersion = '1.1.6';
+  static const appVersion = '1.1.7';
 
   Future<dynamic> _request(
     String method,
