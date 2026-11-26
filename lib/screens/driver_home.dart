@@ -22,6 +22,7 @@ import '../notifications.dart';
 import '../realtime.dart';
 import 'driver_course_sheet.dart';
 import 'documents_screen.dart';
+import 'payroll_screen.dart';
 import 'independent_screens.dart';
 import 'logbook_screen.dart';
 import 'cancel_reasons.dart';
@@ -1188,6 +1189,18 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                                 },
                               ),
                             ],
+                            if (!api.isIndependent)
+                              (
+                                PhosphorIconsFill.wallet,
+                                p.green,
+                                'Ma paye',
+                                () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) => const PayrollScreen(),
+                                  ),
+                                ),
+                              ),
                             (
                               PhosphorIconsFill.clock,
                               p.blue,
@@ -2325,7 +2338,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     final toRemit = (b['toRemit'] ?? 0) as num;
     final pending = (b['pending'] ?? 0) as num;
     final pct = (b['sharePercent'] ?? 0) as num;
-    const methods = {'CASH': 'Espèces', 'MOBILE_MONEY': 'Mobile Money'};
+    const methods = {'CASH': 'Espèces', 'MOBILE_MONEY': 'Mobile Money', 'PAYROLL': 'Déduit de la paie'};
     const statuses = {
       'PENDING': 'À confirmer',
       'CONFIRMED': 'Confirmé',

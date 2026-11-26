@@ -570,6 +570,16 @@ class Api {
   Future<Map<String, dynamic>> notificationSounds() async =>
       (await _request('GET', '/notifications/sounds')) as Map<String, dynamic>;
 
+  // ---------- Paye (livreurs des entreprises) ----------
+  Future<Map<String, dynamic>> myPayroll() async =>
+      (await _request('GET', '/payroll/me')) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> confirmPayslip(String id) async =>
+      (await _request('POST', '/payroll/me/payslips/$id/confirm')) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> disputePayslip(String id, String note) async =>
+      (await _request('POST', '/payroll/me/payslips/$id/dispute', {'note': note})) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> requestAdvance(int amount, {String? reason}) async =>
+      (await _request('POST', '/payroll/me/advances', {'amount': amount, 'reason': ?reason})) as Map<String, dynamic>;
+
   // ---------- Livreurs indépendants : rattachement à une entreprise ----------
   Future<Map<String, dynamic>> myAffiliation() async =>
       (await _request('GET', '/affiliations/me')) as Map<String, dynamic>;
@@ -702,7 +712,7 @@ class Api {
       _request('POST', '/offers/$offerId/decline');
 
   /// Version de l'app envoyée au serveur : les nouvelles règles ne s'appliquent qu'aux apps qui les gèrent
-  static const appVersion = '1.1.8';
+  static const appVersion = '1.1.9';
 
   Future<dynamic> _request(
     String method,
