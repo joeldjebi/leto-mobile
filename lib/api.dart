@@ -12,7 +12,7 @@ import 'notifications.dart';
 import 'realtime.dart';
 
 /// API de production
-const prodApiUrl = 'https://api.leto.performx.online';
+const prodApiUrl = 'https://api.vite.ci';
 
 /// URL de l'API : la production par défaut.
 /// Développement : --dart-define=API_URL=local (votre Mac : localhost, ou 10.0.2.2 sur émulateur Android)
@@ -69,7 +69,7 @@ String? trackingUrl(Map d) {
   if (token == null) return null;
   // Site public (l'espace sa.leto… est réservé à l'administration)
   final base = apiUrl == prodApiUrl
-      ? 'https://leto.performx.online'
+      ? 'https://vite.ci'
       : apiUrl.replaceFirst(':3000', ':5173');
   return '$base/#/suivi/$token';
 }
