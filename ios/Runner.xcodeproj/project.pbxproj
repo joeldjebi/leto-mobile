@@ -16,6 +16,9 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		C4946CEA0F9C2F58BCA3EF0F /* LetoLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E57EF666E0B49F37EE9A23 /* LetoLiveActivity.swift */; };
+		CFB38521D048E3007537428B /* LetoLive.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D4AF0FAAAD49B8279C6FA6DC /* LetoLive.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		EADFBE0379CC555AF63B4DF0 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F71CB9BD29680DEE517521F /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -26,9 +29,27 @@
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
 		};
+		71630D1C68F3A5077141DD59 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0B5F88DC57230495BBCC95C0;
+			remoteInfo = LetoLive;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		389376DC50A69A55226D52BF /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CFB38521D048E3007537428B /* LetoLive.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9705A1C41CF9048500538489 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -43,19 +64,25 @@
 
 /* Begin PBXFileReference section */
 		041C6ADFC5EFE46B5DB16033 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
+		052ADA130E6145FFCF935660 /* README.md */ = {isa = PBXFileReference; includeInIndex = 1; path = README.md; sourceTree = "<group>"; };
 		098F8C618BDAAB68D60F21B9 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
+		11900D667FB3813352583050 /* LetoLive.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = LetoLive.entitlements; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		2B4AB498D3AFAD937A3A8C81 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		34E57EF666E0B49F37EE9A23 /* LetoLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LetoLiveActivity.swift; sourceTree = "<group>"; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
+		3F71CB9BD29680DEE517521F /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		4B038C368739A9F2131B3D28 /* Runner.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		67EA3F3445F192673591DCB7 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D2B9BA836D10F8A9D184F25 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		782C371873FB5CC86E6338F8 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
+		8530446B5439BF0E37BF5FFF /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -63,11 +90,21 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		9B0FC0EE0F4895D8733B6046 /* LetoLive.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = LetoLive.xcconfig; sourceTree = "<group>"; };
 		CBAA692182D6691EE4013CDC /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4AF0FAAAD49B8279C6FA6DC /* LetoLive.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LetoLive.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F6DB94720DAFB05319CE250B /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		92679D9FB603569D62676A4E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EADFBE0379CC555AF63B4DF0 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		97C146EB1CF9000F007C117D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -87,6 +124,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0E634D51406B8F25202C93FB /* LetoLive */ = {
+			isa = PBXGroup;
+			children = (
+				34E57EF666E0B49F37EE9A23 /* LetoLiveActivity.swift */,
+				8530446B5439BF0E37BF5FFF /* Info.plist */,
+				9B0FC0EE0F4895D8733B6046 /* LetoLive.xcconfig */,
+				11900D667FB3813352583050 /* LetoLive.entitlements */,
+				052ADA130E6145FFCF935660 /* README.md */,
+			);
+			name = LetoLive;
+			path = LetoLive;
+			sourceTree = "<group>";
+		};
 		331C8082294A63A400263BE5 /* RunnerTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -129,6 +179,7 @@
 				331C8082294A63A400263BE5 /* RunnerTests */,
 				3326933C6DA4E9BA3958617C /* Pods */,
 				EFF755DEB2ED827F1BCD3C48 /* Frameworks */,
+				0E634D51406B8F25202C93FB /* LetoLive */,
 			);
 			sourceTree = "<group>";
 		};
@@ -137,6 +188,7 @@
 			children = (
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
+				D4AF0FAAAD49B8279C6FA6DC /* LetoLive.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -152,8 +204,17 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
+				4B038C368739A9F2131B3D28 /* Runner.entitlements */,
 			);
 			path = Runner;
+			sourceTree = "<group>";
+		};
+		BB7FC4854F7284E3DD4EEF37 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				3F71CB9BD29680DEE517521F /* Foundation.framework */,
+			);
+			name = iOS;
 			sourceTree = "<group>";
 		};
 		EFF755DEB2ED827F1BCD3C48 /* Frameworks */ = {
@@ -161,6 +222,7 @@
 			children = (
 				CBAA692182D6691EE4013CDC /* Pods_Runner.framework */,
 				67EA3F3445F192673591DCB7 /* Pods_RunnerTests.framework */,
+				BB7FC4854F7284E3DD4EEF37 /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -168,6 +230,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		0B5F88DC57230495BBCC95C0 /* LetoLive */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CC2369B9BD54FD6D247C3898 /* Build configuration list for PBXNativeTarget "LetoLive" */;
+			buildPhases = (
+				63E8BC008D533ABFDF922636 /* Sources */,
+				92679D9FB603569D62676A4E /* Frameworks */,
+				012C3BE2ABED9E66618A2E84 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LetoLive;
+			productName = LetoLive;
+			productReference = D4AF0FAAAD49B8279C6FA6DC /* LetoLive.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		331C8080294A63A400263BE5 /* RunnerTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 331C8087294A63A400263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */;
@@ -197,6 +276,7 @@
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
+				389376DC50A69A55226D52BF /* Embed Foundation Extensions */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 				F9AFD936C8F6AC68E90CA5DF /* [CP] Embed Pods Frameworks */,
 				806F1ABA355C6CF0A2F0BDE3 /* [CP] Copy Pods Resources */,
@@ -204,6 +284,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				D57472C7BB9F45098B7B73D9 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -245,11 +326,19 @@
 			targets = (
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
+				0B5F88DC57230495BBCC95C0 /* LetoLive */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		012C3BE2ABED9E66618A2E84 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		331C807F294A63A400263BE5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -391,6 +480,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		63E8BC008D533ABFDF922636 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C4946CEA0F9C2F58BCA3EF0F /* LetoLiveActivity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		97C146EA1CF9000F007C117D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -407,6 +504,12 @@
 			isa = PBXTargetDependency;
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = 331C8085294A63A400263BE5 /* PBXContainerItemProxy */;
+		};
+		D57472C7BB9F45098B7B73D9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = LetoLive;
+			target = 0B5F88DC57230495BBCC95C0 /* LetoLive */;
+			targetProxy = 71630D1C68F3A5077141DD59 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -488,6 +591,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = T6Y62WJ9M7;
 				ENABLE_BITCODE = NO;
@@ -551,6 +655,61 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner";
+			};
+			name = Profile;
+		};
+		62E22FAD610A47EB88F0AA1F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9B0FC0EE0F4895D8733B6046 /* LetoLive.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = LetoLive/LetoLive.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = T6Y62WJ9M7;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LetoLive/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = ci.leto.leto.LetoLive;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7CDEE24F9E600AB556112742 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9B0FC0EE0F4895D8733B6046 /* LetoLive.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = LetoLive/LetoLive.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = T6Y62WJ9M7;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LetoLive/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = ci.leto.leto.LetoLive;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Profile;
 		};
@@ -671,6 +830,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = T6Y62WJ9M7;
 				ENABLE_BITCODE = NO;
@@ -694,6 +854,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = T6Y62WJ9M7;
 				ENABLE_BITCODE = NO;
@@ -707,6 +868,34 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		DD5FB0647E662E22F01F05C8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9B0FC0EE0F4895D8733B6046 /* LetoLive.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = LetoLive/LetoLive.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = T6Y62WJ9M7;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LetoLive/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = ci.leto.leto.LetoLive;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -739,6 +928,16 @@
 				97C147061CF9000F007C117D /* Debug */,
 				97C147071CF9000F007C117D /* Release */,
 				249021D4217E4FDB00AE95B9 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CC2369B9BD54FD6D247C3898 /* Build configuration list for PBXNativeTarget "LetoLive" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DD5FB0647E662E22F01F05C8 /* Release */,
+				62E22FAD610A47EB88F0AA1F /* Debug */,
+				7CDEE24F9E600AB556112742 /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
