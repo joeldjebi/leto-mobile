@@ -2131,6 +2131,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           p,
           subtitle: [_typeOf(d), ?routeInfo].join(' · '),
         ),
+        // Avant de partir : appeler l'expéditeur puis chaque destinataire (bien visible, en premier)
+        _callChecklist(d, p, sender, stops),
         InsetGroup(
           children: [
             GroupRow(
@@ -2138,14 +2140,6 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               title: '${d['pickupAddress']} (${d['pickupCommune']})',
               subtitle: d['pickupDetails'],
               trailing: _navButton(pointOf(d, 'pickup'), p),
-            ),
-            GroupRow(
-              leading: Avatar(sender, radius: 15),
-              title: sender,
-              subtitle: d['pickupCalledAt'] != null
-                  ? 'Expéditeur · appelé ✓'
-                  : 'Expéditeur · appelez : colis prêt ?',
-              trailing: _phone(d['pickupPhone'], p, () => _call(d, null)),
             ),
             ?_clientRow(d, p),
             if (d['pickupPhotoUrl'] != null)
@@ -2164,30 +2158,16 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
               ),
           ],
         ),
-        // Avant de prendre la route : appeler l'expéditeur et chaque destinataire
-        InsetGroup(
-          header: n > 1 ? 'Destinataires à appeler' : 'Destinataire à appeler',
-          footer: 'Confirmez la disponibilité et l’heure de passage.',
-          children: [
-            for (final s in stops.where((s) => s['status'] == 'PENDING'))
-              GroupRow(
-                leading: _calledBadge(s['calledAt'] != null, p),
-                title: s['recipientName'],
-                subtitle: [
-                  '${s['address']} (${s['commune']})',
-                  if (((s['codAmount'] ?? 0) as num) > 0)
-                    'À encaisser ${formatMoney(s['codAmount'], d['currency'])}',
-                ].join(' · '),
-                trailing: _phone(s['recipientPhone'], p, () => _call(d, s)),
-              ),
-          ],
-        ),
         Builder(
           builder: (_) {
-            final missing = stops
-                .where((s) => s['status'] == 'PENDING' && s['calledAt'] == null)
-                .length;
-            final blocked = api.preCallRequired && missing > 0;
+            final pending = stops.where((s) => s['status'] == 'PENDING');
+            final notCalled = [
+              if (d['pickupCalledAt'] == null)
+                sender.isEmpty ? 'l’expéditeur' : sender,
+              for (final s in pending.where((s) => s['calledAt'] == null))
+                '${s['recipientName']}',
+            ];
+            final blocked = api.preCallRequired && notCalled.isNotEmpty;
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: FilledButton(
@@ -2201,9 +2181,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                       ),
                 child: Text(
                   blocked
-                      ? (missing == 1
-                            ? 'Appelez le destinataire pour continuer'
-                            : 'Appelez les $missing destinataires pour continuer')
+                      ? (notCalled.length == 1
+                            ? 'Appelez ${notCalled.first} avant de partir'
+                            : 'Encore ${notCalled.length} appels avant de partir')
                       : n > 1
                       ? 'J’ai récupéré les $n colis'
                       : 'J’ai récupéré le colis',
@@ -2638,11 +2618,161 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   );
 
   /// Appelé (coche) ou à appeler, pour la liste « Avant de prendre la route »
-  Widget _calledBadge(bool called, Palette p) => Icon(
-    called ? PhosphorIconsFill.checkCircle : PhosphorIconsBold.circle,
-    size: 20,
-    color: called ? p.green : p.tertiaryLabel,
-  );
+  /// « Avant de partir, appelez » : expéditeur (colis prêt ?) puis chaque destinataire (disponible ?), numérotés,
+  /// cochés une fois appelés. Évite un trajet pour rien.
+  Widget _callChecklist(Map d, Palette p, String sender, List<Map> stops) {
+    final pending = stops.where((s) => s['status'] == 'PENDING').toList();
+    final rows =
+        <
+          ({
+            String who,
+            String name,
+            String ask,
+            String? phone,
+            bool called,
+            VoidCallback onCall,
+          })
+        >[
+          (
+            who: 'Expéditeur',
+            name: sender.isEmpty ? 'Expéditeur' : sender,
+            ask: 'Le colis est-il prêt ?',
+            phone: d['pickupPhone'] as String?,
+            called: d['pickupCalledAt'] != null,
+            onCall: () => _call(d, null),
+          ),
+          for (final s in pending)
+            (
+              who: pending.length > 1
+                  ? 'Destinataire ${s['position'] + 1}'
+                  : 'Destinataire',
+              name: '${s['recipientName']}',
+              ask: [
+                'Êtes-vous disponible ?',
+                if (((s['codAmount'] ?? 0) as num) > 0)
+                  'À encaisser ${formatMoney(s['codAmount'], d['currency'])}',
+              ].join(' · '),
+              phone: s['recipientPhone'] as String?,
+              called: s['calledAt'] != null,
+              onCall: () => _call(d, s),
+            ),
+        ];
+    final done = rows.where((r) => r.called).length;
+    final all = done == rows.length;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+      decoration: ShapeDecoration(
+        color: all
+            ? p.green.withValues(alpha: 0.10)
+            : accent.withValues(alpha: 0.10),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(
+            color: (all ? p.green : accent).withValues(alpha: 0.35),
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                all
+                    ? PhosphorIconsFill.checkCircle
+                    : PhosphorIconsFill.phoneCall,
+                color: all ? p.green : accent,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  all
+                      ? 'Tout le monde est prévenu : en route !'
+                      : 'Avant de partir, appelez',
+                  style: TextStyles.headline.copyWith(color: p.label),
+                ),
+              ),
+              Text(
+                '$done/${rows.length}',
+                style: TextStyles.subheadline.copyWith(
+                  color: p.secondaryLabel,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          for (final (i, r) in rows.indexed)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 26,
+                    height: 26,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: r.called ? p.green : p.card,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: r.called ? p.green : p.separator,
+                      ),
+                    ),
+                    child: r.called
+                        ? const Icon(
+                            PhosphorIconsBold.check,
+                            color: Colors.white,
+                            size: 14,
+                          )
+                        : Text(
+                            '${i + 1}',
+                            style: TextStyles.footnote.copyWith(
+                              color: p.label,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${r.who} · ${r.name}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyles.body.copyWith(
+                            color: p.label,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          r.called ? 'Appelé' : r.ask,
+                          style: TextStyles.footnote.copyWith(
+                            color: r.called ? p.green : p.secondaryLabel,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _phone(r.phone, p, r.onCall),
+                ],
+              ),
+            ),
+          if (!all)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 8),
+              child: Text(
+                'Confirmez que le colis est prêt et que chacun est joignable : vous évitez un trajet pour rien.',
+                style: TextStyles.footnote.copyWith(color: p.secondaryLabel),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   /// Reste à verser à l'entreprise, bouton de versement, historique
   List<Widget> _cashSection(Palette p) {
