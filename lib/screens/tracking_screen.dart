@@ -1435,7 +1435,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             leading: IconBadge(PhosphorIconsBold.info, color: p.secondaryLabel),
             title: 'Détails de la commande',
             subtitle: [
-              vehicleLabels[d['vehicleType']],
+              if (d['vehicleType'] != null) vehicleName(d['vehicleType']),
               speedLabels[d['speed']],
               if (d['distanceKm'] != null) km(d['distanceKm']),
             ].whereType<String>().join(' · '),

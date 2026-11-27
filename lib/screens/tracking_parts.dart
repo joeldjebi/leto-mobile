@@ -34,9 +34,9 @@ class DeliveryProgress extends StatelessWidget {
     final p = Palette.of(context);
     final steps = <(IconData, String)>[
       (PhosphorIconsBold.check, 'Commandée'),
-      (vehicleIcon(vehicle), 'Livreur en route'),
+      (vehicleMarkerIcon(vehicle), 'Livreur en route'),
       (PhosphorIconsFill.package, 'Colis récupéré'),
-      (vehicleIcon(vehicle), 'En livraison'),
+      (vehicleMarkerIcon(vehicle), 'En livraison'),
       (PhosphorIconsFill.flagCheckered, 'Livré'),
     ];
     final reached = _reached;
@@ -217,7 +217,7 @@ class VehiclePlate extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 6),
-        Icon(vehicleIcon(vehicle), size: 34, color: accent),
+        Icon(vehicleMarkerIcon(vehicle), size: 34, color: accent),
       ],
     );
   }
@@ -536,7 +536,8 @@ Future<void> showOrderDetails(BuildContext context, Map<String, dynamic> d) {
                   GroupRow(
                     title: 'Service',
                     value: [
-                      vehicleLabels[d['vehicleType']],
+                      if (d['vehicleType'] != null)
+                        vehicleName(d['vehicleType']),
                       speedLabels[d['speed']],
                     ].whereType<String>().join(' · '),
                   ),
@@ -571,7 +572,8 @@ Future<void> showOrderDetails(BuildContext context, Map<String, dynamic> d) {
                       ),
                       title: driver['name'] ?? '',
                       subtitle: [
-                        vehicleLabels[driver['vehicleType']],
+                        if (driver['vehicleType'] != null)
+                          vehicleName(driver['vehicleType']),
                         if ((driver['plate'] ?? '').toString().isNotEmpty)
                           driver['plate'],
                         if (ratingOf(driver) != null)

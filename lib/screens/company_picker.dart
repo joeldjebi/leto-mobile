@@ -31,7 +31,9 @@ Future<ChosenCompany?> loadFavoriteCompany() async {
   final p = await SharedPreferences.getInstance();
   final v = p.getStringList(_favKey);
   // Ancien choix « Livreurs indépendants » : n'existe plus
-  return v == null || v.length != 2 || v[0] == kIndependentId ? null : (id: v[0], name: v[1]);
+  return v == null || v.length != 2 || v[0] == kIndependentId
+      ? null
+      : (id: v[0], name: v[1]);
 }
 
 Future<void> _saveFavorite(ChosenCompany? c) async {
@@ -357,7 +359,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
                           ),
                           if (moto != null)
                             Text(
-                              '${vehicleLabels[moto['vehicle']] ?? moto['label']} dès ${formatMoney(moto['min'])} · ~${formatMoney(moto['sample5km'])} pour 5 km',
+                              '${vehicleName(moto['vehicle'], fallback: moto['name'] ?? moto['label'])} dès ${formatMoney(moto['min'])} · ~${formatMoney(moto['sample5km'])} pour 5 km',
                               style: TextStyles.footnote.copyWith(
                                 color: p.secondaryLabel,
                               ),
@@ -402,14 +404,17 @@ class _CompanyPickerState extends State<_CompanyPicker> {
                         child: Row(
                           children: [
                             Icon(
-                              vehicleIcons[v['vehicle']],
+                              vehicleIcon(v['vehicle'], hint: v['icon']),
                               size: 20,
                               color: p.secondaryLabel,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                vehicleLabels[v['vehicle']] ?? v['label'],
+                                vehicleName(
+                                  v['vehicle'],
+                                  fallback: v['name'] ?? v['label'],
+                                ),
                                 style: TextStyles.subheadline.copyWith(
                                   color: p.label,
                                 ),

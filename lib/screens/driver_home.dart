@@ -3036,7 +3036,7 @@ class _OrderCard extends StatelessWidget {
                     icon: PhosphorIconsBold.arrowsSplit,
                   ),
                 const Spacer(),
-                Icon(vehicleIcons[d['vehicleType']], color: p.label, size: 26),
+                Icon(vehicleIcon(d['vehicleType']), color: p.label, size: 26),
               ],
             ),
             const SizedBox(height: 8),

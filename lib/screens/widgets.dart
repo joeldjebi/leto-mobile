@@ -16,6 +16,7 @@ export 'phone_field.dart';
 import '../api.dart';
 import '../geo.dart';
 import '../labels.dart';
+import '../vehicles.dart' as vehicles show vehicleMarkerIcon;
 import '../main.dart';
 
 // ============================================================================
@@ -265,12 +266,9 @@ class _Dot extends StatelessWidget {
 }
 
 /// Livreur (moto)
-/// Icône de l'engin du livreur (MOTO, CAR, CARGO)
-IconData vehicleIcon(String? vehicle) => switch (vehicle) {
-  'CAR' => PhosphorIconsFill.carProfile,
-  'CARGO' => PhosphorIconsFill.truck,
-  _ => PhosphorIconsFill.motorcycle,
-};
+/// Icône de l'engin du livreur (catalogue des engins)
+IconData vehicleMarkerIcon(String? vehicle) =>
+    vehicles.vehicleMarkerIcon(vehicle);
 
 /// Livreur de la course suivie : l'icône de son engin dans une pastille
 Marker driverMarker(
@@ -312,7 +310,7 @@ Marker driverMarker(
             ),
           ],
         ),
-        child: Icon(vehicleIcon(vehicle), color: Colors.white, size: 24),
+        child: Icon(vehicleMarkerIcon(vehicle), color: Colors.white, size: 24),
       ),
     ],
   ),
@@ -350,11 +348,8 @@ Marker nearbyDriverMarker(LatLng p, String vehicle) => Marker(
   width: 24,
   height: 24,
   child: Semantics(
-    label: vehicle == 'CAR'
-        ? 'Livreur en voiture'
-        : vehicle == 'CARGO'
-        ? 'Livreur en cargo'
-        : 'Livreur à moto',
+    label:
+        '${const {'moto', 'bike'}.contains(vehicleIconKind(vehicle)) ? 'Livreur à' : 'Livreur en'} ${vehicleName(vehicle).toLowerCase()}',
     child: Container(
       decoration: BoxDecoration(
         color: Colors.white,

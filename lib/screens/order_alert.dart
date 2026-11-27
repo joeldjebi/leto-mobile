@@ -463,8 +463,7 @@ class _OrderAlertViewState extends State<_OrderAlertView>
                             if (o['vehicleType'] != null)
                               chip(
                                 PhosphorIconsBold.package,
-                                vehicleLabels[o['vehicleType']] ??
-                                    '${o['vehicleType']}',
+                                vehicleName(o['vehicleType']),
                               ),
                             if (cod > 0)
                               chip(

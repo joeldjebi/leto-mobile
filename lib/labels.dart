@@ -1,6 +1,12 @@
-import 'package:phosphor_flutter/phosphor_flutter.dart';
-
 export 'countries.dart' show currencyLabel, formatMoney, formatPhone, telUri;
+export 'vehicles.dart'
+    show
+        Vehicles,
+        VehicleType,
+        vehicleName,
+        vehicleIcon,
+        vehicleIconKind,
+        vehicleDuotoneIcon;
 
 /// Libellés et icônes partagés (offres, délais, paiements, statuts)
 
@@ -33,14 +39,6 @@ const followUpLabels = {
   'DECIDING': 'En attente du choix de l’expéditeur',
   'RETRY': 'Nouvelle tentative',
   'RETURN': 'À rapporter à l’expéditeur',
-};
-
-const vehicleLabels = {'MOTO': 'Moto', 'CAR': 'Voiture', 'CARGO': 'Cargo'};
-
-const vehicleIcons = {
-  'MOTO': PhosphorIconsFill.moped,
-  'CAR': PhosphorIconsBold.car,
-  'CARGO': PhosphorIconsFill.package,
 };
 
 const speedLabels = {

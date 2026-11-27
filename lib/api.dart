@@ -129,7 +129,7 @@ Future<void> loadMapStyle({bool force = false}) async {
   }
 }
 
-/// Livreur affiché sur la carte du client : position et engin (MOTO, CAR, CARGO)
+/// Livreur affiché sur la carte du client : position et engin (code du catalogue : MOTO, CAR, VELO…)
 typedef NearbyDriver = ({LatLng point, String vehicle});
 
 class Place {

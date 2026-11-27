@@ -41,8 +41,6 @@ const _idTypes = {
   'RESIDENCE': 'Carte de séjour',
 };
 
-const _vehicles = {'MOTO': 'Moto', 'CAR': 'Voiture', 'CARGO': 'Cargo'};
-
 /// Photos du dossier : clé, libellé, aide, caméra avant ?
 const _photos = [
   (
@@ -279,7 +277,21 @@ class _DossierScreenState extends State<DossierScreen> {
   late String? _insuranceExp = _d['insuranceExpiresOn'];
   late String? _commune = _d['commune'];
   late String _idType = _d['idType'] ?? 'CNI';
-  late String _vehicle = _d['vehicleType'] ?? 'MOTO';
+  late String _vehicle = _d['vehicleType'] ?? _defaultVehicle();
+
+  /// Moto par défaut, sinon le premier engin proposé
+  static String _defaultVehicle() {
+    final codes = Vehicles.instance.enabled.map((v) => v.code);
+    return codes.contains('MOTO') || codes.isEmpty ? 'MOTO' : codes.first;
+  }
+
+  /// Engins proposés (catalogue actif), plus celui déjà choisi s'il n'est plus proposé
+  List<String> get _vehicleChoices {
+    final codes = [for (final v in Vehicles.instance.enabled) v.code];
+    if (!codes.contains(_vehicle)) codes.add(_vehicle);
+    return codes;
+  }
+
   late bool _consent = _d['consentAt'] != null;
   final Map<String, File> _local = {};
   final Set<String> _uploading = {};
@@ -629,20 +641,26 @@ class _DossierScreenState extends State<DossierScreen> {
               InsetGroup(
                 header: 'Engin',
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: CupertinoSlidingSegmentedControl<String>(
-                      groupValue: _vehicle,
-                      onValueChanged: (v) {
-                        if (e && v != null) setState(() => _vehicle = v);
-                      },
-                      children: {
-                        for (final v in _vehicles.entries)
-                          v.key: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Text(v.value),
-                          ),
-                      },
+                  ListenableBuilder(
+                    listenable: Vehicles.instance,
+                    builder: (context, _) => Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: CupertinoSlidingSegmentedControl<String>(
+                        groupValue: _vehicle,
+                        onValueChanged: (v) {
+                          if (e && v != null) setState(() => _vehicle = v);
+                        },
+                        children: {
+                          for (final v in _vehicleChoices)
+                            v: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(vehicleName(v), maxLines: 1),
+                              ),
+                            ),
+                        },
+                      ),
                     ),
                   ),
                   _field(
@@ -1095,7 +1113,8 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
                           'TOPUP' => 'Recharge',
                           'COMMISSION' => 'Commission',
                           'REFUND' => 'Remboursement (litige)',
-                          'AFFILIATE_COMMISSION' => 'Commission de votre entreprise',
+                          'AFFILIATE_COMMISSION' =>
+                            'Commission de votre entreprise',
                           _ => 'Correction VITE',
                         },
                         subtitle: [
@@ -1344,10 +1363,14 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
     }
   }
 
-  String _rate(dynamic type, dynamic value) =>
-      type == 'PERCENT' ? '${value is num && value == value.roundToDouble() ? value.toInt() : value} %' : formatMoney(value ?? 0);
+  String _rate(dynamic type, dynamic value) => type == 'PERCENT'
+      ? '${value is num && value == value.roundToDouble() ? value.toInt() : value} %'
+      : formatMoney(value ?? 0);
 
-  Future<void> _act(Future<Map<String, dynamic>> Function() action, String done) async {
+  Future<void> _act(
+    Future<Map<String, dynamic>> Function() action,
+    String done,
+  ) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
@@ -1367,7 +1390,9 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
     final join = inv['kind'] == 'JOIN';
     final ok = await showActions<bool>(
       context,
-      title: join ? 'Rejoindre ${inv['companyName']} ?' : 'Accepter la nouvelle commission ?',
+      title: join
+          ? 'Rejoindre ${inv['companyName']} ?'
+          : 'Accepter la nouvelle commission ?',
       message: join
           ? 'L’entreprise devient responsable de vous et prélève ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde, en plus de la commission VITE.\n\nEn rejoignant ${inv['companyName']}, vous lui partagez votre dossier complet : téléphone, pièce d’identité, permis, carte grise, assurance et photos. Le partage s’arrête si vous la quittez (possible à tout moment, hors course en cours).'
           : '${inv['companyName']} prélèvera ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde.',
@@ -1376,26 +1401,33 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
     if (ok != true) return;
     await _act(
       () => api.acceptInvite(inv['id']),
-      join ? 'Vous êtes rattaché à ${inv['companyName']}' : 'Nouvelle commission acceptée',
+      join
+          ? 'Vous êtes rattaché à ${inv['companyName']}'
+          : 'Nouvelle commission acceptée',
     );
   }
 
   Future<void> _decline(Map inv) => _act(
     () => api.declineInvite(inv['id']),
-    inv['kind'] == 'JOIN' ? 'Invitation refusée' : 'Vous gardez l’ancienne commission',
+    inv['kind'] == 'JOIN'
+        ? 'Invitation refusée'
+        : 'Vous gardez l’ancienne commission',
   );
 
   Future<void> _leave(Map aff) async {
     final reason = await prompt(
       context,
       'Quitter ${aff['companyName']} ?',
-      message: 'Vous ne recevrez plus de courses tant qu’une autre entreprise ne vous aura pas rattaché.',
+      message:
+          'Vous ne recevrez plus de courses tant qu’une autre entreprise ne vous aura pas rattaché.',
       placeholder: 'Motif (facultatif)',
       ok: 'Quitter',
     );
     if (reason == null) return;
     await _act(
-      () => api.leaveCompany(reason: reason.trim().isEmpty ? null : reason.trim()),
+      () => api.leaveCompany(
+        reason: reason.trim().isEmpty ? null : reason.trim(),
+      ),
       'Vous avez quitté ${aff['companyName']}',
     );
   }
@@ -1415,7 +1447,10 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
       onRefresh: _load,
       children: [
         if (a == null)
-          const Padding(padding: EdgeInsets.all(32), child: CupertinoActivityIndicator())
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: CupertinoActivityIndicator(),
+          )
         else ...[
           if (aff == null)
             InsetGroup(
@@ -1424,9 +1459,14 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
                   : 'Pour recevoir des courses, rattachez-vous à une entreprise de livraison : les entreprises voient votre profil validé par VITE et peuvent vous inviter.',
               children: [
                 GroupRow(
-                  leading: IconBadge(PhosphorIconsFill.buildings, color: p.yellow),
+                  leading: IconBadge(
+                    PhosphorIconsFill.buildings,
+                    color: p.yellow,
+                  ),
                   title: 'Aucune entreprise',
-                  subtitle: joins.isEmpty ? 'En attente d’une invitation' : '${joins.length} invitation(s) reçue(s)',
+                  subtitle: joins.isEmpty
+                      ? 'En attente d’une invitation'
+                      : '${joins.length} invitation(s) reçue(s)',
                 ),
               ],
             )
@@ -1437,33 +1477,56 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
                   'Votre entreprise est responsable de vous. Sa commission et celle de VITE${platform == null ? '' : ' (${_rate(platform['type'], platform['value'])})'} sont prélevées sur votre solde à la fin de chaque course.',
               children: [
                 GroupRow(
-                  leading: const IconBadge(PhosphorIconsFill.buildings, color: accent),
+                  leading: const IconBadge(
+                    PhosphorIconsFill.buildings,
+                    color: accent,
+                  ),
                   title: aff['companyName'] ?? '',
-                  subtitle: aff['since'] == null ? null : 'Depuis le ${_date(aff['since'])}',
+                  subtitle: aff['since'] == null
+                      ? null
+                      : 'Depuis le ${_date(aff['since'])}',
                   trailing: CupertinoButton(
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,
                     onPressed: () => launchUrl(telUri(aff['companyPhone'])),
-                    child: Icon(PhosphorIconsFill.phone, color: p.green, size: 22),
+                    child: Icon(
+                      PhosphorIconsFill.phone,
+                      color: p.green,
+                      size: 22,
+                    ),
                   ),
                 ),
                 GroupRow(
-                  leading: Icon(PhosphorIconsBold.tag, color: p.secondaryLabel, size: 20),
+                  leading: Icon(
+                    PhosphorIconsBold.tag,
+                    color: p.secondaryLabel,
+                    size: 20,
+                  ),
                   title: 'Commission de l’entreprise',
-                  value: '${_rate(aff['rateType'], aff['rateValue'])} par course',
+                  value:
+                      '${_rate(aff['rateType'], aff['rateValue'])} par course',
                 ),
                 GroupRow(
-                  leading: Icon(PhosphorIconsBold.handCoins, color: p.secondaryLabel, size: 20),
+                  leading: Icon(
+                    PhosphorIconsBold.handCoins,
+                    color: p.secondaryLabel,
+                    size: 20,
+                  ),
                   title: 'Paiement à la livraison',
-                  subtitle: aff['codAllowed'] == true ? 'Versez les montants encaissés à votre entreprise' : null,
-                  value: aff['codAllowed'] == true ? 'Autorisé' : 'Non autorisé',
+                  subtitle: aff['codAllowed'] == true
+                      ? 'Versez les montants encaissés à votre entreprise'
+                      : null,
+                  value: aff['codAllowed'] == true
+                      ? 'Autorisé'
+                      : 'Non autorisé',
                 ),
               ],
             ),
           for (final inv in rates)
             _InviteCard(
               title: 'Nouvelle commission proposée',
-              subtitle: '${inv['companyName']} propose ${_rate(inv['commissionType'], inv['commissionValue'])} par course. En attendant votre réponse, l’ancienne commission s’applique.',
+              subtitle:
+                  '${inv['companyName']} propose ${_rate(inv['commissionType'], inv['commissionValue'])} par course. En attendant votre réponse, l’ancienne commission s’applique.',
               busy: _busy,
               acceptLabel: 'Accepter',
               declineLabel: 'Garder l’ancienne',
@@ -1477,9 +1540,11 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
                 subtitle: [
                   'Commission : ${_rate(inv['commissionType'], inv['commissionValue'])} par course',
                   if ((inv['drivers'] ?? 0) > 0) '${inv['drivers']} livreurs',
-                  if ((inv['message'] ?? '').toString().isNotEmpty) '« ${inv['message']} »',
+                  if ((inv['message'] ?? '').toString().isNotEmpty)
+                    '« ${inv['message']} »',
                 ].join(' · '),
-                note: 'En rejoignant cette entreprise, vous lui partagez votre dossier complet (pièce d’identité, permis, carte grise, assurance, photos).',
+                note:
+                    'En rejoignant cette entreprise, vous lui partagez votre dossier complet (pièce d’identité, permis, carte grise, assurance, photos).',
                 busy: _busy,
                 acceptLabel: 'Rejoindre',
                 declineLabel: 'Refuser',
@@ -1534,7 +1599,9 @@ class _InviteCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: ShapeDecoration(
         color: p.card,
-        shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1543,30 +1610,57 @@ class _InviteCard extends StatelessWidget {
             children: [
               const IconBadge(PhosphorIconsFill.envelopeSimple, color: accent),
               const SizedBox(width: 10),
-              Expanded(child: Text(title, style: TextStyles.headline.copyWith(color: p.label))),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyles.headline.copyWith(color: p.label),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(subtitle, style: TextStyles.subheadline.copyWith(color: p.secondaryLabel)),
+          Text(
+            subtitle,
+            style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
+          ),
           if (note != null) ...[
             const SizedBox(height: 8),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(PhosphorIconsBold.shieldCheck, size: 16, color: p.secondaryLabel),
+                Icon(
+                  PhosphorIconsBold.shieldCheck,
+                  size: 16,
+                  color: p.secondaryLabel,
+                ),
                 const SizedBox(width: 6),
-                Expanded(child: Text(note!, style: TextStyles.footnote.copyWith(color: p.secondaryLabel))),
+                Expanded(
+                  child: Text(
+                    note!,
+                    style: TextStyles.footnote.copyWith(
+                      color: p.secondaryLabel,
+                    ),
+                  ),
+                ),
               ],
             ),
           ],
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: TintedButton(declineLabel, onPressed: busy ? null : onDecline)),
+              Expanded(
+                child: TintedButton(
+                  declineLabel,
+                  onPressed: busy ? null : onDecline,
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: primaryButton, foregroundColor: onPrimaryButton),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: primaryButton,
+                    foregroundColor: onPrimaryButton,
+                  ),
                   onPressed: busy ? null : onAccept,
                   child: Text(acceptLabel),
                 ),

@@ -542,10 +542,14 @@ class _OrderScreenState extends State<OrderScreen> {
         widget.onVehicleChanged?.call(v);
       },
       children: [
-        Icon(vehicleIcons[v], size: 24, color: on ? accent : p.secondaryLabel),
+        Icon(
+          vehicleIcon(v, hint: o['icon']),
+          size: 24,
+          color: on ? accent : p.secondaryLabel,
+        ),
         const SizedBox(height: 4),
         Text(
-          vehicleLabels[v] ?? o['label'],
+          vehicleName(v, fallback: o['name'] ?? o['label']),
           style: TextStyles.subheadline.copyWith(
             color: p.label,
             fontWeight: on ? FontWeight.w600 : FontWeight.w500,

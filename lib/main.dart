@@ -10,6 +10,7 @@ import 'screens/independent_screens.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding.dart';
 import 'theme.dart';
+import 'vehicles.dart';
 
 export 'theme.dart'
     show
@@ -33,6 +34,9 @@ void main() async {
   await LetoNotifier.instance.init();
   // Pays actifs (indicatifs, devises) : cache local puis API, sans bloquer le démarrage
   Countries.instance.init();
+  // Catalogue des engins (noms, icônes) : cache local tout de suite, puis API sans bloquer
+  await Vehicles.instance.restore();
+  Vehicles.instance.load();
   await Api.instance.restore();
   // Dev uniquement : connexion auto avec --dart-define=DEV_PHONE=... --dart-define=DEV_PASSWORD=...
   const devPhone = String.fromEnvironment('DEV_PHONE');

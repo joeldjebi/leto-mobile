@@ -1107,14 +1107,7 @@ class _ClientHomeState extends State<ClientHome> {
   }
 }
 
-/// Icône d'offre (deux tons)
-PhosphorIconData _vehicleIcon(String v) => switch (v) {
-  'CAR' => PhosphorIcons.car(PhosphorIconsStyle.duotone),
-  'CARGO' => PhosphorIcons.truck(PhosphorIconsStyle.duotone),
-  _ => PhosphorIcons.moped(PhosphorIconsStyle.duotone),
-};
-
-/// Carte d'offre du carrousel (Moto, Voiture, Cargo)
+/// Carte d'offre du carrousel (un engin du devis : Moto, Voiture, Vélo…)
 class _OfferCard extends StatelessWidget {
   final Map<String, dynamic> offer;
   final int? eta;
@@ -1162,7 +1155,7 @@ class _OfferCard extends StatelessWidget {
                     ),
                   ),
                   child: PhosphorIcon(
-                    _vehicleIcon(v),
+                    vehicleDuotoneIcon(v, hint: offer['icon']),
                     size: 36,
                     color: selected ? accent : p.secondaryLabel,
                     duotoneSecondaryColor: selected ? accent : p.secondaryLabel,
@@ -1205,7 +1198,7 @@ class _OfferCard extends StatelessWidget {
               duration: Motion.fast,
               style: TextStyles.headline.copyWith(color: ink2, fontSize: 14.5),
               child: Text(
-                vehicleLabels[v] ?? offer['label'],
+                vehicleName(v, fallback: offer['name'] ?? offer['label']),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

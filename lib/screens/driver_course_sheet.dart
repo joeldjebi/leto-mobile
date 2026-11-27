@@ -296,9 +296,9 @@ class _CourseSheetState extends State<_CourseSheet> {
                   runSpacing: 6,
                   children: [
                     Pill(
-                      '${vehicleLabels[d['vehicleType']]} · ${speedLabels[d['speed']]}',
+                      '${vehicleName(d['vehicleType'])} · ${speedLabels[d['speed']]}',
                       color: p.label,
-                      icon: vehicleIcons[d['vehicleType']],
+                      icon: vehicleIcon(d['vehicleType']),
                     ),
                     const CashPill(),
                     if (cod > 0) CodBadge(cod, currency: d['currency']),
