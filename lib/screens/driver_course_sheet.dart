@@ -197,7 +197,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                       if (_toPickup != null)
                         routeLayer(_toPickup!.points, color: p.blue),
                       if (_trip != null)
-                        routeLayer(_trip!.points, color: p.label),
+                        routeLayer(_trip!.points, color: mapInk),
                       MarkerLayer(
                         markers: [
                           pickupMarker(_a),
@@ -216,7 +216,7 @@ class _CourseSheetState extends State<_CourseSheet> {
                             routeLabel(
                               _mid(_trip!.points),
                               '${_trip!.durationMin} min · ${km(_trip!.distanceKm)}',
-                              p.label,
+                              mapInk,
                             ),
                         ],
                       ),

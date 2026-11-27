@@ -116,7 +116,9 @@ class LetoMap extends StatelessWidget {
       options: MapOptions(
         initialCenter: center,
         initialZoom: zoom,
-        backgroundColor: const Color(0xFFF2EFE9), // teinte des tuiles claires pendant le chargement
+        backgroundColor: const Color(
+          0xFFF2EFE9,
+        ), // teinte des tuiles claires pendant le chargement
         onPositionChanged: onMove,
         onMapEvent: onMoveEnd == null
             ? null
@@ -354,11 +356,7 @@ Marker clientMarker(LatLng p) => Marker(
           ),
         ],
       ),
-      child: const Icon(
-        PhosphorIconsFill.user,
-        color: Colors.white,
-        size: 20,
-      ),
+      child: const Icon(PhosphorIconsFill.user, color: Colors.white, size: 20),
     ),
   ),
 );
@@ -383,6 +381,10 @@ Marker myMarker(LatLng p) => Marker(
     ),
   ),
 );
+
+/// Encre des tracés et étiquettes sur la carte : les tuiles restent claires même en mode sombre
+const mapInk = Color(0xFF1C1C1E);
+const mapMuted = Color(0xFF6B6B70);
 
 /// Étiquette « 9 min · 6,4 km » posée sur la carte
 Marker routeLabel(LatLng p, String text, Color color) => Marker(

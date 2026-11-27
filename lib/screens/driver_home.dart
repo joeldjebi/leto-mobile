@@ -73,6 +73,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
 
   /// Mode navigation : la carte suit le livreur, orientée dans son sens de marche
   bool _navMode = false;
+  bool _hadActive = false; // une course était en cours au dernier chargement
   double _headingDeg = 0;
   double _headingTurns = 0;
   bool _hasHeading = false;
@@ -639,6 +640,15 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       DeliveryLive.instance.sync(_current, driver: true, etaMin: _nav.etaMin);
       _refreshActiveRoute();
       _fitTourIfChanged();
+      // Plus aucune course en cours (livraison terminée) : retour sur ma position, sans le cadrage de la tournée
+      if (_active.isEmpty && _hadActive) {
+        _fittedPlan = '';
+        if (_navMode) setState(() => _navMode = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _centerMe();
+        });
+      }
+      _hadActive = _active.isNotEmpty;
       // Course en cours mais GPS éteint (hors ligne) : le suivi démarre tout seul, sinon le client ne voit rien bouger
       if (_active.isNotEmpty && !_online && !_autoTracking) {
         _autoTracking = true;
@@ -749,13 +759,26 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     }
   }
 
+  /// Décalage pour placer un point au centre de la partie visible de la carte (au-dessus du panneau)
+  Offset get _visibleOffset {
+    final h = MediaQuery.of(context).size.height;
+    return Offset(0, -h * _sheetExtent.value / 2 + 40);
+  }
+
+  /// Centre la carte sur moi, dans la partie visible (bouton de position, passage en ligne, fin de course)
+  void _centerMe([double zoom = 15]) {
+    final me = _shownMe ?? _me;
+    if (me == null) return;
+    _map.rotate(0);
+    _map.move(me, zoom, offset: _visibleOffset);
+  }
+
   /// Mode navigation : centré sur moi (dans la partie visible), carte orientée vers ma direction
   void _followMe() {
     final me = _shownMe;
     if (!_navMode || me == null) return;
-    final h = MediaQuery.of(context).size.height;
     _map.rotate(_hasHeading ? -_headingDeg : 0);
-    _map.move(me, 17, offset: Offset(0, -h * _sheetExtent.value / 2 + 40));
+    _map.move(me, 17, offset: _visibleOffset);
   }
 
   /// Ma position affichée : recalée sur l'itinéraire si je suis dessus
@@ -778,7 +801,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     setState(() => _online = true);
     (await SharedPreferences.getInstance()).setBool('driver_online', true);
     _sendPosition(first);
-    _map.move(first, 14);
+    _map.move(first, 14, offset: _visibleOffset);
     // L'app reste connectée en arrière-plan pour recevoir les courses (notifications + sons)
     LetoNotifier.instance.startKeepAlive(driver: true);
     if (devPosition == null) {
@@ -1104,7 +1127,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                     Polyline(
                       points: [?_shownMe, ...tour.map((t) => t.point)],
                       strokeWidth: 3,
-                      color: p.secondaryLabel.withValues(alpha: 0.55),
+                      color: mapMuted.withValues(alpha: 0.7),
                       pattern: StrokePattern.dashed(segments: const [8, 7]),
                     ),
                   ],
@@ -1280,8 +1303,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                       const Spacer(),
                       MapButton(
                         PhosphorIconsFill.navigationArrow,
-                        onTap: () =>
-                            _me != null ? _map.move(_me!, 15) : _goOnline(),
+                        onTap: () => _me != null ? _centerMe() : _goOnline(),
                       ),
                     ],
                   ),
