@@ -1473,7 +1473,13 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   // ----- En cours -----
   /// Toutes les courses en cours : sélecteur au-dessus du détail de la course choisie
   List<Widget> _activeTab(Palette p) => [
-    if (_plan.where((k) => _taskInfo(k, p) != null).length > 1) _tour(p),
+    // Une seule course à un seul destinataire : l'étape en cours suffit (pas de tournée)
+    if (_active.length > 1 ||
+        _plan
+                .where((k) => k.startsWith('S:') && _taskInfo(k, p) != null)
+                .length >
+            1)
+      _tour(p),
     ..._activeDetail(p),
   ];
 
@@ -1921,7 +1927,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             GroupRow(
               leading: Avatar(sender, radius: 15),
               title: sender,
-              subtitle: 'Expéditeur',
+              subtitle: d['pickupCalledAt'] != null
+                  ? 'Expéditeur · appelé ✓'
+                  : 'Expéditeur · appelez : colis prêt ?',
               trailing: _phone(d['pickupPhone'], p, () => _call(d, null)),
             ),
             ?_clientRow(d, p),
@@ -1943,22 +1951,20 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         ),
         // Avant de prendre la route : appeler l'expéditeur et chaque destinataire
         InsetGroup(
-          header: 'Avant de prendre la route',
+          header: n > 1 ? 'Destinataires à appeler' : 'Destinataire à appeler',
           footer: api.preCallRequired
               ? 'Appelez chaque destinataire pour confirmer qu’il est disponible et lui donner l’heure de passage. Obligatoire avant de partir avec les colis.'
               : 'Appelez chaque destinataire pour confirmer qu’il est disponible et lui donner l’heure de passage.',
           children: [
-            GroupRow(
-              leading: _calledBadge(d['pickupCalledAt'] != null, p),
-              title: 'Expéditeur · colis prêt ?',
-              subtitle: sender,
-              trailing: _phone(d['pickupPhone'], p, () => _call(d, null)),
-            ),
             for (final s in stops.where((s) => s['status'] == 'PENDING'))
               GroupRow(
                 leading: _calledBadge(s['calledAt'] != null, p),
                 title: s['recipientName'],
-                subtitle: '${s['address']} (${s['commune']})',
+                subtitle: [
+                  '${s['address']} (${s['commune']})',
+                  if (((s['codAmount'] ?? 0) as num) > 0)
+                    'À encaisser ${formatMoney(s['codAmount'], d['currency'])}',
+                ].join(' · '),
                 trailing: _phone(s['recipientPhone'], p, () => _call(d, s)),
               ),
           ],
@@ -2024,7 +2030,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
             GroupRow(
               leading: Avatar(sender, radius: 15),
               title: sender,
-              subtitle: 'Expéditeur',
+              subtitle: d['pickupCalledAt'] != null
+                  ? 'Expéditeur · appelé ✓'
+                  : 'Expéditeur · appelez : colis prêt ?',
               trailing: _phone(d['pickupPhone'], p, () => _call(d, null)),
             ),
             ?_clientRow(d, p),
