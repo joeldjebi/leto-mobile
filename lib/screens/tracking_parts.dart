@@ -587,8 +587,8 @@ Future<void> showOrderDetails(BuildContext context, Map<String, dynamic> d) {
                             : company['name'] ?? '',
                         subtitle: independent
                             ? affiliate != null
-                                  ? 'Vérifié par LETO · ${affiliate['name']} en est responsable'
-                                  : 'Vérifié par LETO'
+                                  ? 'Vérifié par VITE · ${affiliate['name']} en est responsable'
+                                  : 'Vérifié par VITE'
                             : 'Entreprise de livraison',
                         // Problème avec le livreur : appeler son entreprise pendant la course
                         trailing: active && (companyPhone ?? '').isNotEmpty

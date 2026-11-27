@@ -58,7 +58,7 @@ class LetoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LETO',
+      title: 'VITE',
       // Alerte « nouvelle commande » du livreur : au-dessus de tous les écrans
       navigatorKey: rootNavigatorKey,
       debugShowCheckedModeBanner: false,

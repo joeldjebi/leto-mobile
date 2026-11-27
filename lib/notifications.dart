@@ -17,12 +17,12 @@ import 'live_activity.dart';
 import 'realtime.dart';
 import 'screens/order_alert.dart';
 
-/// Les 3 sons LETO intégrés à l'app (assets/sounds/ID.wav)
+/// Les 3 sons VITE intégrés à l'app (assets/sounds/ID.wav)
 const builtinSounds = ['leto_course', 'leto_affectation', 'leto_alerte'];
 
 /// Notifications locales déclenchées par le temps réel (Socket.IO), sans service externe :
 /// le serveur envoie `notify` (titre, texte, son) aux bonnes personnes ; l'app affiche la
-/// notification et joue le son LETO choisi par l'admin.
+/// notification et joue le son VITE choisi par l'admin.
 ///
 /// Pour recevoir les notifications app en arrière-plan ou écran verrouillé, l'app doit rester en vie :
 /// - Android : service au premier plan (livreur en ligne, ou client avec une course en cours) ;
@@ -45,10 +45,10 @@ class LetoNotifier {
 
   static const _channel = AndroidNotificationChannel(
     'leto_events',
-    'Courses LETO',
+    'Courses VITE',
     description: 'Nouvelles courses, affectations, annulations et suivi',
     importance: Importance.max,
-    // Le son LETO est joué par l'app (il peut être changé par l'admin)
+    // Le son VITE est joué par l'app (il peut être changé par l'admin)
     playSound: false,
   );
 
@@ -100,9 +100,9 @@ class LetoNotifier {
         FlutterForegroundTask.init(
           androidNotificationOptions: AndroidNotificationOptions(
             channelId: 'leto_online',
-            channelName: 'LETO en ligne',
+            channelName: 'VITE en ligne',
             channelDescription:
-                'Garde LETO connecté pour recevoir les courses en temps réel',
+                'Garde VITE connecté pour recevoir les courses en temps réel',
             onlyAlertOnce: true,
           ),
           iosNotificationOptions: const IOSNotificationOptions(
@@ -196,7 +196,7 @@ class LetoNotifier {
         _custom[s['id'] as String] = file.path;
       }
     } catch (e) {
-      debugPrint('Sons LETO : $e');
+      debugPrint('Sons VITE : $e');
     }
   }
 
@@ -232,7 +232,7 @@ class LetoNotifier {
   bool get _foreground =>
       WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
-  /// Joue un son LETO (aperçu, alerte de commande, notification sur Android)
+  /// Joue un son VITE (aperçu, alerte de commande, notification sur Android)
   Future<void> play(String soundId) async {
     try {
       await _player.stop();
@@ -319,7 +319,7 @@ class LetoNotifier {
   Future<void> startKeepAlive({required bool driver, String? text}) async {
     if (kIsWeb || !Platform.isAndroid) return;
     try {
-      final title = driver ? 'LETO · en ligne' : 'LETO · course en cours';
+      final title = driver ? 'VITE · en ligne' : 'VITE · course en cours';
       final body =
           text ??
           (driver

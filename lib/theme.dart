@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 // ============================================================================
-// Identité LETO « soleil » : jaune soleil, orange, orange vif, noir, blanc
+// Identité VITE « soleil » : jaune soleil, orange, orange vif, noir, blanc
 // (charte : #FBC02D · #F28C1A · #E86A17 · #1A1A1A · #FFFFFF)
 // ============================================================================
 
@@ -21,7 +21,7 @@ const accentLight = sunOrange;
 /// Accent profond (textes sur fond jaune pâle)
 const accentDeep = Color(0xFF9A3412);
 
-/// Noir LETO (titres, icônes fortes, texte sur les boutons jaunes)
+/// Noir VITE (titres, icônes fortes, texte sur les boutons jaunes)
 const ink = Color(0xFF1A1A1A);
 
 /// Bouton principal : jaune soleil, texte noir
@@ -31,7 +31,7 @@ const onPrimaryButton = ink;
 /// Ancien nom conservé pour compatibilité
 const letoOrange = accent;
 
-/// Aplat des pastilles d'icônes (orange vif de la charte). Pas de dégradé dans l'identité LETO.
+/// Aplat des pastilles d'icônes (orange vif de la charte). Pas de dégradé dans l'identité VITE.
 const letoFill = sunOrangeVif;
 
 /// Couleurs système (clair / sombre), accessibles via `Palette.of(context)`.

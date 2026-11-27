@@ -22,7 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _phone = PhoneController();
   final _password = TextEditingController();
 
-  /// Inscriptions des livreurs indépendants ouvertes par LETO ?
+  /// Inscriptions des livreurs indépendants ouvertes par VITE ?
   bool _independentsOpen = false;
 
   @override
@@ -107,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              'LETO',
+              'VITE',
               textAlign: TextAlign.center,
               style: TextStyles.largeTitle.copyWith(
                 color: p.label,

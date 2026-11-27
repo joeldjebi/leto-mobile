@@ -3,13 +3,13 @@
 <plist version="1.0">
 	<dict>
 		<key>NSCameraUsageDescription</key>
-		<string>LETO utilise l’appareil photo pour photographier l’adresse (portail, devanture).</string>
+		<string>VITE utilise l’appareil photo pour photographier l’adresse (portail, devanture).</string>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>LETO accède à vos photos pour joindre une photo de l’adresse.</string>
+		<string>VITE accède à vos photos pour joindre une photo de l’adresse.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>LETO utilise votre position pour placer le point de départ de la livraison et, pour les livreurs en ligne, pour recevoir les courses autour d’eux.</string>
+		<string>VITE utilise votre position pour placer le point de départ de la livraison et, pour les livreurs en ligne, pour recevoir les courses autour d’eux.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-		<string>En ligne, LETO garde votre position pour vous envoyer les courses proches, même écran verrouillé.</string>
+		<string>En ligne, VITE garde votre position pour vous envoyer les courses proches, même écran verrouillé.</string>
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>location</string>
@@ -24,7 +24,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>LETO</string>
+		<string>VITE</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>

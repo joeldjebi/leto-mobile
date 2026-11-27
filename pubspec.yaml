@@ -89,7 +89,7 @@ flutter:
           weight: 600
         - asset: assets/fonts/Inter-Bold.ttf
           weight: 700
-    # Mot « LETO » et grands titres de marque (charte)
+    # Mot « VITE » et grands titres de marque (charte)
     - family: Unbounded
       fonts:
         - asset: assets/fonts/Unbounded-Bold.ttf
@@ -148,7 +148,7 @@ flutter_native_splash:
   fullscreen: false
   web: false
 
-# Icône de l'app (dart run flutter_launcher_icons) : soleil LETO sur fond noir (brand/sun-icon.svg)
+# Icône de l'app (dart run flutter_launcher_icons) : soleil VITE sur fond noir (brand/sun-icon.svg)
 flutter_launcher_icons:
   android: true
   ios: true

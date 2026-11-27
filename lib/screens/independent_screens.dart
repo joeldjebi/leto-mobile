@@ -122,7 +122,7 @@ class _IndependentSignupScreenState extends State<IndependentSignupScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Text(
-            'Livrez avec votre propre engin, sans entreprise. LETO vérifie votre identité avant votre première course.',
+            'Livrez avec votre propre engin, sans entreprise. VITE vérifie votre identité avant votre première course.',
             style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
           ),
         ),
@@ -143,7 +143,7 @@ class _IndependentSignupScreenState extends State<IndependentSignupScreen> {
             ),
             need(
               PhosphorIconsFill.creditCard,
-              'Un solde prépayé : la commission LETO est prélevée à chaque course',
+              'Un solde prépayé : la commission VITE est prélevée à chaque course',
             ),
           ],
         ),
@@ -293,7 +293,7 @@ class _DossierScreenState extends State<DossierScreen> {
   @override
   void initState() {
     super.initState();
-    // Décision de LETO en direct
+    // Décision de VITE en direct
     if (api.token == null) return;
     final s = Realtime.instance.socket;
     void handler(dynamic _) => _reload();
@@ -313,7 +313,7 @@ class _DossierScreenState extends State<DossierScreen> {
       if (!mounted) return;
       if (d['status'] == 'APPROVED' && !_standalone) {
         hapticSuccess();
-        showInfo(context, 'Dossier validé : bienvenue chez LETO !');
+        showInfo(context, 'Dossier validé : bienvenue chez VITE !');
         goHome(context);
         return;
       }
@@ -372,7 +372,7 @@ class _DossierScreenState extends State<DossierScreen> {
       if (!mounted) return;
       hapticSuccess();
       setState(() => _d = d);
-      showInfo(context, 'Dossier envoyé : LETO le vérifie au plus vite');
+      showInfo(context, 'Dossier envoyé : VITE le vérifie au plus vite');
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
@@ -715,10 +715,10 @@ class _DossierScreenState extends State<DossierScreen> {
               ),
               InsetGroup(
                 footer:
-                    'Vos documents sont vérifiés par l’équipe LETO. Si vous acceptez l’invitation d’une entreprise de livraison, votre dossier lui est aussi partagé, tant que vous y êtes rattaché. Ils sont supprimés si votre compte est fermé.',
+                    'Vos documents sont vérifiés par l’équipe VITE. Si vous acceptez l’invitation d’une entreprise de livraison, votre dossier lui est aussi partagé, tant que vous y êtes rattaché. Ils sont supprimés si votre compte est fermé.',
                 children: [
                   GroupSwitch(
-                    title: 'J’accepte que LETO vérifie mes documents',
+                    title: 'J’accepte que VITE vérifie mes documents',
                     value: _consent,
                     onChanged: (v) {
                       if (e) setState(() => _consent = v);
@@ -744,7 +744,7 @@ class _DossierScreenState extends State<DossierScreen> {
         PhosphorIconsBold.hourglassMedium,
         p.blue,
         'Dossier en cours de vérification',
-        'LETO vérifie votre identité et votre engin. Vous serez prévenu ici dès que c’est fait.',
+        'VITE vérifie votre identité et votre engin. Vous serez prévenu ici dès que c’est fait.',
       ),
       'REJECTED' => (
         PhosphorIconsFill.prohibit,
@@ -756,7 +756,7 @@ class _DossierScreenState extends State<DossierScreen> {
         PhosphorIconsFill.pauseCircle,
         p.red,
         'Compte suspendu',
-        _d['reviewNote'] ?? 'Contactez LETO.',
+        _d['reviewNote'] ?? 'Contactez VITE.',
       ),
       'APPROVED' => (
         PhosphorIconsFill.sealCheck,
@@ -1005,7 +1005,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
       ),
     );
     if (ok == true && mounted) {
-      showInfo(context, 'Recharge envoyée : LETO la vérifie au plus vite');
+      showInfo(context, 'Recharge envoyée : VITE la vérifie au plus vite');
       _load();
     }
   }
@@ -1078,14 +1078,14 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
                       size: 20,
                     ),
                     title: '${x['operator']} · ${formatMoney(x['amount'])}',
-                    subtitle: 'En cours de vérification par LETO',
+                    subtitle: 'En cours de vérification par VITE',
                   ),
               ],
             ),
           InsetGroup(
             header: 'Mouvements',
             footer:
-                'Les commissions (LETO et votre entreprise) sont réservées quand vous acceptez une course et prélevées à la fin de la tournée.',
+                'Les commissions (VITE et votre entreprise) sont réservées quand vous acceptez une course et prélevées à la fin de la tournée.',
             children: tx.isEmpty
                 ? [const GroupRow(title: 'Aucun mouvement pour le moment')]
                 : [
@@ -1096,7 +1096,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
                           'COMMISSION' => 'Commission',
                           'REFUND' => 'Remboursement (litige)',
                           'AFFILIATE_COMMISSION' => 'Commission de votre entreprise',
-                          _ => 'Correction LETO',
+                          _ => 'Correction VITE',
                         },
                         subtitle: [
                           if ((t['note'] ?? '').toString().isNotEmpty)
@@ -1119,7 +1119,7 @@ class _IndependentBalanceScreenState extends State<IndependentBalanceScreen> {
   }
 }
 
-/// Recharge : montant envoyé sur un compte Mobile Money de LETO + capture de la preuve
+/// Recharge : montant envoyé sur un compte Mobile Money de VITE + capture de la preuve
 class _TopupScreen extends StatefulWidget {
   final Map config;
   const _TopupScreen({required this.config});
@@ -1216,11 +1216,11 @@ class _TopupScreenState extends State<_TopupScreen> {
       ),
       children: [
         InsetGroup(
-          header: '1. Envoyez l’argent à LETO',
+          header: '1. Envoyez l’argent à VITE',
           children: accounts.isEmpty
               ? [
                   const GroupRow(
-                    title: 'Comptes LETO bientôt disponibles : contactez LETO',
+                    title: 'Comptes VITE bientôt disponibles : contactez VITE',
                   ),
                 ]
               : [
@@ -1369,7 +1369,7 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
       context,
       title: join ? 'Rejoindre ${inv['companyName']} ?' : 'Accepter la nouvelle commission ?',
       message: join
-          ? 'L’entreprise devient responsable de vous et prélève ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde, en plus de la commission LETO.\n\nEn rejoignant ${inv['companyName']}, vous lui partagez votre dossier complet : téléphone, pièce d’identité, permis, carte grise, assurance et photos. Le partage s’arrête si vous la quittez (possible à tout moment, hors course en cours).'
+          ? 'L’entreprise devient responsable de vous et prélève ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde, en plus de la commission VITE.\n\nEn rejoignant ${inv['companyName']}, vous lui partagez votre dossier complet : téléphone, pièce d’identité, permis, carte grise, assurance et photos. Le partage s’arrête si vous la quittez (possible à tout moment, hors course en cours).'
           : '${inv['companyName']} prélèvera ${_rate(inv['commissionType'], inv['commissionValue'])} par course sur votre solde.',
       actions: [(join ? 'Rejoindre' : 'Accepter', true, false)],
     );
@@ -1421,7 +1421,7 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
             InsetGroup(
               footer: legacy != null && legacy.isAfter(DateTime.now())
                   ? 'Vous pouvez encore travailler seul jusqu’au ${legacy.day.toString().padLeft(2, '0')}/${legacy.month.toString().padLeft(2, '0')}/${legacy.year}. Après cette date, il faudra être rattaché à une entreprise pour recevoir des courses.'
-                  : 'Pour recevoir des courses, rattachez-vous à une entreprise de livraison : les entreprises voient votre profil validé par LETO et peuvent vous inviter.',
+                  : 'Pour recevoir des courses, rattachez-vous à une entreprise de livraison : les entreprises voient votre profil validé par VITE et peuvent vous inviter.',
               children: [
                 GroupRow(
                   leading: IconBadge(PhosphorIconsFill.buildings, color: p.yellow),
@@ -1434,7 +1434,7 @@ class _AffiliationScreenState extends State<AffiliationScreen> {
             InsetGroup(
               header: 'Rattaché à',
               footer:
-                  'Votre entreprise est responsable de vous. Sa commission et celle de LETO${platform == null ? '' : ' (${_rate(platform['type'], platform['value'])})'} sont prélevées sur votre solde à la fin de chaque course.',
+                  'Votre entreprise est responsable de vous. Sa commission et celle de VITE${platform == null ? '' : ' (${_rate(platform['type'], platform['value'])})'} sont prélevées sur votre solde à la fin de chaque course.',
               children: [
                 GroupRow(
                   leading: const IconBadge(PhosphorIconsFill.buildings, color: accent),

@@ -15,7 +15,7 @@ String shareMessage(Map<String, dynamic> d, Map<String, dynamic> stop) {
   final cod = (stop['codAmount'] ?? 0) as num;
   return [
     'Bonjour ${stop['recipientName']},',
-    'Votre colis de $sender arrive avec LETO.',
+    'Votre colis de $sender arrive avec VITE.',
     '',
     'Code de livraison : ${stop['confirmationCode']}',
     'Donnez ce code au livreur à la remise du colis.',
@@ -54,7 +54,7 @@ Future<void> shareCode(
   await SharePlus.instance.share(
     ShareParams(
       text: shareMessage(d, stop),
-      subject: 'Votre code de livraison LETO',
+      subject: 'Votre code de livraison VITE',
       sharePositionOrigin: box == null
           ? null
           : box.localToGlobal(Offset.zero) & box.size,

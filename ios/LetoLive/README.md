@@ -1,4 +1,4 @@
-# Live Activity LETO (iPhone)
+# Live Activity VITE (iPhone)
 
 Le code de l'extension est prêt dans `LetoLiveActivity.swift`. Il reste à créer la cible dans Xcode (une seule fois) :
 
@@ -9,4 +9,4 @@ Le code de l'extension est prêt dans `LetoLiveActivity.swift`. Il reste à cré
 5. Cibles **Runner** ET **LetoLive** › Signing & Capabilities › **+ Capability › App Groups** › ajouter `group.ci.leto.leto` (le même pour les deux).
 6. Product › Build. Puis `flutter run` comme d'habitude.
 
-Sur le téléphone : Réglages › LETO › Activités en direct doit être activé.
+Sur le téléphone : Réglages › VITE › Activités en direct doit être activé.

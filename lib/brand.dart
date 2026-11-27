@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Symbole LETO : le soleil (8 rayons aux couleurs de la charte, 8 rayons fins, disque jaune, colis).
+/// Symbole VITE : le soleil (8 rayons aux couleurs de la charte, 8 rayons fins, disque jaune, colis).
 /// Dessiné en vectoriel, même géométrie que brand/sun.svg (repère de 800 unités centré).
 class LetoMark extends StatelessWidget {
   final double size;
@@ -20,7 +20,7 @@ class LetoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: 'LETO',
+    label: 'VITE',
     child: CustomPaint(size: Size.square(size), painter: _SunPainter(ink)),
   );
 }

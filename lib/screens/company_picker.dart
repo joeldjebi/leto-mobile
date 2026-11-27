@@ -123,7 +123,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
             style: TextStyles.displaySmall.copyWith(color: p.label),
           ),
           Text(
-            'Laissez LETO trouver le livreur le plus proche, ou choisissez votre entreprise de livraison.',
+            'Laissez VITE trouver le livreur le plus proche, ou choisissez votre entreprise de livraison.',
             style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
           ),
           const SizedBox(height: 16),
@@ -132,7 +132,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
             selected: widget.current == null,
             icon: PhosphorIconsFill.lightning,
             title: 'Toutes les entreprises',
-            subtitle: 'Le livreur disponible le plus proche · grille LETO',
+            subtitle: 'Le livreur disponible le plus proche · grille VITE',
             onTap: () => Navigator.pop(context, ('all', null)),
           ),
           // Plus de choix « Livreurs indépendants » : ils sont rattachés aux entreprises
@@ -225,7 +225,7 @@ class _CompanyPickerState extends State<_CompanyPicker> {
                     style: TextStyles.headline.copyWith(color: p.label),
                   ),
                   Text(
-                    'Sans entreprise · vérifiés par LETO · grille LETO · pas de paiement à la livraison${online > 0 ? ' · $online en ligne' : ''}',
+                    'Sans entreprise · vérifiés par VITE · grille VITE · pas de paiement à la livraison${online > 0 ? ' · $online en ligne' : ''}',
                     style: TextStyles.footnote.copyWith(
                       color: p.secondaryLabel,
                     ),

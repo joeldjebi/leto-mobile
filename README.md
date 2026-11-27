@@ -1,4 +1,4 @@
-# LETO — Application mobile (Flutter)
+# VITE — Application mobile (Flutter)
 
 Une seule app pour deux profils, au **design inspiré des apps Apple** (grands titres, listes groupées, panneaux translucides sur la carte, feuilles d'actions iOS, mode sombre), sur iPhone comme sur Android.
 

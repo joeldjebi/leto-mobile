@@ -8,7 +8,7 @@ import UserNotifications
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // Notifications LETO affichées aussi quand l'app est ouverte (flutter_local_notifications)
+    // Notifications VITE affichées aussi quand l'app est ouverte (flutter_local_notifications)
     UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

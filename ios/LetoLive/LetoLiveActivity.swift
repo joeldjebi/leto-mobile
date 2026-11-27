@@ -26,7 +26,7 @@ struct LetoLiveValues {
   let eta: Date?
 
   init(_ a: LiveActivitiesAppAttributes) {
-    title = letoDefaults.string(forKey: a.prefixedKey("title")) ?? "Course LETO"
+    title = letoDefaults.string(forKey: a.prefixedKey("title")) ?? "Course VITE"
     subtitle = letoDefaults.string(forKey: a.prefixedKey("subtitle")) ?? ""
     done = letoDefaults.integer(forKey: a.prefixedKey("done"))
     total = letoDefaults.integer(forKey: a.prefixedKey("total"))
@@ -56,7 +56,7 @@ struct LetoLiveActivity: Widget {
       let v = LetoLiveValues(context.attributes)
       VStack(alignment: .leading, spacing: 8) {
         HStack {
-          Text("LETO").font(.caption.weight(.heavy)).foregroundColor(letoViolet)
+          Text("VITE").font(.caption.weight(.heavy)).foregroundColor(letoViolet)
           Spacer()
           if v.eta != nil {
             Label { LetoEta(eta: v.eta).font(.headline) } icon: { Image(systemName: "clock.fill") }

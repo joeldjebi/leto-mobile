@@ -154,7 +154,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
         else if (d['enabled'] != true)
           InsetGroup(
             footer:
-                'Votre entreprise ne calcule pas encore la paie dans LETO. Vos encaissements et versements restent dans « Gains ».',
+                'Votre entreprise ne calcule pas encore la paie dans VITE. Vos encaissements et versements restent dans « Gains ».',
             children: [
               GroupRow(
                 leading: IconBadge(

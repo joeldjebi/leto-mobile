@@ -95,7 +95,7 @@ void main() {
       expect(parseAnyPhone('+225 0701'), isNull);
     });
 
-    test('numéro local : pays où LETO livre', () {
+    test('numéro local : pays où VITE livre', () {
       Countries.instance.setForTest([ci, gh], operating: 'GH');
       expect(parseAnyPhone('024 123 4567'), '+233241234567');
       expect(parseAnyPhone('+2250701020304'), '+2250701020304');
@@ -117,7 +117,7 @@ void main() {
       expect(formatPhone('+33612345678', flag: false), '+33 6 12 34 56 78');
     });
 
-    test('compact : pays où LETO livre au format local', () {
+    test('compact : pays où VITE livre au format local', () {
       expect(formatPhone('+2250701020304', compact: true), '07 01 02 03 04');
       expect(
         formatPhone('+233241234567', compact: true),
@@ -155,7 +155,7 @@ void main() {
       expect(formatMoney(1234567), '1 234 567 F');
       expect(formatMoney(-500), '-500 F');
       expect(formatMoney(null), '0 F');
-      // Devise inconnue : celle du pays où LETO livre
+      // Devise inconnue : celle du pays où VITE livre
       expect(formatMoney(1500, 'ZZZ'), '1 500 F');
     });
 
@@ -165,7 +165,7 @@ void main() {
       expect(formatMoney(1234567.891, 'EUR'), '1 234 567,89 €');
     });
 
-    test('devise du pays où LETO livre par défaut', () {
+    test('devise du pays où VITE livre par défaut', () {
       Countries.instance.setForTest([ci, gh], operating: 'GH');
       expect(formatMoney(12.5), '12,50 ₵');
       expect(formatMoney(1500, 'XOF'), '1 500 F');

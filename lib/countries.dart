@@ -150,7 +150,7 @@ class Countries extends ChangeNotifier {
   /// Pays actifs, dans l'ordre choisi par l'admin
   List<Country> get list => _list;
 
-  /// Pays où LETO livre (devise par défaut, numéros locaux)
+  /// Pays où VITE livre (devise par défaut, numéros locaux)
   Country get operating =>
       byIso(_operatingIso) ??
       _list.where((c) => c.operating).firstOrNull ??
@@ -275,7 +275,7 @@ String? validatePhone(Country c, String? input, {bool required = true}) {
 }
 
 /// Numéro du répertoire ou ancien format → E.164 :
-/// « +225 07… », « 00225… », « 225… » (longueur complète), ou local (pays où LETO livre).
+/// « +225 07… », « 00225… », « 225… » (longueur complète), ou local (pays où VITE livre).
 /// Null si le numéro ne correspond à aucun pays actif.
 String? parseAnyPhone(String? raw) {
   if (raw == null) return null;
@@ -329,7 +329,7 @@ String _group(String digits, List<int> groups) {
 }
 
 /// Affichage : « 🇨🇮 +225 07 01 02 03 04 ».
-/// [compact] : numéro du pays où LETO livre au format local (« 07 01 02 03 04 »).
+/// [compact] : numéro du pays où VITE livre au format local (« 07 01 02 03 04 »).
 /// Valeur inconnue : renvoyée telle quelle.
 String formatPhone(String? value, {bool flag = false, bool compact = false}) {
   final raw = (value ?? '').trim();
@@ -365,7 +365,7 @@ Uri telUri(String? phone) =>
 // ---------------------------------------------------------------------------
 
 /// « 1 500 F » : devise [currencyCode] (celle d'une course ou du carnet),
-/// sinon celle du pays où LETO livre.
+/// sinon celle du pays où VITE livre.
 String formatMoney(Object? amount, [String? currencyCode]) {
   final reg = Countries.instance;
   final c = reg.byCurrency(currencyCode) ?? reg.operating;

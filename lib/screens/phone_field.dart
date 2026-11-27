@@ -64,7 +64,7 @@ class PhoneController extends TextEditingController {
 
   Country? _country;
 
-  /// Pays choisi (par défaut : celui où LETO livre)
+  /// Pays choisi (par défaut : celui où VITE livre)
   Country get country => _country ?? Countries.instance.operating;
   set country(Country c) {
     if (c == _country) return;

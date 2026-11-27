@@ -113,7 +113,7 @@ class OrderAlert {
   void _startRinging(String soundId) {
     _ring?.cancel();
     LetoNotifier.instance.play(soundId);
-    // Son répété tant que l'alerte est affichée (les sons LETO durent environ 1 s)
+    // Son répété tant que l'alerte est affichée (les sons VITE durent environ 1 s)
     _ring = Timer.periodic(const Duration(milliseconds: 2600), (_) {
       LetoNotifier.instance.play(soundId);
       hapticTap();

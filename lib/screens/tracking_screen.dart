@@ -1214,7 +1214,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           ],
         ),
       ],
-      // Commande expirée (aucun livreur dans le délai fixé par LETO)
+      // Commande expirée (aucun livreur dans le délai fixé par VITE)
       if (status == 'CANCELLED' && d['cancelledBy'] == 'Expiration')
         _notice(
           p,
@@ -1564,7 +1564,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     final box = ctx.findRenderObject() as RenderBox?;
     await SharePlus.instance.share(
       ShareParams(
-        text: 'Suivez ma livraison LETO en direct : $url',
+        text: 'Suivez ma livraison VITE en direct : $url',
         sharePositionOrigin: box == null
             ? null
             : box.localToGlobal(Offset.zero) & box.size,

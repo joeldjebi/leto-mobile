@@ -1135,7 +1135,7 @@ class CashPill extends StatelessWidget {
 class CodBadge extends StatelessWidget {
   final num amount;
 
-  /// Devise de la course (code ISO), sinon celle du pays où LETO livre
+  /// Devise de la course (code ISO), sinon celle du pays où VITE livre
   final String? currency;
   const CodBadge(this.amount, {super.key, this.currency});
   @override
@@ -1746,7 +1746,7 @@ class IndependentNotice extends StatelessWidget {
   });
 
   static const text =
-      'Ce livreur n’appartient à aucune entreprise partenaire. Son identité et son engin sont vérifiés par LETO. Pas de paiement à la livraison.';
+      'Ce livreur n’appartient à aucune entreprise partenaire. Son identité et son engin sont vérifiés par VITE. Pas de paiement à la livraison.';
 
   @override
   Widget build(BuildContext context) {

@@ -87,7 +87,7 @@ Future<String?> pickExpiryDate(
 }
 
 /// Livreur indépendant : validité du permis et de l'assurance, documents à renouveler,
-/// demandes de son entreprise. Chaque nouveau document est vérifié par LETO.
+/// demandes de son entreprise. Chaque nouveau document est vérifié par VITE.
 class DocumentsScreen extends StatefulWidget {
   /// Dossier déjà chargé (tests) ; sinon chargé à l'ouverture
   final Map<String, dynamic>? initial;
@@ -106,7 +106,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   void initState() {
     super.initState();
     if (_d == null) _load();
-    // Document validé ou refusé par LETO, demande de l'entreprise : en direct
+    // Document validé ou refusé par VITE, demande de l'entreprise : en direct
     if (api.token == null) return;
     final s = Realtime.instance.socket;
     s.on('independent:docs', _onChanged);
@@ -156,7 +156,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       final choice = await showActions<bool>(
         context,
         title: label,
-        message: 'LETO vérifie la date sur la photo de votre document.',
+        message: 'VITE vérifie la date sur la photo de votre document.',
         actions: [
           ('Prendre une nouvelle photo', true, false),
           ('Indiquer seulement la date', false, false),
@@ -169,8 +169,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         context,
         label,
         message: exp == null
-            ? 'Prenez le document en photo, bien à plat et lisible. LETO le vérifie avant qu’il remplace l’ancien.'
-            : 'Prenez le nouveau document en photo puis indiquez sa date de fin de validité. LETO le vérifie avant qu’il remplace l’ancien.',
+            ? 'Prenez le document en photo, bien à plat et lisible. VITE le vérifie avant qu’il remplace l’ancien.'
+            : 'Prenez le nouveau document en photo puis indiquez sa date de fin de validité. VITE le vérifie avant qu’il remplace l’ancien.',
         ok: 'Prendre la photo',
       );
       if (!ok) return;
@@ -193,7 +193,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       if (!mounted) return;
       hapticSuccess();
       setState(() => _d = d);
-      showInfo(context, 'Envoyé : LETO vérifie votre document');
+      showInfo(context, 'Envoyé : VITE vérifie votre document');
     } catch (e) {
       if (mounted) showError(context, e);
     } finally {
@@ -223,7 +223,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     title: _cap(r['label'] ?? ''),
                     subtitle: [
                       if ((r['note'] ?? '').toString().isNotEmpty) '« ${r['note']} »',
-                      if (_renewals.any((x) => x['field'] == r['field'])) 'Envoyé, en vérification par LETO',
+                      if (_renewals.any((x) => x['field'] == r['field'])) 'Envoyé, en vérification par VITE',
                     ].join(' · '),
                     chevron: true,
                     onTap: () {
@@ -235,7 +235,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             ),
           InsetGroup(
             header: 'Validité',
-            footer: 'Vous et votre entreprise êtes prévenus 30 jours avant la fin de validité. Une fois la date passée, vous ne recevez plus de courses jusqu’à ce que LETO valide le nouveau document.',
+            footer: 'Vous et votre entreprise êtes prévenus 30 jours avant la fin de validité. Une fois la date passée, vous ne recevez plus de courses jusqu’à ce que VITE valide le nouveau document.',
             children: [
               _validity(p, 'licenseUrl', 'Permis de conduire', 'license'),
               _validity(p, 'insuranceUrl', 'Assurance', 'insurance'),
@@ -264,7 +264,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
   String? _status(String field) {
-    if (_renewals.any((x) => x['field'] == field)) return 'Nouveau document en vérification par LETO';
+    if (_renewals.any((x) => x['field'] == field)) return 'Nouveau document en vérification par VITE';
     if (_requests.any((x) => x['field'] == field)) return 'Mise à jour demandée par votre entreprise';
     return null;
   }
@@ -299,7 +299,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 const SizedBox(height: 2),
                 Text(
                   expired
-                      ? 'Vous ne recevez plus de courses. Envoyez le nouveau document ci-dessous : vous reprenez dès que LETO l’a validé.'
+                      ? 'Vous ne recevez plus de courses. Envoyez le nouveau document ci-dessous : vous reprenez dès que VITE l’a validé.'
                       : 'Envoyez le nouveau document avant la date pour continuer à recevoir des courses sans interruption.',
                   style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
                 ),

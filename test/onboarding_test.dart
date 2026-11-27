@@ -36,7 +36,7 @@ void main() {
       await t.pumpWidget(app(const SplashScreen()));
       // Splash : le symbole seul, sans texte
     expect(find.byType(LetoMark), findsOneWidget);
-    expect(find.text('LETO'), findsNothing);
+    expect(find.text('VITE'), findsNothing);
       await t.pump(const Duration(milliseconds: 1600));
       await settle(t);
       expect(find.text('Commandez en 30 secondes'), findsOneWidget);

@@ -280,7 +280,7 @@ class Api {
     List<({LatLng point, bool cod})> stops, {
     String? companyId,
   }) async => await _request('POST', '/pricing/quote', {
-    // Indépendants : règles LETO par défaut (pas de grille d'entreprise)
+    // Indépendants : règles VITE par défaut (pas de grille d'entreprise)
     if (companyId != kIndependentId) 'companyId': ?companyId,
     'pickupLat': pickup.latitude,
     'pickupLng': pickup.longitude,
@@ -569,7 +569,7 @@ class Api {
       });
 
   // ---------- Notifications ----------
-  /// Sons des notifications (3 sons LETO intégrés + sons ajoutés par l'admin)
+  /// Sons des notifications (3 sons VITE intégrés + sons ajoutés par l'admin)
   Future<Map<String, dynamic>> notificationSounds() async =>
       (await _request('GET', '/notifications/sounds')) as Map<String, dynamic>;
 
@@ -617,7 +617,7 @@ class Api {
       (await _request('GET', '/independents/me')) as Map<String, dynamic>;
   Future<Map<String, dynamic>> saveDossier(Map<String, dynamic> body) async =>
       (await _request('PUT', '/independents/me', body)) as Map<String, dynamic>;
-  /// Document renouvelé (nouvelle photo et/ou nouvelle date), vérifié par LETO
+  /// Document renouvelé (nouvelle photo et/ou nouvelle date), vérifié par VITE
   Future<Map<String, dynamic>> submitRenewal(
     String field, {
     String? url,
