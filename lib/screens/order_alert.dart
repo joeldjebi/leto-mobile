@@ -462,8 +462,11 @@ class _OrderAlertViewState extends State<_OrderAlertView>
                               ),
                             if (o['vehicleType'] != null)
                               chip(
-                                PhosphorIconsBold.package,
-                                vehicleName(o['vehicleType']),
+                                vehicleIcon(o['vehicleType']),
+                                [
+                                  vehicleName(o['vehicleType']),
+                                  speedLabels[o['speed']],
+                                ].whereType<String>().join(' · '),
                               ),
                             if (cod > 0)
                               chip(

@@ -1618,6 +1618,14 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     child: Text(label, style: TextStyles.subheadline),
   );
 
+  /// Type de livraison payé par le client : engin et délai (Express = livreur dédié à cette course)
+  String _typeOf(Map d) => [
+    vehicleName(d['vehicleType']),
+    d['speed'] == 'EXPRESS'
+        ? 'Express, course dédiée'
+        : speedLabels[d['speed']],
+  ].whereType<String>().join(' · ');
+
   Widget _title(String text, Palette p, {String? subtitle}) => Padding(
     padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
     child: Column(
@@ -2118,7 +2126,11 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: StatusSteps(d['status']),
         ),
-        _title('Vers le départ', p, subtitle: routeInfo),
+        _title(
+          'Vers le départ',
+          p,
+          subtitle: [_typeOf(d), ?routeInfo].join(' · '),
+        ),
         InsetGroup(
           children: [
             GroupRow(
@@ -2297,7 +2309,11 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                   ? 'Arrêt ${next['position'] + 1} sur $n'
                   : 'Vers le destinataire'),
         p,
-        subtitle: [if (n > 1) '$done/$n traités', ?routeInfo].join(' · '),
+        subtitle: [
+          _typeOf(d),
+          if (n > 1) '$done/$n traités',
+          ?routeInfo,
+        ].join(' · '),
       ),
     ];
     if (next == null && deciding.isNotEmpty) {
