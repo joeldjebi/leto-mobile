@@ -29,7 +29,8 @@ String photoUrl(String path) => '$apiUrl$path';
 
 /// Message générique : jamais de détail technique affiché à l'utilisateur
 const genericError = 'Une erreur est survenue. Réessayez dans un instant.';
-const offlineError = 'Impossible de joindre le serveur. Vérifiez votre connexion.';
+const offlineError =
+    'Impossible de joindre le serveur. Vérifiez votre connexion.';
 
 /// Texte à afficher pour une erreur : messages prévus pour l'utilisateur, sinon message générique
 String friendlyError(Object? e) {
@@ -355,7 +356,11 @@ class Api {
     final data = _decode(res);
     if (res.statusCode >= 400 || data is! Map || data['url'] == null) {
       throw ApiException(
-        _apiMessage(res.statusCode, data, 'Échec de l’envoi de la photo. Réessayez.'),
+        _apiMessage(
+          res.statusCode,
+          data,
+          'Échec de l’envoi de la photo. Réessayez.',
+        ),
       );
     }
     return data['url'];
@@ -430,6 +435,7 @@ class Api {
   // ---------- Livreur ----------
   /// L'entreprise peut-elle travailler ? (abonnement actif, crédit disponible)
   Future<dynamic> billingStatus() => _request('GET', '/billing/driver-status');
+
   /// Alertes de nouvelle course encore valables (renvoyées si l'app était déconnectée)
   Future<List<dynamic>> driverAlerts() async =>
       (await _request('GET', '/deliveries/alerts')) as List<dynamic>;
@@ -471,10 +477,13 @@ class Api {
 
   /// Confirmation de livraison par le code du destinataire (réglage de l'admin)
   bool deliveryCodeEnabled = true;
+
   /// Retour des colis confirmé par le code de l'expéditeur (sinon : au point de départ)
   bool returnCodeEnabled = false;
+
   /// Le livreur doit appeler chaque destinataire avant de partir avec les colis
   bool preCallRequired = true;
+
   /// Échecs : retour facturé (% du prix de l'arrêt), nouvelle tentative (%), délai de choix (min)
   num returnFeePct = 50;
   num retryFeePct = 70;
@@ -509,7 +518,9 @@ class Api {
     try {
       await _request(
         'POST',
-        stopId == null ? '/deliveries/$id/call' : '/deliveries/$id/stops/$stopId/call',
+        stopId == null
+            ? '/deliveries/$id/call'
+            : '/deliveries/$id/stops/$stopId/call',
       );
     } catch (_) {}
   }
@@ -577,21 +588,35 @@ class Api {
   Future<Map<String, dynamic>> myPayroll() async =>
       (await _request('GET', '/payroll/me')) as Map<String, dynamic>;
   Future<Map<String, dynamic>> confirmPayslip(String id) async =>
-      (await _request('POST', '/payroll/me/payslips/$id/confirm')) as Map<String, dynamic>;
+      (await _request('POST', '/payroll/me/payslips/$id/confirm'))
+          as Map<String, dynamic>;
   Future<Map<String, dynamic>> disputePayslip(String id, String note) async =>
-      (await _request('POST', '/payroll/me/payslips/$id/dispute', {'note': note})) as Map<String, dynamic>;
-  Future<Map<String, dynamic>> requestAdvance(int amount, {String? reason}) async =>
-      (await _request('POST', '/payroll/me/advances', {'amount': amount, 'reason': ?reason})) as Map<String, dynamic>;
+      (await _request('POST', '/payroll/me/payslips/$id/dispute', {
+            'note': note,
+          }))
+          as Map<String, dynamic>;
+  Future<Map<String, dynamic>> requestAdvance(
+    int amount, {
+    String? reason,
+  }) async =>
+      (await _request('POST', '/payroll/me/advances', {
+            'amount': amount,
+            'reason': ?reason,
+          }))
+          as Map<String, dynamic>;
 
   // ---------- Livreurs indépendants : rattachement à une entreprise ----------
   Future<Map<String, dynamic>> myAffiliation() async =>
       (await _request('GET', '/affiliations/me')) as Map<String, dynamic>;
   Future<Map<String, dynamic>> acceptInvite(String id) async =>
-      (await _request('POST', '/affiliations/invites/$id/accept')) as Map<String, dynamic>;
+      (await _request('POST', '/affiliations/invites/$id/accept'))
+          as Map<String, dynamic>;
   Future<Map<String, dynamic>> declineInvite(String id) async =>
-      (await _request('POST', '/affiliations/invites/$id/decline')) as Map<String, dynamic>;
+      (await _request('POST', '/affiliations/invites/$id/decline'))
+          as Map<String, dynamic>;
   Future<Map<String, dynamic>> leaveCompany({String? reason}) async =>
-      (await _request('POST', '/affiliations/me/leave', {'reason': ?reason})) as Map<String, dynamic>;
+      (await _request('POST', '/affiliations/me/leave', {'reason': ?reason}))
+          as Map<String, dynamic>;
 
   // ---------- Livreurs indépendants ----------
   /// Inscriptions ouvertes ? service actif ? livreurs en ligne
@@ -617,6 +642,7 @@ class Api {
       (await _request('GET', '/independents/me')) as Map<String, dynamic>;
   Future<Map<String, dynamic>> saveDossier(Map<String, dynamic> body) async =>
       (await _request('PUT', '/independents/me', body)) as Map<String, dynamic>;
+
   /// Document renouvelé (nouvelle photo et/ou nouvelle date), vérifié par VITE
   Future<Map<String, dynamic>> submitRenewal(
     String field, {
@@ -714,6 +740,16 @@ class Api {
   Future<dynamic> declineOffer(String offerId) =>
       _request('POST', '/offers/$offerId/decline');
 
+  /// Client : contre-proposition à un livreur (une fois par proposition)
+  Future<dynamic> counterOffer(String offerId, int price) =>
+      _request('POST', '/offers/$offerId/counter', {'price': price});
+
+  /// Livreur : réponse à la contre-proposition du client
+  Future<dynamic> acceptCounter(String offerId) =>
+      _request('POST', '/offers/$offerId/counter/accept');
+  Future<dynamic> declineCounter(String offerId) =>
+      _request('POST', '/offers/$offerId/counter/decline');
+
   /// Version de l'app envoyée au serveur : les nouvelles règles ne s'appliquent qu'aux apps qui les gèrent
   static const appVersion = '1.2.1';
 
@@ -740,7 +776,8 @@ class Api {
     if (res.statusCode >= 400) {
       throw ApiException(_apiMessage(res.statusCode, data, genericError));
     }
-    if (data == null && res.bodyBytes.isNotEmpty) throw ApiException(genericError);
+    if (data == null && res.bodyBytes.isNotEmpty)
+      throw ApiException(genericError);
     return data;
   }
 }

@@ -483,7 +483,8 @@ class _TrackingScreenState extends State<TrackingScreen>
     if (details == null) return null;
     final ph = phone.trim(), de = details.trim();
     if (ph.isEmpty && de.isEmpty) {
-      if (mounted) showError(context, 'Indiquez un autre numéro ou des indications');
+      if (mounted)
+        showError(context, 'Indiquez un autre numéro ou des indications');
       return null;
     }
     return (ph.isEmpty ? null : ph, de.isEmpty ? null : de);
@@ -504,7 +505,11 @@ class _TrackingScreenState extends State<TrackingScreen>
         'Sans réponse dans ${api.followUpAutoMin} min, le colis vous est rapporté.',
       ].join('\n'),
       actions: [
-        ('Nouvelle tentative · même adresse (${formatMoney(retry, cur)})', 'RETRY', false),
+        (
+          'Nouvelle tentative · même adresse (${formatMoney(retry, cur)})',
+          'RETRY',
+          false,
+        ),
         ('Nouvelle tentative · autre numéro ou adresse', 'EDIT', false),
         ('Me rapporter le colis (${formatMoney(back, cur)})', 'RETURN', false),
       ],
@@ -787,6 +792,42 @@ class _TrackingScreenState extends State<TrackingScreen>
       if (mounted) showError(context, e);
       _loadOffers();
     }
+  }
+
+  /// Contre-proposition : un prix entre le prix affiché (+50) et celui du livreur (−50)
+  Future<void> _counterOffer(Map o) async {
+    final cur = _d?['currency'] as String?;
+    final min =
+        (o['minCounter'] as num?)?.toInt() ??
+        ((_d?['price'] as num).toInt() + 50);
+    final max = (o['price'] as num).toInt() - 50;
+    if (max < min)
+      return showError(
+        context,
+        'Proposition trop proche du prix affiché : acceptez-la ou refusez-la',
+      );
+    final mid = (((min + max) / 2) / 50).round() * 50;
+    final value = await prompt(
+      context,
+      'Votre prix',
+      message:
+          '${o['driver']['name']} propose ${formatMoney(o['price'], cur)}. Proposez entre ${formatMoney(min, cur)} et ${formatMoney(max, cur)}.',
+      initial: '$mid',
+      keyboard: TextInputType.number,
+      ok: 'Proposer',
+      large: true,
+    );
+    final price = int.tryParse((value ?? '').replaceAll(RegExp(r'\D'), ''));
+    if (price == null) return;
+    try {
+      await api.counterOffer(o['id'], price);
+      hapticSuccess();
+      if (mounted)
+        showInfo(context, 'Proposition envoyée à ${o['driver']['name']}');
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+    _loadOffers();
   }
 
   Future<void> _declineOffer(Map o) async {
@@ -1186,6 +1227,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             secondsLeft: _secondsLeft(o),
             onAccept: () => _acceptOffer(o),
             onDecline: () => _declineOffer(o),
+            onCounter: () => _counterOffer(o),
           ),
         const SizedBox(height: 6),
       ],
@@ -1202,7 +1244,10 @@ class _TrackingScreenState extends State<TrackingScreen>
           margin: EdgeInsets.zero,
           children: [
             GroupSwitch(
-              leading: IconBadge(PhosphorIconsFill.navigationArrow, color: p.blue),
+              leading: IconBadge(
+                PhosphorIconsFill.navigationArrow,
+                color: p.blue,
+              ),
               title: 'Montrer au livreur où je me trouve',
               subtitle: _sharing
                   ? 'Le livreur voit votre position en direct'
@@ -1268,7 +1313,10 @@ class _TrackingScreenState extends State<TrackingScreen>
           trailing: api.returnCodeEnabled
               ? Text(
                   d['returnCode'] ?? '',
-                  style: TextStyles.title2.copyWith(color: p.label, letterSpacing: 4),
+                  style: TextStyles.title2.copyWith(
+                    color: p.label,
+                    letterSpacing: 4,
+                  ),
                 )
               : null,
         ),
@@ -1352,10 +1400,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         margin: const EdgeInsets.only(bottom: 18),
         children: [
           GroupRow(
-            leading: IconBadge(
-              PhosphorIconsFill.money,
-              color: p.green,
-            ),
+            leading: IconBadge(PhosphorIconsFill.money, color: p.green),
             title: 'Espèces',
             subtitle: ((d['extraFees'] ?? 0) as num) > 0
                 ? 'Paiement au livreur · dont ${formatMoney(d['extraFees'], d['currency'])} de retour ou nouvelle tentative'
@@ -1404,10 +1449,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           ),
           if ((d['courierComment'] ?? '').toString().isNotEmpty)
             GroupRow(
-              leading: IconBadge(
-                PhosphorIconsFill.chatText,
-                color: p.blue,
-              ),
+              leading: IconBadge(PhosphorIconsFill.chatText, color: p.blue),
               title: d['courierComment'],
               subtitle: 'Instructions pour le livreur',
             ),
@@ -1721,7 +1763,10 @@ class _TrackingScreenState extends State<TrackingScreen>
       ),
       if (_finished)
         RoundAction(
-          icon: const RoundIcon(PhosphorIconsBold.arrowClockwise, color: accent),
+          icon: const RoundIcon(
+            PhosphorIconsBold.arrowClockwise,
+            color: accent,
+          ),
           label: 'Répéter',
           onTap: () => _repeat(d),
         ),
@@ -1777,7 +1822,8 @@ class _StopTile extends StatelessWidget {
             ? 'Nouvelle tentative'
             : stop['address'],
     };
-    final fees = ((stop['returnFee'] ?? 0) as num) + ((stop['retryFee'] ?? 0) as num);
+    final fees =
+        ((stop['returnFee'] ?? 0) as num) + ((stop['retryFee'] ?? 0) as num);
     final past = ((stop['pastAttempts'] as List?) ?? []);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -1858,7 +1904,11 @@ class _StopTile extends StatelessWidget {
                     padding: const EdgeInsets.only(left: 8),
                     minimumSize: Size.zero,
                     onPressed: () => shareToWhatsApp(ctx, d, stop),
-                    child: Icon(PhosphorIconsBold.shareNetwork, size: 20, color: p.blue),
+                    child: Icon(
+                      PhosphorIconsBold.shareNetwork,
+                      size: 20,
+                      color: p.blue,
+                    ),
                   ),
                 ),
                 if (onCancel != null)
@@ -2024,6 +2074,7 @@ class _OfferTile extends StatelessWidget {
   final int secondsLeft;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
+  final VoidCallback onCounter;
   const _OfferTile({
     required this.offer,
     required this.original,
@@ -2031,6 +2082,7 @@ class _OfferTile extends StatelessWidget {
     required this.secondsLeft,
     required this.onAccept,
     required this.onDecline,
+    required this.onCounter,
   });
 
   @override
@@ -2038,6 +2090,7 @@ class _OfferTile extends StatelessWidget {
     final p = Palette.of(context);
     final mm = (secondsLeft ~/ 60).toString();
     final ss = (secondsLeft % 60).toString().padLeft(2, '0');
+    final countered = offer['counterPrice'] != null;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -2106,6 +2159,16 @@ class _OfferTile extends StatelessWidget {
               ),
             ],
           ),
+          if (countered) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Vous proposez ${formatMoney(offer['counterPrice'], currency)} · en attente de la réponse du livreur',
+              style: TextStyles.footnote.copyWith(
+                color: accent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -2118,17 +2181,31 @@ class _OfferTile extends StatelessWidget {
               ),
               const Spacer(),
               CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 onPressed: onDecline,
                 child: Text(
                   'Refuser',
                   style: TextStyles.body.copyWith(color: p.secondaryLabel),
                 ),
               ),
-              SizedBox(
-                width: 130,
-                child: FilledButton(
-                  onPressed: onAccept,
-                  child: const Text('Accepter'),
+              if (!countered)
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  onPressed: onCounter,
+                  child: Text(
+                    'Contre-proposer',
+                    style: TextStyles.body.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              FilledButton(
+                onPressed: onAccept,
+                child: Text(
+                  countered
+                      ? 'Accepter ${formatMoney(offer['price'], currency)}'
+                      : 'Accepter',
                 ),
               ),
             ],

@@ -157,6 +157,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.on('deliveries:changed', _onChanged);
     s.on('offer:accepted', _onOfferAccepted);
     s.on('offer:rejected', _onOfferRejected);
+    s.on('offer:countered', _onOfferCountered);
     s.on('stop:arrived', _onArrived);
     s.on('stop:cancelled', _onStopCancelled);
     s.on('stop:cancel-refused', _onCancelRefused);
@@ -206,6 +207,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     s.off('deliveries:changed', _onChanged);
     s.off('offer:accepted', _onOfferAccepted);
     s.off('offer:rejected', _onOfferRejected);
+    s.off('offer:countered', _onOfferCountered);
     s.off('stop:arrived', _onArrived);
     s.off('stop:cancelled', _onStopCancelled);
     s.off('client:location', _onClientLocation);
@@ -274,6 +276,66 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     hapticSuccess();
     _setTab(1);
     showInfo(context, 'Le client a accepté votre prix — direction le départ');
+  }
+
+  /// Le client répond à ma proposition par un autre prix : accepter, refuser ou décider plus tard
+  Future<void> _onOfferCountered(dynamic e) async {
+    await _load();
+    if (!mounted || e is! Map) return;
+    hapticTap();
+    final offer = _myOffers[e['deliveryId']];
+    if (offer != null) await _answerCounter(e['deliveryId'] as String, offer);
+  }
+
+  Future<void> _answerCounter(String deliveryId, Map offer) async {
+    final d = _available.where((x) => x['id'] == deliveryId).firstOrNull;
+    final cur = d?['currency'] as String?;
+    final counter = offer['counterPrice'] as num?;
+    if (counter == null) return;
+    final choice = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (c) => CupertinoActionSheet(
+        title: const Text('Contre-proposition du client'),
+        message: Text(
+          'Vous proposiez ${formatMoney(offer['price'], cur)}. Le client propose ${formatMoney(counter, cur)}. Répondez dans les 2 min.',
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(c, 'accept'),
+            child: Text('Accepter ${formatMoney(counter, cur)}'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(c, 'decline'),
+            child: const Text('Refuser'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(c),
+          child: const Text('Plus tard'),
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    try {
+      if (choice == 'accept') {
+        await api.acceptCounter(offer['id'] as String);
+        hapticSuccess();
+        await _load();
+        _setTab(1);
+        if (mounted)
+          showInfo(
+            context,
+            'Course acceptée à ${formatMoney(counter, cur)} — direction le départ',
+          );
+      } else {
+        await api.declineCounter(offer['id'] as String);
+        await _load();
+      }
+    } catch (err) {
+      if (mounted) showError(context, err);
+      _load();
+    }
   }
 
   void _onOfferRejected(dynamic _) {
@@ -879,6 +941,10 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   // ---------- Actions ----------
 
   Future<void> _openCourse(Map<String, dynamic> d) async {
+    // Le client a répondu par un autre prix : on répond d'abord à sa contre-proposition
+    final offer = _myOffers[d['id']];
+    if (offer?['counterPrice'] != null)
+      return _answerCounter(d['id'] as String, offer!);
     final result = await showCourseSheet(
       context,
       d,
@@ -1488,6 +1554,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           myOffer: _myOffers[d['id']],
           match: d['match'] as Map?,
           onTap: () => _openCourse(d),
+          onCounter: _myOffers[d['id']] == null
+              ? null
+              : () => _answerCounter(d['id'] as String, _myOffers[d['id']]!),
         ),
     ];
   }
@@ -2793,12 +2862,14 @@ class _OrderCard extends StatelessWidget {
   final Map<String, dynamic>? myOffer;
   final Map? match;
   final VoidCallback onTap;
+  final VoidCallback? onCounter;
   const _OrderCard({
     required this.d,
     required this.distance,
     required this.myOffer,
     required this.onTap,
     this.match,
+    this.onCounter,
   });
 
   @override
@@ -2919,11 +2990,20 @@ class _OrderCard extends StatelessWidget {
             ],
             if (myOffer != null) ...[
               const SizedBox(height: 10),
-              Pill(
-                'Votre proposition : ${formatMoney(myOffer!['price'], d['currency'])} · en attente',
-                color: accentDeep,
-                icon: PhosphorIconsBold.hourglassMedium,
-              ),
+              myOffer!['counterPrice'] != null
+                  ? GestureDetector(
+                      onTap: onCounter,
+                      child: Pill(
+                        'Le client propose ${formatMoney(myOffer!['counterPrice'], d['currency'])} · répondre',
+                        color: accent,
+                        icon: PhosphorIconsFill.handshake,
+                      ),
+                    )
+                  : Pill(
+                      'Votre proposition : ${formatMoney(myOffer!['price'], d['currency'])} · en attente',
+                      color: accentDeep,
+                      icon: PhosphorIconsBold.hourglassMedium,
+                    ),
             ],
           ],
         ),
