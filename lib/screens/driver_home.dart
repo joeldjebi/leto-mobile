@@ -74,6 +74,9 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   /// Mode navigation : la carte suit le livreur, orientée dans son sens de marche
   bool _navMode = false;
   bool _hadActive = false; // une course était en cours au dernier chargement
+  /// Indépendant : invitations d'entreprises (rattachement, nouvelle commission) en attente de réponse
+  List<Map> _invites = [];
+  bool _invitePopup = false;
   double _headingDeg = 0;
   double _headingTurns = 0;
   bool _hasHeading = false;
@@ -703,6 +706,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           },
         );
       }
+      if (api.isIndependent) _loadInvites();
       // Course en cours : suivi en direct hors de l'app (Live Activity / notification fixe)
       DeliveryLive.instance.sync(_current, driver: true, etaMin: _nav.etaMin);
       _refreshActiveRoute();
@@ -724,6 +728,103 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     } catch (e) {
       if (mounted) showError(context, e);
     }
+  }
+
+  /// Invitations en attente ; une nouvelle invitation s'affiche une fois en grand, puis reste en pastille discrète
+  Future<void> _loadInvites() async {
+    try {
+      final a = await api.myAffiliation();
+      if (!mounted) return;
+      final list = ((a['invites'] as List?) ?? []).cast<Map>();
+      setState(() => _invites = list);
+      final prefs = await SharedPreferences.getInstance();
+      final seen = (prefs.getStringList('invites_seen') ?? []).toSet();
+      final fresh = list.where((i) => !seen.contains(i['id'])).firstOrNull;
+      if (fresh == null || !mounted || _invitePopup) return;
+      _invitePopup = true;
+      await prefs.setStringList('invites_seen', [...seen, '${fresh['id']}']);
+      if (mounted) await _showInvite(fresh);
+      _invitePopup = false;
+    } catch (_) {}
+  }
+
+  void _openAffiliation() => Navigator.push(
+    context,
+    CupertinoPageRoute(builder: (_) => const AffiliationScreen()),
+  ).then((_) => _loadInvites());
+
+  /// Fenêtre d'invitation, dans l'esprit de l'alerte « nouvelle course »
+  Future<void> _showInvite(Map inv) async {
+    hapticSuccess();
+    final p = Palette.of(context);
+    final join = inv['kind'] == 'JOIN';
+    final open = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (c) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
+          decoration: ShapeDecoration(
+            color: p.card,
+            shape: RoundedSuperellipseBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    PhosphorIconsFill.handshake,
+                    color: accent,
+                    size: 28,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                join
+                    ? '${inv['companyName']} vous invite'
+                    : 'Nouvelle commission proposée',
+                textAlign: TextAlign.center,
+                style: TextStyles.title2.copyWith(color: p.label),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                join
+                    ? 'Rejoignez cette entreprise de livraison pour recevoir ses courses.'
+                    : '${inv['companyName']} vous propose une nouvelle commission.',
+                textAlign: TextAlign.center,
+                style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Voir l’invitation'),
+              ),
+              const SizedBox(height: 4),
+              CupertinoButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: Text(
+                  'Plus tard',
+                  style: TextStyles.body.copyWith(color: p.secondaryLabel),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (open == true && mounted) _openAffiliation();
   }
 
   double _distanceTo(Map d) {
@@ -1378,9 +1479,20 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                       ),
                     ],
                   ),
+                  if (_invites.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: _InvitePill(
+                        invites: _invites,
+                        onTap: _openAffiliation,
+                      ),
+                    ),
                   AnimatedSwitcher(
                     duration: Motion.medium,
-                    child: _blocked == null
+                    child:
+                        _blocked == null ||
+                            (_invites.isNotEmpty &&
+                                _blocked!.contains('Rattachez'))
                         ? const SizedBox.shrink()
                         : Padding(
                             key: ValueKey(_blocked),
@@ -3045,6 +3157,73 @@ class _PriceTag extends StatelessWidget {
 }
 
 /// Bandeau : l'entreprise ne peut pas faire travailler ses livreurs (abonnement, crédit)
+/// Pastille discrète : invitation(s) en attente, toujours visible jusqu'à la réponse
+class _InvitePill extends StatelessWidget {
+  final List<Map> invites;
+  final VoidCallback onTap;
+  const _InvitePill({required this.invites, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final first = invites.first;
+    final text = invites.length > 1
+        ? '${invites.length} invitations en attente'
+        : first['kind'] == 'JOIN'
+        ? 'Invitation de ${first['companyName']}'
+        : 'Nouvelle commission à valider';
+    return Align(
+      child: GestureDetector(
+        onTap: () {
+          hapticTap();
+          onTap();
+        },
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+          decoration: ShapeDecoration(
+            color: p.card,
+            shape: const StadiumBorder(),
+            shadows: const [
+              BoxShadow(
+                color: Color(0x1F000000),
+                blurRadius: 12,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                PhosphorIconsFill.envelopeSimple,
+                color: accent,
+                size: 17,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  text,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyles.footnote.copyWith(
+                    color: p.label,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                PhosphorIconsBold.caretRight,
+                color: p.tertiaryLabel,
+                size: 13,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BlockedBanner extends StatelessWidget {
   final String reason;
   const _BlockedBanner(this.reason);
