@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'dart:ui';
 
@@ -23,6 +24,41 @@ import '../main.dart';
 
 void hapticTap() => HapticFeedback.selectionClick();
 void hapticSuccess() => HapticFeedback.mediumImpact();
+
+/// Petit morceau d'écran redessiné à intervalle régulier (compte à rebours, « il y a X s »)
+/// sans reconstruire tout l'écran autour
+class Ticking extends StatefulWidget {
+  final WidgetBuilder builder;
+  final Duration every;
+  const Ticking({
+    super.key,
+    required this.builder,
+    this.every = const Duration(seconds: 1),
+  });
+  @override
+  State<Ticking> createState() => _TickingState();
+}
+
+class _TickingState extends State<Ticking> {
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer.periodic(widget.every, (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context);
+}
 
 /// Élément qui s'enfonce légèrement sous le doigt (retour visuel fluide)
 class Pressable extends StatefulWidget {
@@ -1363,6 +1399,10 @@ class AddressPhoto extends StatelessWidget {
           url,
           width: size,
           height: size,
+          // Décodée près de la taille affichée (x2 : reste nette en « cover » même en paysage)
+          // au lieu de la pleine résolution de l'appareil photo
+          cacheWidth: (size * 2 * MediaQuery.devicePixelRatioOf(context))
+              .round(),
           fit: BoxFit.cover,
           errorBuilder: (_, _, _) => Container(
             width: size,
@@ -1389,7 +1429,13 @@ class Avatar extends StatelessWidget {
     return CircleAvatar(
       radius: radius,
       backgroundColor: p.fill,
-      foregroundImage: photo == null ? null : NetworkImage(photoUrl(photo!)),
+      foregroundImage: photo == null
+          ? null
+          : ResizeImage(
+              NetworkImage(photoUrl(photo!)),
+              width: (radius * 4 * MediaQuery.devicePixelRatioOf(context))
+                  .round(),
+            ),
       child: Text(
         name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
         style: TextStyle(

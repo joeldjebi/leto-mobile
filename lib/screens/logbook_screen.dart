@@ -776,11 +776,13 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
       if (phone == null && raw.trim().isNotEmpty) {
         showError(
           context,
-          'Ce numéro ne correspond à aucun pays disponible : vérifiez-le',
+          'Vérifiez ce numéro : son pays n’est pas encore desservi',
         );
       }
     } catch (_) {
-      if (mounted) showError(context, 'Répertoire indisponible');
+      if (mounted) {
+        showError(context, 'Contacts inaccessibles : saisissez le numéro');
+      }
     }
   }
 
@@ -995,11 +997,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
       ),
       if (n > 1)
         GroupRow(
-          leading: Icon(
-            PhosphorIconsFill.minusCircle,
-            color: p.red,
-            size: 20,
-          ),
+          leading: Icon(PhosphorIconsFill.minusCircle, color: p.red, size: 20),
           title: 'Retirer ce destinataire',
           titleColor: p.red,
           onTap: () => _remove(r),
@@ -1019,6 +1017,8 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
             fit: BoxFit.cover,
             width: size,
             height: size,
+            cacheWidth: (size * 2 * MediaQuery.devicePixelRatioOf(context))
+                .round(),
             errorBuilder: (_, _, _) =>
                 Container(width: size, height: size, color: p.fill),
           )
@@ -1045,9 +1045,7 @@ class _LogbookEntryScreenState extends State<LogbookEntryScreen> {
                   children: [
                     image ??
                         Container(
-                          decoration: const BoxDecoration(
-                            color: letoFill,
-                          ),
+                          decoration: const BoxDecoration(color: letoFill),
                           child: const Icon(
                             PhosphorIconsFill.camera,
                             color: Colors.white,

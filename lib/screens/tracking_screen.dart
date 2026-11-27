@@ -94,8 +94,9 @@ class _TrackingScreenState extends State<TrackingScreen>
     _move;
     WidgetsBinding.instance.addObserver(this);
     _load();
+    // Actualisations périodiques : seulement quand l'écran est visible (ni arrière-plan, ni recouvert)
     _timer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (!_finished) _load();
+      if (!_finished && _visible) _load();
     });
     _ticker = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
@@ -103,14 +104,15 @@ class _TrackingScreenState extends State<TrackingScreen>
       if (_driverStale != _wasStale || (_driverStale && t.tick % 30 == 0)) {
         setState(() => _wasStale = _driverStale);
       }
-      if (_offers.isEmpty) return;
-      setState(() => _offers.removeWhere((o) => _secondsLeft(o) <= 0));
+      // Les comptes à rebours s'actualisent seuls (_Countdown) : on ne reconstruit l'écran qu'à l'expiration
+      if (_offers.any((o) => _secondsLeft(o) <= 0)) {
+        setState(() => _offers.removeWhere((o) => _secondsLeft(o) <= 0));
+      }
     });
     _loadExpiry();
-    _nearbyTimer = Timer.periodic(
-      const Duration(seconds: 10),
-      (_) => _loadNearby(),
-    );
+    _nearbyTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_visible) _loadNearby();
+    });
     final s = Realtime.instance.socket;
     s.on('driver:location', _onDriverLocation);
     s.on('delivery:updated', _onDeliveryUpdated);
@@ -154,6 +156,12 @@ class _TrackingScreenState extends State<TrackingScreen>
   }
 
   // ---------- Temps réel ----------
+
+  /// Écran au premier plan et non recouvert par un autre écran
+  bool get _visible =>
+      mounted &&
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
+      TickerMode.getNotifier(context).value;
 
   /// Retour au premier plan : la connexion a pu tomber pendant l'arrière-plan
   @override
@@ -405,7 +413,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     } else {
       showInfo(
         context,
-        'Livraison impossible chez ${e['recipientName']} : le colis vous est rapporté',
+        'Colis non remis à ${e['recipientName']} : il vous est rapporté',
       );
     }
   }
@@ -499,9 +507,9 @@ class _TrackingScreenState extends State<TrackingScreen>
     final back = api.stopFee(d, api.returnFeePct);
     final choice = await showActions<String>(
       context,
-      title: 'Livraison impossible chez ${stop['recipientName']}',
+      title: 'Colis non remis à ${stop['recipientName']}',
       message: [
-        '${failureLabels[stop['failureReason']] ?? 'Échec'}${(stop['failureNote'] ?? '').toString().isNotEmpty ? ' · « ${stop['failureNote']} »' : ''}',
+        '${failureLabels[stop['failureReason']] ?? 'Non livré'}${(stop['failureNote'] ?? '').toString().isNotEmpty ? ' · « ${stop['failureNote']} »' : ''}',
         'Sans réponse dans ${api.followUpAutoMin} min, le colis vous est rapporté.',
       ].join('\n'),
       actions: [
@@ -640,6 +648,13 @@ class _TrackingScreenState extends State<TrackingScreen>
         // Trajet réel dès l'ouverture, puis à chaque changement d'étape
         final shown = _trackLive(_driverPos!);
         if (shown != _driverPos) setState(() => _driverPos = shown);
+      }
+      // Ondes radar : seulement pendant la recherche d'un livreur
+      final searching = d['status'] == 'PENDING';
+      if (searching && !_radar.isAnimating) {
+        _radar.repeat();
+      } else if (!searching && _radar.isAnimating) {
+        _radar.stop();
       }
       // Course terminée ou annulée : le partage de position s'arrête (le serveur le retire aussi)
       if (_sharing && !_active(d)) _stopSharing();
@@ -846,7 +861,10 @@ class _TrackingScreenState extends State<TrackingScreen>
       final preview = await api.cancelPreview(widget.id);
       if (preview['allowed'] != true) {
         if (mounted)
-          showError(context, preview['reason'] ?? 'Annulation impossible');
+          showError(
+            context,
+            preview['reason'] ?? 'Cette livraison ne peut plus être annulée',
+          );
         return;
       }
       fee = (preview['fee'] ?? 0) as int;
@@ -1193,7 +1211,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       'DELIVERED' =>
         failed == 0
             ? 'Livraison terminée'
-            : 'Terminée · $delivered livré(s), $failed échec(s)',
+            : 'Terminée · $delivered livré(s), $failed non livré(s)',
       _ => 'Livraison annulée',
     };
 
@@ -1224,7 +1242,7 @@ class _TrackingScreenState extends State<TrackingScreen>
             offer: o,
             original: d['price'],
             currency: d['currency'],
-            secondsLeft: _secondsLeft(o),
+            expiresAt: DateTime.parse(o['expiresAt']),
             onAccept: () => _acceptOffer(o),
             onDecline: () => _declineOffer(o),
             onCounter: () => _counterOffer(o),
@@ -1357,7 +1375,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           p,
           icon: PhosphorIconsFill.warningCircle,
           color: p.yellow,
-          title: 'Livraison impossible chez ${s['recipientName']}',
+          title: 'Colis non remis à ${s['recipientName']}',
           text:
               'Choisissez une nouvelle tentative ou le retour du colis. Sans réponse, il vous est rapporté.',
           onTap: () => _chooseFollowUp(s),
@@ -1382,7 +1400,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         _notice(
           p,
           icon: PhosphorIconsFill.money,
-          color: p.red,
+          color: accent,
           title:
               'Frais de déplacement : ${formatMoney(d['cancellationFee'], d['currency'])}',
           text: d['cancellationFeeSettledAt'] != null
@@ -1640,7 +1658,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       case 'ACCEPTED':
         return (
           eta != null ? 'Prise en charge dans ≈$eta min' : fallback,
-          '${driver ?? 'Le livreur'} se rend au point de départ pour récupérer le colis.',
+          '${driver ?? 'Le livreur'} vient récupérer le colis.',
         );
       case 'PICKED_UP':
         if (next != null && next['arrivedAt'] != null) {
@@ -1664,7 +1682,13 @@ class _TrackingScreenState extends State<TrackingScreen>
               : 'Le ${t.day.toString().padLeft(2, '0')}/${t.month.toString().padLeft(2, '0')} à ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
         );
       default:
-        return (fallback, d['cancelReason'] as String?);
+        // Commande expirée : le motif est déjà dans l'encadré « Commande expirée »
+        return (
+          fallback,
+          d['cancelledBy'] == 'Expiration'
+              ? null
+              : d['cancelReason'] as String?,
+        );
     }
   }
 
@@ -1710,7 +1734,7 @@ class _TrackingScreenState extends State<TrackingScreen>
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Signal du livreur interrompu : dernière position il y a $staleMin min',
+                        'Position du livreur mise à jour il y a $staleMin min',
                         style: TextStyles.footnote.copyWith(color: p.yellow),
                       ),
                     ),
@@ -1756,11 +1780,13 @@ class _TrackingScreenState extends State<TrackingScreen>
             onTap: () => _shareTracking(ctx, d),
           ),
         ),
-      RoundAction(
-        icon: const RoundIcon(PhosphorIconsBold.info),
-        label: 'Détails',
-        onTap: () => showOrderDetails(context, d),
-      ),
+      // Sans livreur : accès direct au détail (sinon, sa photo ouvre déjà la même fiche)
+      if (driver == null)
+        RoundAction(
+          icon: const RoundIcon(PhosphorIconsBold.info),
+          label: 'Détails',
+          onTap: () => showOrderDetails(context, d),
+        ),
       if (_finished)
         RoundAction(
           icon: const RoundIcon(
@@ -1988,7 +2014,7 @@ class _StopTile extends StatelessWidget {
                 children: [
                   for (final a in past)
                     Pill(
-                      '1er passage : ${failureLabels[a['reason']] ?? 'échec'}',
+                      '1er passage : ${failureLabels[a['reason']] ?? 'non livré'}',
                       color: p.secondaryLabel,
                       icon: PhosphorIconsBold.clock,
                     ),
@@ -2071,7 +2097,7 @@ class _OfferTile extends StatelessWidget {
   final Map<String, dynamic> offer;
   final num original;
   final String? currency;
-  final int secondsLeft;
+  final DateTime expiresAt;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
   final VoidCallback onCounter;
@@ -2079,7 +2105,7 @@ class _OfferTile extends StatelessWidget {
     required this.offer,
     required this.original,
     this.currency,
-    required this.secondsLeft,
+    required this.expiresAt,
     required this.onAccept,
     required this.onDecline,
     required this.onCounter,
@@ -2088,8 +2114,6 @@ class _OfferTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final mm = (secondsLeft ~/ 60).toString();
-    final ss = (secondsLeft % 60).toString().padLeft(2, '0');
     final countered = offer['counterPrice'] != null;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -2172,13 +2196,7 @@ class _OfferTile extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Text(
-                '$mm:$ss',
-                style: TextStyles.footnote.copyWith(
-                  color: p.secondaryLabel,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
+              _Countdown(expiresAt),
               const Spacer(),
               CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -2211,6 +2229,45 @@ class _OfferTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Compte à rebours « m:ss » qui se redessine seul chaque seconde (sans reconstruire l'écran)
+class _Countdown extends StatefulWidget {
+  final DateTime until;
+  const _Countdown(this.until);
+  @override
+  State<_Countdown> createState() => _CountdownState();
+}
+
+class _CountdownState extends State<_Countdown> {
+  late final Timer _t = Timer.periodic(
+    const Duration(seconds: 1),
+    (_) => setState(() {}),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _t;
+  }
+
+  @override
+  void dispose() {
+    _t.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final left = math.max(0, widget.until.difference(DateTime.now()).inSeconds);
+    return Text(
+      '${left ~/ 60}:${(left % 60).toString().padLeft(2, '0')}',
+      style: TextStyles.footnote.copyWith(
+        color: Palette.of(context).secondaryLabel,
+        fontFeatures: const [FontFeature.tabularFigures()],
       ),
     );
   }

@@ -325,7 +325,8 @@ class _CourseSheetState extends State<_CourseSheet> {
                           title: '${s['address']} (${s['commune']})',
                           detail: [
                             s['details'],
-                            if ((s['codAmount'] ?? 0) > 0)
+                            // Une seule adresse : le montant est déjà sur la pastille « Encaisser »
+                            if (n > 1 && (s['codAmount'] ?? 0) > 0)
                               'Encaisser ${formatMoney(s['codAmount'], d['currency'])}',
                           ].whereType<String>().join(' · '),
                         ),

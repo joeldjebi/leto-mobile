@@ -149,9 +149,10 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         })
         .catchError((_) {});
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _load());
-    // Rafraîchit les compteurs (« il y a X sec. », attente sur place)
-    _clock = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (mounted && (_tab == 1 || t.tick % 15 == 0)) setState(() {});
+    // Actualisation légère de l'écran (positions périmées, délais) ; les comptes à rebours
+    // à la seconde se redessinent seuls (Ticking) sans reconstruire la carte
+    _clock = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) setState(() {});
     });
     final s = Realtime.instance.socket;
     s.on('deliveries:changed', _onChanged);
@@ -421,7 +422,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     if (!await launchUrl(telUri(phone)) && mounted) {
       showError(
         context,
-        'Impossible de lancer l’appel. Numéro : ${formatPhone(phone)}',
+        'Appelez le ${formatPhone(phone)} depuis votre téléphone',
       );
     }
   }
@@ -487,7 +488,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     } else if (e['status'] == 'REJECTED') {
       showError(
         context,
-        'Versement refusé par votre entreprise : voir le motif dans Gains',
+        'Votre entreprise revoit ce versement : le motif est dans Gains',
       );
     }
   }
@@ -640,15 +641,19 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
   Widget? _clientRow(Map d, Palette p) {
     final c = _clientOf(d);
     if (c == null) return null;
-    final ago = DateTime.now().difference(c.$2).inSeconds;
-    return GroupRow(
-      leading: IconBadge(PhosphorIconsFill.userCircle, color: p.blue),
-      title: 'Le client partage sa position',
-      subtitle: [
-        if (_me != null) 'à ${km(distanceKm(_me!, c.$1))}',
-        ago < 10 ? 'en direct' : 'il y a $ago s',
-      ].join(' · '),
-      trailing: _navButton(c.$1, p),
+    return Ticking(
+      builder: (_) {
+        final ago = DateTime.now().difference(c.$2).inSeconds;
+        return GroupRow(
+          leading: IconBadge(PhosphorIconsFill.userCircle, color: p.blue),
+          title: 'Le client partage sa position',
+          subtitle: [
+            if (_me != null) 'à ${km(distanceKm(_me!, c.$1))}',
+            ago < 10 ? 'en direct' : 'il y a $ago s',
+          ].join(' · '),
+          trailing: _navButton(c.$1, p),
+        );
+      },
     );
   }
 
@@ -1086,7 +1091,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       if (left == null) {
         showError(
           context,
-          'Arrivée non détectée : rapprochez-vous de l’adresse (moins de 150 m).',
+          'Rapprochez-vous de l’adresse (moins de 150 m) pour continuer.',
         );
         return;
       }
@@ -1144,8 +1149,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         note: note.isEmpty ? null : note,
       ),
       (stop['attempt'] ?? 1) > 1 || reason == 'DAMAGED'
-          ? 'Échec signalé · rapportez le colis à l’expéditeur'
-          : 'Échec signalé · l’expéditeur choisit : nouvelle tentative ou retour',
+          ? 'C’est noté · rapportez le colis à l’expéditeur'
+          : 'C’est noté · l’expéditeur choisit : nouvelle tentative ou retour',
     );
   }
 
@@ -1155,7 +1160,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     if (end == null) return followUpLabels['DECIDING']!;
     final left = end.difference(DateTime.now()).inSeconds;
     return left > 0
-        ? 'Choix de l’expéditeur · retour automatique dans ${_fmt(left)}'
+        ? 'Retour automatique dans ${_fmt(left)}'
         : 'Retour automatique imminent';
   }
 
@@ -1961,7 +1966,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
             child: Text(
-              'Maintenez la poignée à droite et glissez pour changer l’ordre. Destinataire indisponible ? « Plus tard » : livrez ailleurs et revenez.',
+              'Glissez la poignée pour changer l’ordre.',
               style: TextStyles.caption.copyWith(color: p.tertiaryLabel),
             ),
           ),
@@ -1974,12 +1979,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     final d = _current;
     if (d == null) {
       return [
-        _title(
-          'Aucune course en cours',
-          p,
-          subtitle:
-              'Acceptez une course ou proposez votre prix dans « Courses ».',
-        ),
+        _title('Aucune course en cours', p),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: TintedButton(
@@ -2043,9 +2043,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         // Avant de prendre la route : appeler l'expéditeur et chaque destinataire
         InsetGroup(
           header: n > 1 ? 'Destinataires à appeler' : 'Destinataire à appeler',
-          footer: api.preCallRequired
-              ? 'Appelez chaque destinataire pour confirmer qu’il est disponible et lui donner l’heure de passage. Obligatoire avant de partir avec les colis.'
-              : 'Appelez chaque destinataire pour confirmer qu’il est disponible et lui donner l’heure de passage.',
+          footer: 'Confirmez la disponibilité et l’heure de passage.',
           children: [
             for (final s in stops.where((s) => s['status'] == 'PENDING'))
               GroupRow(
@@ -2110,8 +2108,8 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
         ),
         InsetGroup(
           footer: api.returnCodeEnabled
-              ? 'Remettez les colis à l’expéditeur : il vous donne son code de retour pour terminer la tournée.'
-              : 'Remettez les colis à l’expéditeur au point de départ, puis confirmez pour terminer la tournée.',
+              ? 'L’expéditeur vous donne son code de retour.'
+              : null,
           children: [
             GroupRow(
               leading: _dot('A', ink),
@@ -2194,16 +2192,18 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
       list.add(
         InsetGroup(
           footer:
-              'L’expéditeur choisit entre une nouvelle tentative et le retour du colis. Sans réponse, le colis est à rapporter.',
+              'Nouvelle tentative ou retour : vous êtes prévenu dès son choix.',
           children: [
             for (final s in deciding)
-              GroupRow(
-                leading: IconBadge(
-                  PhosphorIconsBold.hourglassMedium,
-                  color: p.yellow,
+              Ticking(
+                builder: (_) => GroupRow(
+                  leading: IconBadge(
+                    PhosphorIconsBold.hourglassMedium,
+                    color: p.yellow,
+                  ),
+                  title: s['recipientName'],
+                  subtitle: _deadlineText(s),
                 ),
-                title: s['recipientName'],
-                subtitle: _deadlineText(s),
               ),
           ],
         ),
@@ -2211,7 +2211,6 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     }
     if (next != null) {
       final cod = (next['codAmount'] ?? 0) as num;
-      final left = _waitLeft(next);
       final arrived = next['arrivedAt'] != null;
       final helpPending =
           next['helpRequestedAt'] != null && next['helpAnswer'] == null;
@@ -2289,14 +2288,16 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                 subtitle: 'En attente de sa réponse · restez sur place',
               ),
             if (next['helpAnswer'] != null)
-              GroupRow(
-                leading: IconBadge(PhosphorIconsFill.chatText, color: accent),
-                title: 'Réponse de l’expéditeur',
-                subtitle: [
-                  next['helpAnswer'],
-                  if (waitUntil != null && waitUntil.isAfter(DateTime.now()))
-                    'attendre encore ${_fmt(waitUntil.difference(DateTime.now()).inSeconds)}',
-                ].join(' · '),
+              Ticking(
+                builder: (_) => GroupRow(
+                  leading: IconBadge(PhosphorIconsFill.chatText, color: accent),
+                  title: 'Réponse de l’expéditeur',
+                  subtitle: [
+                    next['helpAnswer'],
+                    if (waitUntil != null && waitUntil.isAfter(DateTime.now()))
+                      'attendre encore ${_fmt(waitUntil.difference(DateTime.now()).inSeconds)}',
+                  ].join(' · '),
+                ),
               ),
             if (next['cancelRequestedAt'] != null)
               GroupRow(
@@ -2308,22 +2309,25 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
                 subtitle:
                     'L’expéditeur doit confirmer · continuez vers les autres arrêts',
               ),
-            // Présence sur place (détectée par le serveur)
-            GroupRow(
-              leading: IconBadge(
-                left == null
-                    ? PhosphorIconsBold.navigationArrow
-                    : PhosphorIconsFill.sealCheck,
-                color: left == null ? p.secondaryLabel : p.green,
-              ),
-              title: left == null
-                  ? 'Arrivée non détectée'
-                  : 'Vous êtes sur place',
-              subtitle: left == null
-                  ? 'Elle est enregistrée automatiquement à moins de 150 m'
-                  : left > 0
-                  ? 'Absence signalable dans ${_fmt(left)}'
-                  : 'L’expéditeur est prévenu de votre arrivée',
+            // Présence sur place (détectée automatiquement) : délai redessiné chaque seconde
+            Ticking(
+              builder: (_) {
+                final left = _waitLeft(next);
+                return GroupRow(
+                  leading: IconBadge(
+                    left == null
+                        ? PhosphorIconsBold.navigationArrow
+                        : PhosphorIconsFill.sealCheck,
+                    color: left == null ? p.secondaryLabel : p.green,
+                  ),
+                  title: left == null ? 'En route' : 'Vous êtes sur place',
+                  subtitle: left == null
+                      ? 'Arrivée enregistrée automatiquement à moins de 150 m'
+                      : left > 0
+                      ? 'Absence signalable dans ${_fmt(left)}'
+                      : 'L’expéditeur est prévenu de votre arrivée',
+                );
+              },
             ),
           ],
         ),
@@ -2438,7 +2442,7 @@ class _DriverHomeState extends State<DriverHome> with WidgetsBindingObserver {
     });
     if (!await launchUrl(url, mode: LaunchMode.externalApplication) &&
         mounted) {
-      showError(context, 'Impossible d’ouvrir Google Maps');
+      showError(context, 'Installez Google Maps pour lancer l’itinéraire');
     }
   }
 
@@ -3065,14 +3069,14 @@ class _BlockedBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(PhosphorIconsFill.warning, color: p.red, size: 22),
+          Icon(PhosphorIconsFill.pauseCircle, color: p.yellow, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Courses indisponibles',
+                  'Courses en pause',
                   style: TextStyles.headline.copyWith(color: p.label),
                 ),
                 Text(

@@ -230,11 +230,13 @@ class _OrderScreenState extends State<OrderScreen> {
       if (phone == null && raw.trim().isNotEmpty) {
         showError(
           context,
-          'Ce numéro ne correspond à aucun pays disponible : vérifiez-le',
+          'Vérifiez ce numéro : son pays n’est pas encore desservi',
         );
       }
     } catch (e) {
-      if (mounted) showError(context, 'Répertoire indisponible');
+      if (mounted) {
+        showError(context, 'Contacts inaccessibles : saisissez le numéro');
+      }
     }
   }
 

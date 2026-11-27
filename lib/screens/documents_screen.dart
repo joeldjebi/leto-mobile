@@ -39,7 +39,9 @@ Future<String?> pickExpiryDate(
 ) async {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
-  var picked = DateTime.tryParse(current ?? '') ?? DateTime(now.year + 1, now.month, now.day);
+  var picked =
+      DateTime.tryParse(current ?? '') ??
+      DateTime(now.year + 1, now.month, now.day);
   if (picked.isBefore(today)) picked = today;
   final ok = await showCupertinoModalPopup<bool>(
     context: context,
@@ -131,7 +133,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   List<Map> get _renewals => ((_d?['renewals'] as List?) ?? []).cast<Map>();
-  List<Map> get _requests => ((_d?['updateRequests'] as List?) ?? []).cast<Map>();
+  List<Map> get _requests =>
+      ((_d?['updateRequests'] as List?) ?? []).cast<Map>();
   Map? _state(String key) => (_d?['docs'] as Map?)?[key] as Map?;
 
   Future<String?> _photo(String field, bool front) async {
@@ -210,7 +213,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       onRefresh: _load,
       children: [
         if (d == null)
-          const Padding(padding: EdgeInsets.all(32), child: CupertinoActivityIndicator())
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: CupertinoActivityIndicator(),
+          )
         else ...[
           _banner(p),
           if (_requests.isNotEmpty)
@@ -219,11 +225,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               children: [
                 for (final r in _requests)
                   GroupRow(
-                    leading: const IconBadge(PhosphorIconsFill.buildings, color: accent),
+                    leading: const IconBadge(
+                      PhosphorIconsFill.buildings,
+                      color: accent,
+                    ),
                     title: _cap(r['label'] ?? ''),
                     subtitle: [
-                      if ((r['note'] ?? '').toString().isNotEmpty) '« ${r['note']} »',
-                      if (_renewals.any((x) => x['field'] == r['field'])) 'Envoyé, en vérification par VITE',
+                      if ((r['note'] ?? '').toString().isNotEmpty)
+                        '« ${r['note']} »',
+                      if (_renewals.any((x) => x['field'] == r['field']))
+                        'Envoyé, en vérification par VITE',
                     ].join(' · '),
                     chevron: true,
                     onTap: () {
@@ -235,7 +246,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             ),
           InsetGroup(
             header: 'Validité',
-            footer: 'Vous et votre entreprise êtes prévenus 30 jours avant la fin de validité. Une fois la date passée, vous ne recevez plus de courses jusqu’à ce que VITE valide le nouveau document.',
+            footer:
+                'Vous et votre entreprise êtes prévenus 30 jours avant la fin de validité. Une fois la date passée, vous ne recevez plus de courses jusqu’à ce que VITE valide le nouveau document.',
             children: [
               _validity(p, 'licenseUrl', 'Permis de conduire', 'license'),
               _validity(p, 'insuranceUrl', 'Assurance', 'insurance'),
@@ -243,14 +255,17 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           ),
           InsetGroup(
             header: 'Documents',
-            footer: 'Touchez un document pour envoyer une nouvelle photo. L’ancien reste valable jusqu’à la validation du nouveau.',
+            footer:
+                'Touchez un document pour envoyer une nouvelle photo. L’ancien reste valable jusqu’à la validation du nouveau.',
             children: [
               for (final (field, label, front) in _docs)
                 GroupRow(
                   leading: _thumb(p, field),
                   title: label,
                   subtitle: _status(field),
-                  trailing: _busy == field ? const CupertinoActivityIndicator() : null,
+                  trailing: _busy == field
+                      ? const CupertinoActivityIndicator()
+                      : null,
                   chevron: _busy != field,
                   onTap: () => _renew(field, label, front),
                 ),
@@ -264,8 +279,12 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
   String? _status(String field) {
-    if (_renewals.any((x) => x['field'] == field)) return 'Nouveau document en vérification par VITE';
-    if (_requests.any((x) => x['field'] == field)) return 'Mise à jour demandée par votre entreprise';
+    if (_renewals.any((x) => x['field'] == field)) {
+      return 'Nouveau document en vérification par VITE';
+    }
+    if (_requests.any((x) => x['field'] == field)) {
+      return 'Mise à jour demandée par votre entreprise';
+    }
     return null;
   }
 
@@ -281,12 +300,18 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       padding: const EdgeInsets.all(14),
       decoration: ShapeDecoration(
         color: color.withValues(alpha: 0.12),
-        shape: RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(expired ? PhosphorIconsFill.warningCircle : PhosphorIconsFill.clock, color: color, size: 26),
+          Icon(
+            expired ? PhosphorIconsFill.warningCircle : PhosphorIconsFill.clock,
+            color: color,
+            size: 26,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -301,7 +326,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   expired
                       ? 'Vous ne recevez plus de courses. Envoyez le nouveau document ci-dessous : vous reprenez dès que VITE l’a validé.'
                       : 'Envoyez le nouveau document avant la date pour continuer à recevoir des courses sans interruption.',
-                  style: TextStyles.subheadline.copyWith(color: p.secondaryLabel),
+                  style: TextStyles.subheadline.copyWith(
+                    color: p.secondaryLabel,
+                  ),
                 ),
               ],
             ),
@@ -323,11 +350,18 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     };
     final doc = _docs.firstWhere((x) => x.$1 == field);
     return GroupRow(
-      leading: Icon(PhosphorIconsBold.calendarCheck, color: p.secondaryLabel, size: 20),
+      leading: Icon(
+        PhosphorIconsBold.calendarCheck,
+        color: p.secondaryLabel,
+        size: 20,
+      ),
       title: label,
       subtitle: [
-        date == null ? 'Date de fin de validité non renseignée' : 'Valable jusqu’au ${frDate(date)}',
-        if (pending != null && pending['expiresOn'] != null) 'Nouveau : ${frDate(pending['expiresOn'])}, en vérification',
+        date == null
+            ? 'Date de fin de validité non renseignée'
+            : 'Valable jusqu’au ${frDate(date)}',
+        if (pending != null && pending['expiresOn'] != null)
+          'Nouveau : ${frDate(pending['expiresOn'])}, en vérification',
       ].join('\n'),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -335,7 +369,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           color: color.withValues(alpha: 0.14),
           shape: const StadiumBorder(),
         ),
-        child: Text(chip, style: TextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
+        child: Text(
+          chip,
+          style: TextStyles.caption.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
       onTap: () => _renew(doc.$1, doc.$2, doc.$3),
     );
@@ -349,10 +389,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         width: 40,
         height: 40,
         child: link == null
-            ? Container(color: p.fill, child: Icon(PhosphorIconsFill.camera, color: accent, size: 18))
+            ? Container(
+                color: p.fill,
+                child: Icon(PhosphorIconsFill.camera, color: accent, size: 18),
+              )
             : Image.network(
                 photoUrl(link),
                 fit: BoxFit.cover,
+                // Miniature 40 px : inutile de décoder la photo en pleine résolution
+                cacheWidth: (80 * MediaQuery.devicePixelRatioOf(context))
+                    .round(),
                 errorBuilder: (_, _, _) => Container(color: p.fill),
               ),
       ),

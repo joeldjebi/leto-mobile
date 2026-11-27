@@ -629,7 +629,7 @@ Future<void> callPhone(BuildContext context, String? phone) async {
   if (!await launchUrl(telUri(phone)) && context.mounted) {
     showError(
       context,
-      'Impossible de lancer l’appel vers ${formatPhone(phone)}',
+      'Appelez le ${formatPhone(phone)} depuis votre téléphone',
     );
   }
 }

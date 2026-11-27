@@ -70,6 +70,7 @@ class _ClientHomeState extends State<ClientHome> {
     super.initState();
     repeatOrder.addListener(_onRepeat);
     _loadActive();
+    // Livreurs autour : chargés une fois l'entreprise favorite connue (lecture locale, instantanée)
     loadFavoriteCompany().then((c) {
       if (!mounted) return;
       setState(() => _company = c);
@@ -77,11 +78,15 @@ class _ClientHomeState extends State<ClientHome> {
     });
     _lookupCenter();
     _locateMe();
-    _loadDrivers();
-    _driversTimer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => _loadDrivers(),
-    );
+    // Rafraîchis seulement quand l'accueil est visible (pas sous le suivi, pas en arrière-plan)
+    _driversTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!mounted ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+          !TickerMode.getNotifier(context).value) {
+        return;
+      }
+      _loadDrivers();
+    });
   }
 
   @override
@@ -169,7 +174,10 @@ class _ClientHomeState extends State<ClientHome> {
       center,
       for (final d in near.take(3)) ...[
         d.point,
-        LatLng(2 * center.latitude - d.point.latitude, 2 * center.longitude - d.point.longitude),
+        LatLng(
+          2 * center.latitude - d.point.latitude,
+          2 * center.longitude - d.point.longitude,
+        ),
       ],
     ];
     _map.fitCamera(
@@ -572,11 +580,7 @@ class _ClientHomeState extends State<ClientHome> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            PhosphorIconsBold.plus,
-                            color: accent,
-                            size: 20,
-                          ),
+                          Icon(PhosphorIconsBold.plus, color: accent, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             'Ajouter un arrêt',
@@ -867,11 +871,7 @@ class _ClientHomeState extends State<ClientHome> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            PhosphorIconsBold.plus,
-            size: 15,
-            color: accent,
-          ),
+          Icon(PhosphorIconsBold.plus, size: 15, color: accent),
           const SizedBox(width: 6),
           Text(
             _stops.length > 1 ? 'Arrêts · ${_stops.length}' : 'Arrêts',
@@ -978,10 +978,7 @@ class _ClientHomeState extends State<ClientHome> {
     ),
     _divider(p),
     _row(
-      leading: _softTile(
-        PhosphorIconsFill.flagCheckered,
-        p,
-      ),
+      leading: _softTile(PhosphorIconsFill.flagCheckered, p),
       caption: 'Livraison',
       placeholder: 'Adresse de livraison',
       onTap: _addStop,
@@ -1021,10 +1018,7 @@ class _ClientHomeState extends State<ClientHome> {
       ),
       _divider(p),
       _row(
-        leading: _softTile(
-          PhosphorIconsFill.flagCheckered,
-          p,
-        ),
+        leading: _softTile(PhosphorIconsFill.flagCheckered, p),
         caption: route ?? 'Calcul de l’itinéraire…',
         value: _stops.length == 1
             ? _stops.first.place.label
@@ -1283,7 +1277,7 @@ class _ActiveBanner extends StatelessWidget {
                   borderRadius: BorderRadius.circular(13),
                 ),
               ),
-              child: Icon(
+              child: const Icon(
                 PhosphorIconsFill.moped,
                 color: Colors.white,
                 size: 22,
@@ -1312,7 +1306,7 @@ class _ActiveBanner extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
+            const Icon(
               PhosphorIconsBold.caretRight,
               color: Colors.white54,
               size: 18,

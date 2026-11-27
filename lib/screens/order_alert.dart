@@ -477,7 +477,9 @@ class _OrderAlertViewState extends State<_OrderAlertView>
                           const SizedBox(height: 12),
                           Text(
                             _error!,
-                            style: TextStyles.footnote.copyWith(color: p.red),
+                            style: TextStyles.footnote.copyWith(
+                              color: p.secondaryLabel,
+                            ),
                           ),
                         ],
                         const SizedBox(height: 16),

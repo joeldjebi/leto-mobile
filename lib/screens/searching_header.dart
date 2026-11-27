@@ -71,7 +71,7 @@ class _SearchingHeaderState extends State<SearchingHeader>
         : null;
     final n = widget.nearby;
     final message = n == 0
-        ? 'Aucun livreur en ligne près du départ pour l’instant. Votre demande reste visible : le premier qui se connecte la reçoit.'
+        ? 'Votre demande reste visible : le premier livreur qui se connecte la reçoit.'
         : widget.targeted
         ? 'Votre demande est envoyée aux livreurs de l’entreprise choisie. Le premier qui accepte prend la course.'
         : 'Votre demande est envoyée aux livreurs les plus proches. Ils peuvent l’accepter ou vous proposer un prix.';

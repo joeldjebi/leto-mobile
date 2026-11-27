@@ -28,9 +28,9 @@ final String apiUrl = switch (const String.fromEnvironment('API_URL')) {
 String photoUrl(String path) => '$apiUrl$path';
 
 /// Message générique : jamais de détail technique affiché à l'utilisateur
-const genericError = 'Une erreur est survenue. Réessayez dans un instant.';
+const genericError = 'On s’en occupe : réessayez dans un instant.';
 const offlineError =
-    'Impossible de joindre le serveur. Vérifiez votre connexion.';
+    'Connexion un peu lente : vérifiez votre réseau et réessayez.';
 
 /// Texte à afficher pour une erreur : messages prévus pour l'utilisateur, sinon message générique
 String friendlyError(Object? e) {
@@ -359,7 +359,7 @@ class Api {
         _apiMessage(
           res.statusCode,
           data,
-          'Échec de l’envoi de la photo. Réessayez.',
+          'La photo n’est pas encore partie : réessayez dans un instant.',
         ),
       );
     }
